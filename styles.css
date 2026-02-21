@@ -74,6 +74,50 @@ body {
     margin: 0 auto 32px;
 }
 
+.hero-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+    justify-content: center;
+}
+
+.cta-link {
+    color: var(--color-text);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    opacity: 0.85;
+}
+
+.cta-link:hover {
+    opacity: 1;
+}
+
+.badge-row {
+    margin-top: 18px;
+    display: flex;
+    justify-content: center;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--color-card-border);
+    background: var(--color-card);
+    color: var(--color-text);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.badge:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
 .cta-button {
     display: inline-block;
     background: var(--color-accent);
@@ -93,6 +137,50 @@ body {
 .hero-note {
     margin-top: 20px;
     font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+/* Screenshots */
+.screenshots {
+    padding: 60px 0 40px;
+    text-align: center;
+}
+
+.section-subtitle {
+    color: var(--color-text-muted);
+    font-size: 1rem;
+    margin-top: 8px;
+}
+
+.screenshot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+    margin-top: 28px;
+}
+
+.screenshot-card {
+    border-radius: 20px;
+    border: 1px solid var(--color-card-border);
+    background: var(--color-card);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+}
+
+.screenshot-card img {
+    width: 100%;
+    max-width: 240px;
+    height: auto;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.screenshot-card figcaption {
+    font-size: 0.9rem;
     color: var(--color-text-muted);
 }
 
@@ -164,6 +252,24 @@ body {
 .footer {
     padding: 32px 0;
     border-top: 1px solid var(--color-card-border);
+}
+
+.footer-links {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    font-size: 0.875rem;
+}
+
+.footer-links a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+}
+
+.footer-links a:hover {
+    color: var(--color-text);
 }
 
 .footer p {
