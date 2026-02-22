@@ -249,6 +249,82 @@ body {
     text-align: center;
 }
 
+.pricing {
+    padding: 60px 0 80px;
+    text-align: center;
+}
+
+.pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin-top: 28px;
+}
+
+.pricing-card {
+    background: var(--color-card);
+    border: 1px solid var(--color-card-border);
+    border-radius: 16px;
+    padding: 22px;
+    text-align: left;
+    position: relative;
+}
+
+.pricing-card h3 {
+    font-size: 1.1rem;
+    margin-bottom: 6px;
+}
+
+.pricing-card .price {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+}
+
+.pricing-card ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 8px;
+    color: var(--color-text-muted);
+    font-size: 0.95rem;
+}
+
+.pricing-card li::before {
+    content: "•";
+    color: var(--color-accent);
+    margin-right: 8px;
+}
+
+.pricing-card.featured {
+    border-color: rgba(74, 144, 226, 0.5);
+    background: rgba(74, 144, 226, 0.08);
+}
+
+.pricing-card .pill {
+    position: absolute;
+    top: -12px;
+    right: 16px;
+    background: var(--color-accent);
+    color: white;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    border-radius: 999px;
+}
+
+@media (max-width: 900px) {
+    .pricing-grid {
+        grid-template-columns: 1fr;
+    }
+    .pricing-card {
+        text-align: center;
+    }
+    .pricing-card ul {
+        justify-items: center;
+    }
+}
+
 .cta-section h2 {
     font-size: 1.5rem;
     font-weight: 600;
