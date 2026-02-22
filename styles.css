@@ -265,9 +265,10 @@ body {
     background: var(--color-card);
     border: 1px solid var(--color-card-border);
     border-radius: 16px;
-    padding: 22px;
+    padding: 28px;
     text-align: left;
     position: relative;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
 }
 
 .pricing-card h3 {
@@ -300,6 +301,7 @@ body {
 .pricing-card.featured {
     border-color: rgba(74, 144, 226, 0.5);
     background: rgba(74, 144, 226, 0.08);
+    transform: translateY(-4px);
 }
 
 .pricing-card .pill {
