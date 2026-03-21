@@ -1,161 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FocuShift — Personal Affirmations, Your Way</title>
-    <meta name="description" content="Create personalized affirmation scripts with AI. Generate audio with your favorite voice and background music. Listen anywhere.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Focus Shift — Personal affirmations, built for you</title>
+  <meta name="description" content="Focus Shift helps you create affirmations, generate natural audio, and build a listening habit." />
+  <link rel="canonical" href="https://focusshift.app/" />
+  <meta property="og:url" content="https://focusshift.app/" />
+  <meta property="og:title" content="Focus Shift" />
+  <meta property="og:description" content="Personal affirmations, built for you." />
+  <meta property="og:type" content="website" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-    <header class="header">
-        <div class="container">
-            <a href="/" class="logo">FocuShift</a>
-        </div>
-    </header>
+  <header class="hero">
+    <div class="hero-inner">
+      <p class="eyebrow">Focus Shift</p>
+      <h1>Personal affirmations, built for you.</h1>
+      <p class="lede">
+        Create scripts that match your goals, hear them in natural voices with optional background sound,
+        and keep them in playlists you actually use.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn-primary" id="testflight-primary" href="https://testflight.apple.com/" target="_blank" rel="noopener noreferrer">Join on TestFlight</a>
+        <a class="btn btn-ghost" href="mailto:support@focusshift.app">Contact support</a>
+      </div>
+      <p class="fineprint">Replace the TestFlight link above with your real invite URL in <code>index.html</code> if you haven’t already.</p>
+    </div>
+  </header>
 
-    <main>
-        <section class="hero">
-            <div class="container">
-                <h1>Personal affirmations,<br>built for you.</h1>
-                <p class="hero-subtitle">
-                    Answer a few questions. Get a custom affirmation script. Generate audio with your favorite voice and music. Listen anywhere.
-                </p>
-                <div class="hero-actions">
-                    <a href="https://testflight.apple.com/join/FPSH36kK" class="cta-button" id="cta-button">
-                        Get the App
-                    </a>
-                    <a href="#features" class="cta-link">See how it works</a>
-                </div>
-                <div class="badge-row">
-                    <a href="https://testflight.apple.com/join/FPSH36kK" class="badge">
-                        TestFlight Beta
-                    </a>
-                </div>
-                <p class="hero-note">Available on iPhone · Beta now, App Store soon</p>
-            </div>
-        </section>
+  <main class="features">
+    <section class="card">
+      <h2>Create</h2>
+      <p>Guided flows and editing tools so your scripts reflect what you want to reinforce—without friction.</p>
+    </section>
+    <section class="card">
+      <h2>Generate</h2>
+      <p>Turn text into listenable audio with voices and optional background tracks that fit your style.</p>
+    </section>
+    <section class="card">
+      <h2>Listen</h2>
+      <p>Playlists, streaks, and playback that fits your day—headphones, speaker, or on the go.</p>
+    </section>
+  </main>
 
-        <section class="screenshots">
-            <div class="container">
-                <h2>See it in action</h2>
-                <p class="section-subtitle">A quick look at the FocuShift experience.</p>
-                <div class="screenshot-grid">
-                    <figure class="screenshot-card">
-                        <img src="assets/screen-home.png" alt="FocuShift home screen" />
-                        <figcaption>Home</figcaption>
-                    </figure>
-                    <figure class="screenshot-card">
-                        <img src="assets/screen-create.png" alt="Create a script screen" />
-                        <figcaption>Create</figcaption>
-                    </figure>
-                    <figure class="screenshot-card">
-                        <img src="assets/screen-playlist.png" alt="Playlist and mix mode screen" />
-                        <figcaption>Listen</figcaption>
-                    </figure>
-                </div>
-            </div>
-        </section>
+  <footer class="footer">
+    <p><strong>Focus Shift</strong></p>
+    <p class="footer-links">
+      <a href="mailto:support@focusshift.app">support@focusshift.app</a>
+      <span class="sep">·</span>
+      <span class="muted">Also available at <a href="https://focushift.app">focushift.app</a> (redirects here)</span>
+    </p>
+  </footer>
 
-        <section class="features" id="features">
-            <div class="container">
-                <h2>How it works</h2>
-                <div class="feature-grid">
-                    <div class="feature-card">
-                        <span class="feature-icon">✍️</span>
-                        <h3>Create</h3>
-                        <p>Quick survey or in-depth questions. Tell us what you want to focus on—confidence, performance, calm, or anything else.</p>
-                    </div>
-                    <div class="feature-card">
-                        <span class="feature-icon">🤖</span>
-                        <h3>Generate</h3>
-                        <p>AI writes your personalized affirmation script. Edit it, save it, and choose from multiple voices and background music.</p>
-                    </div>
-                    <div class="feature-card">
-                        <span class="feature-icon">🎧</span>
-                        <h3>Listen</h3>
-                        <p>Build playlists, listen on the go, and track your streak. Make affirmations part of your routine.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="pricing" id="pricing">
-            <div class="container">
-                <h2>Plans</h2>
-                <p class="section-subtitle">All plans are free during beta testing.</p>
-                <div class="pricing-grid">
-                    <div class="pricing-card">
-                        <h3>Free</h3>
-                        <p class="price">Free</p>
-                        <ul>
-                            <li>Premade audio only</li>
-                            <li>3 total scripts</li>
-                            <li>180 words/month limit</li>
-                            <li>1 local playlist</li>
-                        </ul>
-                    </div>
-                    <div class="pricing-card">
-                        <h3>Basic</h3>
-                        <p class="price">$4.99/mo</p>
-                        <ul>
-                            <li>AI scripts (up to ~800 words)</li>
-                            <li>10 scripts total + 10 local audio files</li>
-                            <li>2 playlists</li>
-                            <li>Some background packs & uploads</li>
-                        </ul>
-                    </div>
-                    <div class="pricing-card featured">
-                        <div class="pill">Most popular</div>
-                        <h3>Premium</h3>
-                        <p class="price">$19.99/mo</p>
-                        <ul>
-                            <li>Unlimited scripts + 100k words/mo</li>
-                            <li>All backgrounds + unlimited uploads</li>
-                            <li>Voice cloning + Mix Mode</li>
-                            <li>Cloud sync across devices</li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="cta-section">
-            <div class="container">
-                <h2>Ready to shift your focus?</h2>
-                <a href="https://testflight.apple.com/join/FPSH36kK" class="cta-button cta-button-secondary">
-                    Join the Beta
-                </a>
-            </div>
-        </section>
-
-        <section class="updates">
-            <div class="container">
-                <h2>Get updates</h2>
-                <p class="section-subtitle">Want to be notified when we launch on the App Store?</p>
-                <a class="cta-button cta-button-secondary" href="mailto:focushiftapp25@gmail.com?subject=FocuShift%20Beta%20Updates">
-                    Join the waitlist
-                </a>
-            </div>
-        </section>
-    </main>
-
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-links">
-                <a href="/privacy/">Privacy</a>
-                <span>·</span>
-                <a href="/terms/">Terms</a>
-                <span>·</span>
-                <a href="mailto:focushiftapp25@gmail.com">Support</a>
-            </div>
-            <p>&copy; 2026 FocuShift. All rights reserved.</p>
-        </div>
-    </footer>
-
-    <script src="script.js"></script>
+  <script src="script.js" defer></script>
 </body>
 </html>
