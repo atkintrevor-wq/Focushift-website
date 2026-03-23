@@ -8,11 +8,14 @@
 :root {
   --bg: #0b1220;
   --bg-elevated: #121a2b;
+  --bg-card: #151f33;
   --text: #e8edf7;
   --muted: #94a3b8;
   --accent: #3b82f6;
   --accent-hover: #60a5fa;
+  --accent-dim: rgba(59, 130, 246, 0.15);
   --border: rgba(148, 163, 184, 0.2);
+  --featured-ring: rgba(59, 130, 246, 0.45);
 }
 
 html {
@@ -31,12 +34,12 @@ body {
 }
 
 .hero {
-  padding: 4rem 1.5rem 3rem;
+  padding: 4rem 1.5rem 2.5rem;
   border-bottom: 1px solid var(--border);
 }
 
 .hero-inner {
-  max-width: 40rem;
+  max-width: 42rem;
   margin: 0 auto;
 }
 
@@ -50,7 +53,7 @@ body {
 }
 
 h1 {
-  font-size: clamp(1.85rem, 5vw, 2.35rem);
+  font-size: clamp(1.85rem, 5vw, 2.45rem);
   font-weight: 700;
   line-height: 1.15;
   margin: 0 0 1rem;
@@ -79,7 +82,11 @@ h1 {
   font-size: 0.95rem;
   text-decoration: none;
   border: 1px solid transparent;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.1s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
 }
 
 .btn-primary {
@@ -102,10 +109,16 @@ h1 {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.btn-lg {
+  padding: 0.85rem 1.75rem;
+  font-size: 1.05rem;
+}
+
 .fineprint {
   font-size: 0.8rem;
   color: var(--muted);
   margin: 0;
+  max-width: 36rem;
 }
 
 .fineprint code {
@@ -115,10 +128,31 @@ h1 {
   border-radius: 4px;
 }
 
-.features {
+.section {
+  padding: 3rem 1.5rem;
+}
+
+.section-inner {
   max-width: 56rem;
   margin: 0 auto;
-  padding: 2.5rem 1.5rem 4rem;
+}
+
+.section-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  text-align: center;
+}
+
+.section-lede {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.95rem;
+  margin: 0 auto 2rem;
+  max-width: 36rem;
+}
+
+.features {
   display: grid;
   gap: 1rem;
 }
@@ -130,13 +164,13 @@ h1 {
 }
 
 .card {
-  background: var(--bg-elevated);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 1.35rem 1.25rem;
 }
 
-.card h2 {
+.card h3 {
   margin: 0 0 0.5rem;
   font-size: 1.1rem;
   font-weight: 600;
@@ -146,6 +180,121 @@ h1 {
   margin: 0;
   font-size: 0.92rem;
   color: var(--muted);
+}
+
+.section-plans {
+  background: linear-gradient(180deg, transparent, rgba(59, 130, 246, 0.06) 40%, transparent);
+}
+
+.plans {
+  display: grid;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+@media (min-width: 768px) {
+  .plans {
+    grid-template-columns: 1fr 1fr;
+    align-items: stretch;
+  }
+}
+
+.plan {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.5rem 1.35rem 1.75rem;
+}
+
+.plan-featured {
+  border-color: var(--featured-ring);
+  box-shadow: 0 0 0 1px var(--accent-dim);
+}
+
+.plan-badge {
+  position: absolute;
+  top: -0.6rem;
+  right: 1rem;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+}
+
+.plan-name {
+  margin: 0 0 0.25rem;
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+.plan-tagline {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.plan-price {
+  margin: 0 0 1.25rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.plan-price span {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.plan-list {
+  margin: 0;
+  padding: 0 0 0 1.15rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.plan-list li {
+  margin-bottom: 0.5rem;
+}
+
+.plan-list li:last-child {
+  margin-bottom: 0;
+}
+
+.plan-note {
+  text-align: center;
+  font-size: 0.88rem;
+  color: var(--muted);
+  margin: 2rem 0 0;
+}
+
+.cta-bottom {
+  padding-bottom: 4rem;
+}
+
+.cta-bottom-inner {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.cta-bottom-title {
+  margin: 0 0 0.5rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.cta-bottom-text {
+  margin: 0 0 1.5rem;
+  color: var(--muted);
+  font-size: 1rem;
 }
 
 .footer {
