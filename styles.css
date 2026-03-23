@@ -78,14 +78,14 @@ body {
   line-height: 1.2;
 }
 
-/* Inline mark — fixed visual size so it reads as a logo, not a favicon */
+/* Inline mark — sized to read clearly next to the wordmark */
 .brand-mark {
-  width: 1.75rem;
-  height: 1.75rem;
-  min-width: 26px;
-  min-height: 26px;
-  max-width: 40px;
-  max-height: 40px;
+  width: 3.5rem;
+  height: 3.5rem;
+  min-width: 52px;
+  min-height: 52px;
+  max-width: 80px;
+  max-height: 80px;
   object-fit: contain;
   flex-shrink: 0;
   display: block;
