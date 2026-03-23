@@ -78,14 +78,14 @@ body {
   line-height: 1.2;
 }
 
-/* Small mark next to text — smaller than cap height so it doesn’t dominate */
+/* Inline mark: match line height of the word next to it (not hero-sized) */
 .brand-mark {
-  width: 0.62em;
-  height: 0.62em;
-  min-width: 12px;
-  min-height: 12px;
-  max-width: 18px;
-  max-height: 18px;
+  width: 1em;
+  height: 1em;
+  min-width: 16px;
+  min-height: 16px;
+  max-width: 24px;
+  max-height: 24px;
   object-fit: contain;
   flex-shrink: 0;
   display: block;
