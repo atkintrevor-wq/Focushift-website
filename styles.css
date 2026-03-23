@@ -16,6 +16,9 @@
   --accent-dim: rgba(59, 130, 246, 0.15);
   --border: rgba(148, 163, 184, 0.2);
   --featured-ring: rgba(59, 130, 246, 0.45);
+  /* Readable text links on dark bg (not saturated blue) */
+  --link-text: #e2e8f0;
+  --link-text-hover: #f8fafc;
 }
 
 html {
@@ -64,21 +67,25 @@ body {
 }
 
 .site-top-home:hover {
-  color: var(--accent-hover);
+  color: var(--link-text-hover);
 }
 
 .site-top-home:hover .brand-mark {
-  opacity: 0.92;
+  opacity: 0.95;
 }
 
 .site-top-wordmark {
   line-height: 1.2;
 }
 
-/* Icon matches the wordmark font size (use inside elements with font-size set) */
+/* Small mark next to text — smaller than cap height so it doesn’t dominate */
 .brand-mark {
-  width: 1em;
-  height: 1em;
+  width: 0.62em;
+  height: 0.62em;
+  min-width: 12px;
+  min-height: 12px;
+  max-width: 18px;
+  max-height: 18px;
   object-fit: contain;
   flex-shrink: 0;
   display: block;
@@ -92,11 +99,12 @@ body {
 }
 
 .site-top-links a {
-  color: var(--accent);
+  color: var(--link-text);
   text-decoration: none;
 }
 
 .site-top-links a:hover {
+  color: var(--link-text-hover);
   text-decoration: underline;
 }
 
@@ -137,11 +145,12 @@ body {
 .hero-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
   margin: 0 0 1rem;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--text);
+  letter-spacing: 0.01em;
 }
 
 .hero-brand-text {
@@ -153,7 +162,7 @@ body {
   letter-spacing: 0.12em;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--muted);
   margin: 0 0 0.75rem;
 }
 
@@ -471,12 +480,15 @@ h1 {
 }
 
 .faq a {
-  color: var(--accent);
-  text-decoration: none;
+  color: var(--link-text);
+  text-decoration: underline;
+  text-decoration-color: rgba(226, 232, 240, 0.35);
+  text-underline-offset: 0.15em;
 }
 
 .faq a:hover {
-  text-decoration: underline;
+  color: var(--link-text-hover);
+  text-decoration-color: currentColor;
 }
 
 .cta-bottom {
@@ -529,11 +541,12 @@ h1 {
 }
 
 .footer-nav a {
-  color: var(--accent);
+  color: var(--link-text);
   text-decoration: none;
 }
 
 .footer-nav a:hover {
+  color: var(--link-text-hover);
   text-decoration: underline;
 }
 
