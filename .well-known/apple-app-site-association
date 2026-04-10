@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "A88DZ5BB6U.com.trevoratkin.FocuShift",
+        "paths": [
+          "/s/*",
+          "/share/*"
+        ]
+      }
+    ]
+  }
+}

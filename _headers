@@ -1,0 +1,5 @@
+# Cloudflare Pages: Apple expects this file with Content-Type application/json
+# https://developers.cloudflare.com/pages/configuration/headers/
+
+/.well-known/apple-app-site-association
+  Content-Type: application/json
