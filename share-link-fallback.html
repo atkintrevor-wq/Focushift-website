@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shared audio — Focus Shift</title>
+  <meta name="description" content="Open this link in the Focus Shift app to add shared audio to your library." />
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, sans-serif; line-height: 1.5; color: #1a1a1a; }
+    body { margin: 0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 1.5rem; background: #f5f7fb; }
+    .card { max-width: 28rem; background: #fff; border-radius: 12px; padding: 1.75rem; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+    h1 { font-size: 1.25rem; margin: 0 0 0.5rem; }
+    p { margin: 0 0 1rem; color: #444; font-size: 0.95rem; }
+    .token { font-size: 0.75rem; color: #666; word-break: break-all; margin-bottom: 1.25rem; }
+    a.button { display: inline-block; background: #007aff; color: #fff !important; text-decoration: none; padding: 0.65rem 1.25rem; border-radius: 10px; font-weight: 600; margin-right: 0.5rem; margin-bottom: 0.5rem; }
+    a.secondary { color: #007aff; text-decoration: underline; font-size: 0.9rem; }
+    .note { font-size: 0.85rem; color: #555; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Someone shared Focus Shift audio with you</h1>
+    <p id="lead">On an iPhone or iPad with the app installed, this link should open Focus Shift so you can add it to My Library.</p>
+    <p class="token" id="tokendisplay" hidden></p>
+    <p>
+      <a class="button" id="openApp" href="#">Open in app</a>
+      <a class="button" href="https://testflight.apple.com/" style="background:#34c759">Get TestFlight</a>
+    </p>
+    <p><a class="secondary" href="/">Focus Shift home</a></p>
+    <p class="note">
+      If you opened this on a Mac or PC, install the app from TestFlight on your phone, then open the same link on that device (Messages, Mail, etc.).
+    </p>
+  </div>
+  <script>
+    (function () {
+      var parts = location.pathname.split("/").filter(Boolean);
+      var token = (parts[0] === "s" && parts[1]) ? parts[1] : null;
+      var openBtn = document.getElementById("openApp");
+      if (token) {
+        var deep = "focushift://s/" + encodeURIComponent(token);
+        openBtn.href = deep;
+        var td = document.getElementById("tokendisplay");
+        td.hidden = false;
+        td.textContent = "Link id: " + token;
+      } else {
+        openBtn.href = "https://testflight.apple.com/";
+        document.getElementById("lead").textContent =
+          "This page is for shared listen links. Use the link from your message or email (it should contain /s/…).";
+      }
+    })();
+  </script>
+</body>
+</html>
