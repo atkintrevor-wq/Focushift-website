@@ -19,6 +19,11 @@
   /* Readable text links on dark bg (not saturated blue) */
   --link-text: #e2e8f0;
   --link-text-hover: #f8fafc;
+  /* Privacy / Terms pages use these names in scoped rules */
+  --color-text: var(--text);
+  --color-text-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
 }
 
 html {
@@ -569,5 +574,90 @@ h1 {
 }
 
 .muted a {
+  color: var(--muted);
+}
+
+/* Smaller logo in top nav on inner pages (keeps bar compact) */
+.brand-mark--compact {
+  width: 2.25rem;
+  height: 2.25rem;
+  min-width: 36px;
+  min-height: 36px;
+  max-width: 44px;
+  max-height: 44px;
+}
+
+/* ----- Legal documents (/privacy, /terms) ----- */
+.legal-page-section {
+  padding-top: 1.5rem;
+  padding-bottom: 4rem;
+}
+
+.legal-page h1 {
+  font-size: 2rem;
+  margin: 0 0 0.35rem;
+  color: var(--text);
+}
+
+.legal-page .updated {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-bottom: 1.75rem;
+}
+
+.legal-page h2 {
+  font-size: 1.2rem;
+  margin: 1.75rem 0 0.65rem;
+  color: var(--text);
+}
+
+.legal-page h3 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.5rem;
+  color: var(--text);
+}
+
+.legal-page p,
+.legal-page li {
+  color: var(--muted);
+  margin-bottom: 0.65rem;
+}
+
+.legal-page ul {
+  margin: 0 0 1rem 1.1rem;
+  padding: 0;
+}
+
+.legal-page a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.legal-page a:hover {
+  color: var(--accent-hover);
+  text-decoration: underline;
+}
+
+.legal-back {
+  display: inline-block;
+  margin-bottom: 1.25rem;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.legal-back:hover {
+  color: var(--accent);
+}
+
+.site-top-links a[aria-current="page"] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.card-plan-caps {
+  margin: 0.75rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
   color: var(--muted);
 }

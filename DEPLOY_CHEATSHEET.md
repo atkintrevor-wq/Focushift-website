@@ -33,7 +33,7 @@ git push origin main
 
 3. Wait **1–3 minutes**, then open **https://focusshift.app** and **hard refresh** (or use a private window).
 
-**If the old logo or CSS still shows:** Cloudflare and your browser cache files. `index.html` uses **`?v=3`** on `styles.css` and `images/logo.png` so a normal refresh usually picks up changes. If not, try a **private window** or bump the number (e.g. `?v=4`) after you change the logo or styling.
+**If the old logo or CSS still shows:** Cloudflare and your browser cache files. Bump the **`?v=`** query string on `styles.css`, `script.js`, and `images/logo.png` in **`index.html`**, **`privacy/index.html`**, **`terms/index.html`**, and **`share-link-fallback.html`** after you change assets or CSS, then push again. If it still sticks, try a **private window** or hard refresh.
 
 **Why `git pull` first?** So if you edited on GitHub or another computer, you don’t get “push rejected.”
 
