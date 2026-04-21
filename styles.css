@@ -147,6 +147,42 @@ body {
   margin: 0 auto;
 }
 
+/* Same brand asset as iOS home (`FocuShift App Image`) */
+.hero-app-brand {
+  display: block;
+  width: 100%;
+  max-width: min(36rem, 100%);
+  height: auto;
+  max-height: clamp(7.5rem, 22vw, 11rem);
+  margin: 0 auto 0.65rem;
+  object-fit: contain;
+  object-position: center;
+  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.28));
+}
+
+.hero-app-tagline {
+  text-align: center;
+  font-size: clamp(1.05rem, 3vw, 1.35rem);
+  font-weight: 600;
+  color: var(--accent);
+  margin: 0 0 1.15rem;
+  letter-spacing: 0.01em;
+}
+
+/* Top nav: compact version of app brand (matches app identity) */
+.site-top-home .site-top-app-brand {
+  display: block;
+  height: 2.1rem;
+  width: auto;
+  max-width: min(11.5rem, 52vw);
+  object-fit: contain;
+  object-position: left center;
+}
+
+.site-top-home {
+  min-width: 0;
+}
+
 .hero-brand {
   display: inline-flex;
   align-items: center;
@@ -535,6 +571,16 @@ h1 {
   gap: 0.45rem;
   margin: 0 0 0.75rem;
   font-size: 1rem;
+}
+
+.footer-app-brand {
+  display: block;
+  height: clamp(2.5rem, 8vw, 3.25rem);
+  width: auto;
+  max-width: min(18rem, 90vw);
+  object-fit: contain;
+  margin: 0 auto;
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.2));
 }
 
 .footer-brand {
