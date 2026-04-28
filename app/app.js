@@ -4,9 +4,11 @@
   var root = document.getElementById("root");
   var scriptsUnsubscribe = null;
   var playlistsUnsubscribe = null;
+  var premadeUnsubscribe = null;
   var currentUser = null;
   var currentScripts = [];
   var currentPlaylists = [];
+  var currentPremade = [];
   var isEditing = false;
   var editingScriptId = null;
   var generatingAudioByScriptId = {};
@@ -146,6 +148,13 @@
     }
   }
 
+  function teardownPremadeListener() {
+    if (typeof premadeUnsubscribe === "function") {
+      premadeUnsubscribe();
+      premadeUnsubscribe = null;
+    }
+  }
+
   function formatDate(ts) {
     if (!ts || typeof ts.toDate !== "function") return "No date";
     try {
@@ -163,6 +172,10 @@
     return db.collection("users").doc(uid).collection("playlists");
   }
 
+  function premadeCollection() {
+    return db.collection("premadeAudio");
+  }
+
   function backendBaseURL() {
     if (window.fsFirebaseConfig && window.fsFirebaseConfig.backendURL) {
       return String(window.fsFirebaseConfig.backendURL).replace(/\/+$/, "");
@@ -173,12 +186,14 @@
   function renderSignedOut() {
     teardownScriptsListener();
     teardownPlaylistsListener();
+    teardownPremadeListener();
     redirectLogin();
   }
 
   function renderNonAdmin(email, displayName) {
     teardownScriptsListener();
     teardownPlaylistsListener();
+    teardownPremadeListener();
     root.innerHTML =
       "<h1>You're signed in</h1>" +
       "<p class=\"app-muted\">Hi " +
@@ -264,6 +279,7 @@
       "</div>" +
       '<div id="scripts-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '<div id="premade-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="script-editor"></div>' +
       '<section aria-label="My Library scripts">' +
       '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">My Library Scripts</h2>' +
@@ -276,6 +292,10 @@
       "  </div>" +
       '  <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
       '  <div id="playlist-detail" style="margin-top:0.8rem;"></div>' +
+      "</section>" +
+      '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
+      '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">App Library (Premade)</h2>' +
+      '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
       "</section>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
 
@@ -449,6 +469,13 @@
 
   function setPlaylistsMessage(text, kind) {
     var el = document.getElementById("playlists-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function setPremadeMessage(text, kind) {
+    var el = document.getElementById("premade-message");
     if (!el) return;
     el.className = "app-inline-msg" + (kind ? " " + kind : "");
     el.textContent = text || "";
@@ -1121,6 +1148,11 @@
       return;
     }
     var p = currentPlaylists[idx];
+    addScriptToPlaylist(script, p);
+  }
+
+  function addScriptToPlaylist(script, p) {
+    if (!currentUser) return;
     var ids = (p.scriptIDs || []).slice();
     if (!ids.includes(script.id)) ids.push(script.id);
     var items = ids.map(function (id) {
@@ -1184,6 +1216,176 @@
       );
   }
 
+  function premadeToScript(premade) {
+    return {
+      id: premade.id,
+      title: premade.title,
+      text: premade.scriptText || "",
+      audioURL: premade.audioURL || "",
+      voiceID: selectedVoiceId,
+      backgroundID: "",
+      createdAt: null,
+    };
+  }
+
+  function savePremadeToMyLibrary(premade) {
+    if (!currentUser) return;
+    var title = uniqueScriptTitle(premade.title || "Premade Script");
+    var docRef = scriptCollection(currentUser.uid).doc();
+    scriptCollection(currentUser.uid)
+      .doc(docRef.id)
+      .set({
+        title: title,
+        text: premade.scriptText || "",
+        createdAt: firebase.firestore.Timestamp.now(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        audioURL: premade.audioURL || "",
+        backgroundID: "",
+        voiceID: selectedVoiceId,
+        audioCreatedAt: premade.audioURL ? firebase.firestore.FieldValue.serverTimestamp() : null,
+        categoryID: premade.categoryID || "",
+      })
+      .then(function () {
+        setPremadeMessage('Saved "' + title + '" to My Library.', "success");
+      })
+      .catch(function (e) {
+        setPremadeMessage(e.message || "Could not save premade script.", "error");
+      });
+  }
+
+  function addPremadeToPlaylist(premade) {
+    if (!currentPlaylists.length) {
+      setPremadeMessage("Create a playlist first.", "error");
+      return;
+    }
+    var s = premadeToScript(premade);
+    var tempTitle = uniqueScriptTitle(premade.title || "Premade Script");
+    var docRef = scriptCollection(currentUser.uid).doc();
+    scriptCollection(currentUser.uid)
+      .doc(docRef.id)
+      .set({
+        title: tempTitle,
+        text: s.text,
+        createdAt: firebase.firestore.Timestamp.now(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        audioURL: s.audioURL || "",
+        backgroundID: "",
+        voiceID: selectedVoiceId,
+        audioCreatedAt: s.audioURL ? firebase.firestore.FieldValue.serverTimestamp() : null,
+        categoryID: premade.categoryID || "",
+      })
+      .then(function () {
+        var savedScript = {
+          id: docRef.id,
+          title: tempTitle,
+          text: s.text,
+          audioURL: s.audioURL || "",
+          voiceID: selectedVoiceId,
+          backgroundID: "",
+        };
+        addScriptToPlaylistPrompt(savedScript);
+        setPremadeMessage('Saved "' + tempTitle + '" then choose a playlist.', "success");
+      })
+      .catch(function (e) {
+        setPremadeMessage(e.message || "Could not save premade script.", "error");
+      });
+  }
+
+  function renderPremade() {
+    var list = document.getElementById("premade-list");
+    if (!list) return;
+    if (!currentPremade.length) {
+      list.innerHTML = '<div class="app-card"><p class="app-muted">No premade items found.</p></div>';
+      return;
+    }
+    list.innerHTML = currentPremade
+      .map(function (p) {
+        var hasAudio = !!(p.audioURL && String(p.audioURL).trim());
+        var playingThis = activeAudioScriptId === p.id && activeAudio && !activeAudio.paused;
+        return (
+          '<article class="app-card" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">' +
+          "<h3>" +
+          escapeHtml(p.title || "Untitled Premade") +
+          "</h3>" +
+          '<div class="app-card-meta">' +
+          escapeHtml(p.categoryID || "general") +
+          "</div>" +
+          '<p class="app-card-text">' +
+          escapeHtml((p.scriptText || "").slice(0, 220) || "(No script text)") +
+          "</p>" +
+          '<div class="app-card-actions">' +
+          '  <button type="button" class="app-btn" data-premade-action="save" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">Save to My Library</button>' +
+          '  <button type="button" class="app-btn" data-premade-action="add-playlist" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">Save + Add to Playlist</button>' +
+          '  <button type="button" class="app-btn" data-premade-action="play" data-premade-id="' +
+          escapeHtml(p.id) +
+          '"' +
+          (!hasAudio ? " disabled" : "") +
+          ">" +
+          (playingThis ? "Pause" : "Play") +
+          "</button>" +
+          "</div>" +
+          "</article>"
+        );
+      })
+      .join("");
+
+    list.querySelectorAll("[data-premade-action]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var action = btn.getAttribute("data-premade-action");
+        var pid = btn.getAttribute("data-premade-id");
+        var premade = currentPremade.find(function (x) {
+          return x.id === pid;
+        });
+        if (!premade) return;
+        if (action === "save") {
+          savePremadeToMyLibrary(premade);
+        } else if (action === "add-playlist") {
+          addPremadeToPlaylist(premade);
+        } else if (action === "play") {
+          togglePlayScriptAudio(premadeToScript(premade));
+        }
+      });
+    });
+  }
+
+  function subscribePremade() {
+    teardownPremadeListener();
+    premadeUnsubscribe = premadeCollection().onSnapshot(
+      function (snap) {
+        currentPremade = snap.docs
+          .map(function (doc) {
+            var data = doc.data() || {};
+            return {
+              id: doc.id,
+              title: data.title || "",
+              categoryID: data.categoryID || "",
+              description: data.description || "",
+              scriptText: data.scriptText || "",
+              audioURL: data.audioURL || "",
+              createdAt: data.createdAt || null,
+            };
+          })
+          .sort(function (a, b) {
+            var at = a.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
+            var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
+            return bt - at;
+          });
+        renderPremade();
+      },
+      function (e) {
+        setPremadeMessage(e.message || "Could not load premade library.", "error");
+        currentPremade = [];
+        renderPremade();
+      }
+    );
+  }
+
   function subscribeScripts(uid) {
     teardownScriptsListener();
     scriptsUnsubscribe = scriptCollection(uid)
@@ -1231,6 +1433,7 @@
           renderAdminShell(user.email, user.displayName);
           subscribeScripts(user.uid);
           subscribePlaylists(user.uid);
+          subscribePremade();
         } else {
           renderNonAdmin(user.email, user.displayName);
         }
