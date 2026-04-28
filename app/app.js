@@ -18,6 +18,7 @@
   var activeAudio = null;
   var activeAudioScriptId = null;
   var activeAudioTitle = "";
+  var activePreviewBlobURL = null;
   var activePlaylistQueue = [];
   var activePlaylistIndex = -1;
   var selectedPlaylistId = null;
@@ -34,6 +35,8 @@
   var premadeVoiceOverrideById = {};
   var premadeBackgroundOverrideById = {};
   var mediaPickerTarget = null;
+  var editingVoiceSettingsId = null;
+  var editingVoiceSettingsToken = "";
   var activeVoicesTab = "my-voices";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
@@ -473,6 +476,27 @@
       "    </div>" +
       "  </div>" +
       "</div>" +
+      '<div id="voice-settings-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice settings editor">' +
+      "    <h3>Voice settings</h3>" +
+      '    <p id="voice-settings-subtitle" class="app-muted" style="margin:0 0 0.55rem;">Tune cloned voice behavior to match iOS controls.</p>' +
+      '    <label for="voice-setting-stability">Stability <span id="voice-setting-stability-value" class="app-muted">0.50</span></label>' +
+      '    <input id="voice-setting-stability" type="range" min="0" max="1" step="0.01" value="0.5">' +
+      '    <label for="voice-setting-similarity">Similarity boost <span id="voice-setting-similarity-value" class="app-muted">0.80</span></label>' +
+      '    <input id="voice-setting-similarity" type="range" min="0" max="1" step="0.01" value="0.8">' +
+      '    <label for="voice-setting-style">Style <span id="voice-setting-style-value" class="app-muted">0.30</span></label>' +
+      '    <input id="voice-setting-style" type="range" min="0" max="1" step="0.01" value="0.3">' +
+      '    <label for="voice-setting-speaker-boost" style="display:flex;align-items:center;gap:0.45rem;cursor:pointer;">' +
+      '      <input id="voice-setting-speaker-boost" type="checkbox" checked style="width:auto;margin:0;">' +
+      "      Use speaker boost" +
+      "    </label>" +
+      '    <div id="voice-settings-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="voice-settings-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn" id="voice-settings-save">Save settings</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
@@ -581,6 +605,24 @@
       if (ev.target && ev.target.id === "media-picker-backdrop") {
         closeMediaPicker();
       }
+    });
+    document.getElementById("voice-settings-cancel").addEventListener("click", function () {
+      closeVoiceSettingsModal();
+    });
+    document.getElementById("voice-settings-save").addEventListener("click", function () {
+      saveVoiceSettingsFromModal();
+    });
+    document.getElementById("voice-settings-backdrop").addEventListener("click", function (ev) {
+      if (ev.target && ev.target.id === "voice-settings-backdrop") {
+        closeVoiceSettingsModal();
+      }
+    });
+    ["stability", "similarity", "style"].forEach(function (k) {
+      var el = document.getElementById("voice-setting-" + k);
+      if (!el) return;
+      el.addEventListener("input", function () {
+        updateVoiceSettingsReadout(k);
+      });
     });
     renderHomeFlow(displayName || "");
     renderVoices();
@@ -995,6 +1037,8 @@
         var isSelected = v.id === selectedVoiceId;
         var inMyVoices = !!savedSet[v.id] || currentClonedVoices.some(function (cv) { return cv.id === v.id; });
         var supportsSaveToggle = activeVoicesTab === "app-voices";
+        var isCloned = isClonedVoiceOption(v);
+        var supportsCloneActions = activeVoicesTab === "my-voices" && isCloned;
         return (
           '<div class="app-modal-row" style="margin-bottom:0.45rem;">' +
           '  <div class="app-modal-row-name">' +
@@ -1008,6 +1052,17 @@
               '">' +
               (inMyVoices ? "Saved" : "Add to My Voices") +
               "</button>"
+            : "") +
+          '<button type="button" class="app-btn app-btn-ghost" data-voice-preview-id="' +
+          escapeHtml(v.id) +
+          '">Preview</button>' +
+          (supportsCloneActions
+            ? '<button type="button" class="app-btn app-btn-ghost" data-voice-settings-id="' +
+              escapeHtml(v.id) +
+              '">Settings</button>' +
+              '<button type="button" class="app-btn app-btn-danger" data-voice-delete-id="' +
+              escapeHtml(v.id) +
+              '">Delete</button>'
             : "") +
           '<button type="button" class="app-btn ' +
           (isSelected ? "app-btn-primary" : "app-btn-secondary") +
@@ -1059,6 +1114,30 @@
           });
       });
     });
+    list.querySelectorAll("[data-voice-preview-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var voiceID = btn.getAttribute("data-voice-preview-id");
+        var voice = sourceVoices.find(function (v) {
+          return v.id === voiceID;
+        });
+        if (!voice) return;
+        previewVoiceSample(voice);
+      });
+    });
+    list.querySelectorAll("[data-voice-settings-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var voiceID = btn.getAttribute("data-voice-settings-id");
+        if (!voiceID) return;
+        editClonedVoiceSettings(voiceID);
+      });
+    });
+    list.querySelectorAll("[data-voice-delete-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var voiceID = btn.getAttribute("data-voice-delete-id");
+        if (!voiceID) return;
+        deleteClonedVoice(voiceID);
+      });
+    });
   }
 
   function allVoiceOptionsForSelection() {
@@ -1072,6 +1151,21 @@
     currentClonedVoices.forEach(pushVoice);
     availableVoices.forEach(pushVoice);
     return out;
+  }
+
+  function isClonedVoiceOption(voice) {
+    if (!voice || !voice.id) return false;
+    return currentClonedVoices.some(function (cv) {
+      return cv.id === voice.id;
+    });
+  }
+
+  function clonedVoiceById(voiceID) {
+    return (
+      currentClonedVoices.find(function (cv) {
+        return cv.id === voiceID;
+      }) || null
+    );
   }
 
   function beginVoiceUploadFlow(mode) {
@@ -1176,6 +1270,244 @@
       })
       .catch(function (e) {
         setVoicesMessage(e.message || "Could not create voice.", "error");
+      });
+  }
+
+  function previewVoiceSample(voice) {
+    if (!currentUser || !voice || !voice.id) return;
+    setVoicesMessage('Generating preview for "' + (voice.name || "voice") + '"...', "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/text-to-speech", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({
+            text: "I am focused. I am calm. I am ready for a great day.",
+            voiceID: voice.id,
+          }),
+        });
+      })
+      .then(function (resp) {
+        if (!resp.ok) {
+          return resp.json().then(function (json) {
+            throw new Error((json && json.error) || "Could not preview voice.");
+          }).catch(function () {
+            throw new Error("Could not preview voice.");
+          });
+        }
+        return resp.blob();
+      })
+      .then(function (blob) {
+        if (activePreviewBlobURL) {
+          try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
+          activePreviewBlobURL = null;
+        }
+        var blobURL = URL.createObjectURL(blob);
+        activePreviewBlobURL = blobURL;
+        stopActiveAudio(false);
+        activeAudio = new Audio(blobURL);
+        activeAudioScriptId = null;
+        activeAudioTitle = "Voice preview — " + (voice.name || "Voice");
+        bindAudioLifecycle(function () {
+          if (activePreviewBlobURL) {
+            try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
+            activePreviewBlobURL = null;
+          }
+          activeAudioScriptId = null;
+          activeAudioTitle = "";
+          activeAudio = null;
+          updateMiniPlayer();
+        });
+        return activeAudio.play();
+      })
+      .then(function () {
+        updateMiniPlayer();
+        setVoicesMessage("Playing preview.", "success");
+      })
+      .catch(function (e) {
+        setVoicesMessage(e.message || "Could not preview voice.", "error");
+      });
+  }
+
+  function setVoiceSettingsMessage(text, kind) {
+    var el = document.getElementById("voice-settings-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function updateVoiceSettingsReadout(kind) {
+    var input = document.getElementById("voice-setting-" + kind);
+    var out = document.getElementById("voice-setting-" + kind + "-value");
+    if (!input || !out) return;
+    var val = Number(input.value || 0);
+    if (!isFinite(val)) val = 0;
+    out.textContent = val.toFixed(2);
+  }
+
+  function closeVoiceSettingsModal() {
+    var backdrop = document.getElementById("voice-settings-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    editingVoiceSettingsId = null;
+    editingVoiceSettingsToken = "";
+    setVoiceSettingsMessage("", "");
+  }
+
+  function openVoiceSettingsModal(voice, token, settings) {
+    var backdrop = document.getElementById("voice-settings-backdrop");
+    if (!backdrop || !voice || !voice.id) return;
+    editingVoiceSettingsId = voice.id;
+    editingVoiceSettingsToken = token || "";
+
+    var subtitle = document.getElementById("voice-settings-subtitle");
+    var stability = document.getElementById("voice-setting-stability");
+    var similarity = document.getElementById("voice-setting-similarity");
+    var style = document.getElementById("voice-setting-style");
+    var speaker = document.getElementById("voice-setting-speaker-boost");
+    if (!stability || !similarity || !style || !speaker) return;
+
+    var s = settings || {};
+    stability.value = String(typeof s.stability === "number" ? s.stability : 0.5);
+    similarity.value = String(typeof s.similarity_boost === "number" ? s.similarity_boost : 0.8);
+    style.value = String(typeof s.style === "number" ? s.style : 0.3);
+    speaker.checked = s.use_speaker_boost !== false;
+
+    updateVoiceSettingsReadout("stability");
+    updateVoiceSettingsReadout("similarity");
+    updateVoiceSettingsReadout("style");
+    if (subtitle) subtitle.textContent = 'Editing "' + (voice.name || "Cloned voice") + '"';
+    setVoiceSettingsMessage("", "");
+
+    backdrop.hidden = false;
+  }
+
+  function saveVoiceSettingsFromModal() {
+    var cloned = clonedVoiceById(editingVoiceSettingsId);
+    if (!currentUser || !cloned || !cloned.elevenLabsVoiceID || !editingVoiceSettingsToken) {
+      setVoiceSettingsMessage("Voice settings session expired. Reopen settings and try again.", "error");
+      return;
+    }
+
+    function clamp01(n, fallback) {
+      var x = Number(n);
+      if (!isFinite(x)) return fallback;
+      return Math.max(0, Math.min(1, x));
+    }
+
+    var stability = document.getElementById("voice-setting-stability");
+    var similarity = document.getElementById("voice-setting-similarity");
+    var style = document.getElementById("voice-setting-style");
+    var speaker = document.getElementById("voice-setting-speaker-boost");
+    if (!stability || !similarity || !style || !speaker) return;
+
+    var payload = {
+      stability: clamp01(stability.value, 0.5),
+      similarity_boost: clamp01(similarity.value, 0.8),
+      style: clamp01(style.value, 0.3),
+      use_speaker_boost: !!speaker.checked,
+    };
+
+    setVoiceSettingsMessage("Saving voice settings...", "");
+    fetch(backendBaseURL() + "/elevenlabs/voices/" + encodeURIComponent(cloned.elevenLabsVoiceID) + "/settings/edit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + editingVoiceSettingsToken,
+      },
+      body: JSON.stringify(payload),
+    })
+      .then(function (resp) {
+        return resp.json().then(function (json) {
+          if (!resp.ok) throw new Error((json && json.error) || "Could not save settings.");
+          return true;
+        }).catch(function () {
+          if (!resp.ok) throw new Error("Could not save settings.");
+          return true;
+        });
+      })
+      .then(function () {
+        closeVoiceSettingsModal();
+        setVoicesMessage("Voice settings updated.", "success");
+      })
+      .catch(function (e) {
+        setVoiceSettingsMessage(e.message || "Could not update voice settings.", "error");
+      });
+  }
+
+  function editClonedVoiceSettings(voiceID) {
+    var cloned = clonedVoiceById(voiceID);
+    if (!currentUser || !cloned || !cloned.elevenLabsVoiceID) {
+      setVoicesMessage("Could not find cloned voice settings target.", "error");
+      return;
+    }
+    setVoicesMessage("Loading current settings...", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/elevenlabs/voices/" + encodeURIComponent(cloned.elevenLabsVoiceID) + "/settings", {
+          method: "GET",
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        }).then(function (resp) {
+          return resp.json().then(function (json) {
+            if (!resp.ok) throw new Error((json && json.error) || "Could not load voice settings.");
+            return { token: token, settings: json || {}, voice: cloned };
+          });
+        });
+      })
+      .then(function (ctx) {
+        openVoiceSettingsModal(ctx.voice, ctx.token, ctx.settings);
+      })
+      .catch(function (e) {
+        setVoicesMessage(e.message || "Could not update voice settings.", "error");
+      });
+  }
+
+  function deleteClonedVoice(voiceID) {
+    var cloned = clonedVoiceById(voiceID);
+    if (!currentUser || !cloned || !cloned.elevenLabsVoiceID) {
+      setVoicesMessage("Could not find cloned voice to delete.", "error");
+      return;
+    }
+    if (!window.confirm('Delete cloned voice "' + (cloned.name || "voice") + '"?')) return;
+    setVoicesMessage("Deleting cloned voice...", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/elevenlabs/voices/" + encodeURIComponent(cloned.elevenLabsVoiceID), {
+          method: "DELETE",
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        }).then(function (resp) {
+          if (!resp.ok) {
+            return resp.text().then(function (t) {
+              throw new Error(t || "Could not delete cloned voice from provider.");
+            });
+          }
+          return true;
+        });
+      })
+      .then(function () {
+        return clonedVoicesCollection(currentUser.uid).doc(cloned.id).delete();
+      })
+      .then(function () {
+        if (selectedVoiceId === cloned.id) {
+          selectedVoiceId = availableVoices.length ? availableVoices[0].id : selectedVoiceId;
+          return saveUserDefaults();
+        }
+        return null;
+      })
+      .then(function () {
+        setVoicesMessage("Cloned voice deleted.", "success");
+      })
+      .catch(function (e) {
+        setVoicesMessage(e.message || "Could not delete cloned voice.", "error");
       });
   }
 
@@ -2109,6 +2441,12 @@
       try {
         activeAudio.pause();
       } catch (_e) {}
+    }
+    if (activePreviewBlobURL) {
+      try {
+        URL.revokeObjectURL(activePreviewBlobURL);
+      } catch (_e2) {}
+      activePreviewBlobURL = null;
     }
     activeAudio = null;
     activeAudioScriptId = null;
