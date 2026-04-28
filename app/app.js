@@ -566,9 +566,11 @@
     var titleInput = document.getElementById("publish-title");
     var textInput = document.getElementById("publish-script-text");
     if (!s) return;
-    if (titleInput && !titleInput.value.trim()) titleInput.value = s.title || "";
-    if (textInput && !textInput.value.trim()) textInput.value = s.text || "";
-    if (!publishCategoryId) publishCategoryId = s.categoryID || "confidence";
+    // When the selected source script changes, always sync fields to that script
+    // so the modal reflects what will actually be published.
+    if (titleInput) titleInput.value = s.title || "";
+    if (textInput) textInput.value = s.text || "";
+    publishCategoryId = s.categoryID || publishCategoryId || "confidence";
     var catSel = document.getElementById("publish-category");
     if (catSel && publishCategoryId) catSel.value = publishCategoryId;
   }
