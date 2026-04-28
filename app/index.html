@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Focus Shift — Web</title>
+  <meta name="robots" content="noindex" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="icon" href="../images/logo.png?v=8" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css?v=8" />
+  <link rel="stylesheet" href="../login/auth.css?v=1" />
+  <style>
+    .app-shell { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    .app-shell h1 { font-size: 1.5rem; margin-top: 0; }
+    .app-muted { color: var(--muted, #8b9bb4); font-size: 0.95rem; line-height: 1.5; }
+    .app-admin-links { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .app-admin-links a {
+      display: block; padding: 0.85rem 1rem; border-radius: 12px;
+      background: rgba(255,255,255,0.06); border: 1px solid var(--stroke, rgba(255,255,255,0.12));
+      color: inherit; text-decoration: none; font-weight: 600;
+    }
+    .app-admin-links a:hover { border-color: #2563eb; }
+  </style>
+</head>
+<body>
+  <main class="app-shell" id="root">
+    <p class="app-muted">Loading…</p>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+  <script src="app.js?v=1"></script>
+</body>
+</html>

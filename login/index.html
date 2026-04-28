@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in — Focus Shift</title>
+  <meta name="description" content="Sign in to Focus Shift on the web with Google or email." />
+  <link rel="canonical" href="https://focusshift.app/login/" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="icon" href="../images/logo.png?v=8" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css?v=8" />
+  <link rel="stylesheet" href="auth.css?v=1" />
+</head>
+<body>
+  <main class="auth-page">
+    <div class="auth-card" id="auth-card">
+      <img class="auth-brand" src="../images/focus-shift-app-brand.png?v=8" alt="Focus Shift" width="1174" height="417" decoding="async" />
+      <h1 id="auth-title">Sign in</h1>
+      <p class="auth-tagline">Shift Your Focus, Shift Your Life</p>
+
+      <div class="auth-banner auth-banner--setup" id="setup-banner" role="alert"></div>
+      <div class="auth-banner auth-banner--error" id="error-banner" role="alert"></div>
+
+      <button type="button" class="auth-btn auth-btn-google" id="btn-google" disabled>Continue with Google</button>
+
+      <p style="text-align:center;margin:0.75rem 0;color:var(--muted,#8b9bb4);font-size:0.85rem;">or</p>
+
+      <form id="email-form" autocomplete="on">
+        <div class="auth-field sign-up-only">
+          <label for="firstName">First name</label>
+          <input id="firstName" name="given-name" type="text" autocomplete="given-name" />
+        </div>
+        <div class="auth-field sign-up-only">
+          <label for="lastName">Last name</label>
+          <input id="lastName" name="family-name" type="text" autocomplete="family-name" />
+        </div>
+        <div class="auth-field">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" autocomplete="username" required />
+        </div>
+        <div class="auth-field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <div class="auth-field sign-up-only">
+          <label for="password2">Confirm password</label>
+          <input id="password2" name="password2" type="password" autocomplete="new-password" />
+        </div>
+        <div class="auth-row-actions sign-in-only">
+          <button type="button" class="auth-link-btn" id="btn-forgot">Forgot password?</button>
+        </div>
+        <button type="submit" class="auth-btn auth-btn-primary" id="btn-email-submit" disabled>Sign in</button>
+      </form>
+
+      <div class="auth-toggle">
+        <span id="toggle-label">New here?</span>
+        <button type="button" id="btn-toggle-mode">Create an account</button>
+      </div>
+
+      <p class="auth-back"><a href="/">← Back to home</a></p>
+    </div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+  <script src="auth.js?v=1"></script>
+</body>
+</html>

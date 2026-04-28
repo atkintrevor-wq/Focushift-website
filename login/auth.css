@@ -1,0 +1,175 @@
+/* Login / sign-up — uses marketing tokens from ../styles.css */
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 1rem 3rem;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--stroke, rgba(255, 255, 255, 0.12));
+  border-radius: 16px;
+  padding: 1.5rem 1.25rem 1.75rem;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+}
+
+.auth-card h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.25rem;
+  text-align: center;
+}
+
+.auth-tagline {
+  text-align: center;
+  color: var(--muted, #8b9bb4);
+  font-size: 0.95rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-brand {
+  display: block;
+  margin: 0 auto 1rem;
+  max-width: 220px;
+  height: auto;
+}
+
+.auth-field {
+  margin-bottom: 1rem;
+}
+
+.auth-field label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #8b9bb4);
+  margin-bottom: 0.35rem;
+}
+
+.auth-field input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid var(--stroke, rgba(255, 255, 255, 0.15));
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+  font-size: 1rem;
+}
+
+.auth-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.auth-row-actions a {
+  font-size: 0.875rem;
+  color: var(--accent, #4f8cff);
+}
+
+.auth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  border: none;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 0.65rem;
+}
+
+.auth-btn-primary {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #fff;
+}
+
+.auth-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-btn-google {
+  background: #fff;
+  color: #1f2937;
+}
+
+.auth-banner {
+  display: none;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 0.9rem;
+}
+
+.auth-banner.is-visible {
+  display: block;
+}
+
+.auth-banner--error {
+  background: rgba(220, 38, 38, 0.2);
+  border: 1px solid rgba(220, 38, 38, 0.45);
+}
+
+.auth-banner--setup {
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.4);
+}
+
+.auth-toggle {
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: var(--muted, #8b9bb4);
+}
+
+.auth-toggle button {
+  background: none;
+  border: none;
+  color: var(--accent, #4f8cff);
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+
+.auth-back {
+  margin-top: 1.5rem;
+  font-size: 0.875rem;
+}
+
+.auth-back a {
+  color: var(--muted, #8b9bb4);
+}
+
+body.is-sign-up .sign-up-only {
+  display: block;
+}
+
+body.is-sign-up .sign-in-only {
+  display: none;
+}
+
+.sign-up-only {
+  display: none;
+}
+
+.auth-link-btn {
+  background: none;
+  border: none;
+  color: var(--accent, #4f8cff);
+  cursor: pointer;
+  font-size: 0.875rem;
+  padding: 0;
+}
