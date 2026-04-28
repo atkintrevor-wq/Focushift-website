@@ -100,6 +100,59 @@
       border-color: #2563eb;
     }
     .app-section[hidden] { display: none !important; }
+    .app-tab-count {
+      font-size: 0.78rem;
+      opacity: 0.85;
+      margin-left: 0.3rem;
+    }
+    .mini-player {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 1000;
+      padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
+      background: rgba(9, 15, 30, 0.95);
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      backdrop-filter: blur(8px);
+    }
+    .mini-player[hidden] { display: none !important; }
+    .mini-player-inner {
+      max-width: 720px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+    }
+    .mini-player-title {
+      font-size: 0.9rem;
+      flex: 1;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .mini-player-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .mini-player-btn {
+      border: 1px solid rgba(255,255,255,0.25);
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      border-radius: 999px;
+      min-width: 34px;
+      height: 34px;
+      padding: 0 0.65rem;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+    .mini-player-time {
+      font-size: 0.75rem;
+      opacity: 0.8;
+      min-width: 58px;
+      text-align: right;
+    }
   </style>
 </head>
 <body>
@@ -111,6 +164,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=9"></script>
 </body>
 </html>

@@ -14,10 +14,12 @@
   var generatingAudioByScriptId = {};
   var activeAudio = null;
   var activeAudioScriptId = null;
+  var activeAudioTitle = "";
   var activePlaylistQueue = [];
   var activePlaylistIndex = -1;
   var selectedPlaylistId = null;
   var activeAdminTab = "create";
+  var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var availableVoices = [
     { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
@@ -239,9 +241,9 @@
       "). Stage 4 now includes personalized mental script generation (web) + My Library CRUD.</p>" +
       '<nav class="app-tabs" aria-label="Admin sections">' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="create">Create</button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="library">My Library</button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists</button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="app-library">App Library</button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="library">My Library <span class="app-tab-count" id="count-library">0</span></button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
       "</nav>" +
       '<section id="section-create" class="app-section" aria-label="Create personalized mental script">' +
       '<section class="app-card" aria-label="Create personalized mental script">' +
@@ -312,6 +314,16 @@
       '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
       "</section>" +
       "</section>" +
+      '<div id="mini-player" class="mini-player" hidden>' +
+      '  <div class="mini-player-inner">' +
+      '    <div id="mini-player-title" class="mini-player-title">Now playing</div>' +
+      '    <div class="mini-player-controls">' +
+      '      <button type="button" id="mini-player-toggle" class="mini-player-btn">Play</button>' +
+      '      <button type="button" id="mini-player-stop" class="mini-player-btn">Stop</button>' +
+      "    </div>" +
+      '    <div id="mini-player-time" class="mini-player-time">0:00</div>' +
+      "  </div>" +
+      "</div>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
 
     document.getElementById("btn-sign-out").addEventListener("click", function () {
@@ -348,8 +360,24 @@
         setAdminTab(btn.getAttribute("data-admin-tab"));
       });
     });
+    document.getElementById("mini-player-toggle").addEventListener("click", function () {
+      if (!activeAudio) return;
+      if (activeAudio.paused) {
+        activeAudio.play().catch(function () {});
+      } else {
+        activeAudio.pause();
+      }
+      updateMiniPlayer();
+    });
+    document.getElementById("mini-player-stop").addEventListener("click", function () {
+      stopActiveAudio();
+      renderScripts(currentScripts);
+      renderSelectedPlaylistDetail();
+    });
     refreshGenerationQuestions();
     setAdminTab(activeAdminTab);
+    updateMiniPlayer();
+    updateTabCounts();
   }
 
   function setAdminTab(tabId) {
@@ -369,6 +397,9 @@
       var isActive = btn.getAttribute("data-admin-tab") === activeAdminTab;
       btn.classList.toggle("is-active", isActive);
     });
+    try {
+      localStorage.setItem(ADMIN_TAB_STORAGE_KEY, activeAdminTab);
+    } catch (_e) {}
   }
 
   function generationMessage(text, kind) {
@@ -519,6 +550,15 @@
     if (!el) return;
     el.className = "app-inline-msg" + (kind ? " " + kind : "");
     el.textContent = text || "";
+  }
+
+  function updateTabCounts() {
+    var cLib = document.getElementById("count-library");
+    var cPlay = document.getElementById("count-playlists");
+    var cPre = document.getElementById("count-premade");
+    if (cLib) cLib.textContent = String(currentScripts.length);
+    if (cPlay) cPlay.textContent = String(currentPlaylists.length);
+    if (cPre) cPre.textContent = String(currentPremade.length);
   }
 
   function setScriptBusy(scriptId, busy) {
@@ -745,6 +785,8 @@
       activePlaylistQueue = [];
       activePlaylistIndex = -1;
     }
+    activeAudioTitle = "";
+    updateMiniPlayer();
   }
 
   function togglePlayScriptAudio(script) {
@@ -768,14 +810,12 @@
     stopActiveAudio();
     activeAudio = new Audio(audioURL);
     activeAudioScriptId = script.id;
-    activeAudio.addEventListener("ended", function () {
-      activeAudioScriptId = null;
-      activeAudio = null;
-      renderScripts(currentScripts);
-    });
+    activeAudioTitle = script.title || "Audio";
+    bindAudioLifecycle();
     activeAudio
       .play()
       .then(function () {
+        updateMiniPlayer();
         renderScripts(currentScripts);
       })
       .catch(function () {
@@ -803,12 +843,14 @@
     activePlaylistIndex = index;
     activeAudioScriptId = script.id;
     activeAudio = new Audio(audioURL);
-    activeAudio.addEventListener("ended", function () {
+    activeAudioTitle = script.title || "Playlist audio";
+    bindAudioLifecycle(function () {
       playQueueAt(activePlaylistIndex + 1);
     });
     activeAudio
       .play()
       .then(function () {
+        updateMiniPlayer();
         renderSelectedPlaylistDetail();
         renderScripts(currentScripts);
       })
@@ -829,6 +871,48 @@
     }
     activePlaylistQueue = scripts;
     playQueueAt(0);
+  }
+
+  function bindAudioLifecycle(onEnded) {
+    if (!activeAudio) return;
+    activeAudio.addEventListener("play", updateMiniPlayer);
+    activeAudio.addEventListener("pause", updateMiniPlayer);
+    activeAudio.addEventListener("timeupdate", updateMiniPlayer);
+    activeAudio.addEventListener("ended", function () {
+      if (typeof onEnded === "function") {
+        onEnded();
+      } else {
+        activeAudioScriptId = null;
+        activeAudioTitle = "";
+        activeAudio = null;
+      }
+      updateMiniPlayer();
+      renderScripts(currentScripts);
+      renderSelectedPlaylistDetail();
+    });
+  }
+
+  function formatTime(sec) {
+    var s = Math.max(0, Math.floor(sec));
+    var m = Math.floor(s / 60);
+    var r = s % 60;
+    return m + ":" + (r < 10 ? "0" : "") + r;
+  }
+
+  function updateMiniPlayer() {
+    var shell = document.getElementById("mini-player");
+    if (!shell) return;
+    if (!activeAudio) {
+      shell.hidden = true;
+      return;
+    }
+    shell.hidden = false;
+    var titleEl = document.getElementById("mini-player-title");
+    var toggleEl = document.getElementById("mini-player-toggle");
+    var timeEl = document.getElementById("mini-player-time");
+    if (titleEl) titleEl.textContent = activeAudioTitle || "Now playing";
+    if (toggleEl) toggleEl.textContent = activeAudio.paused ? "Play" : "Pause";
+    if (timeEl) timeEl.textContent = formatTime(activeAudio.currentTime || 0);
   }
 
   function backendRequest(path, token, body) {
@@ -1247,6 +1331,7 @@
           renderPlaylists(currentPlaylists);
           renderSelectedPlaylistDetail();
           renderScripts(currentScripts);
+          updateTabCounts();
         },
         function (e) {
           setPlaylistsMessage(e.message || "Could not load playlists.", "error");
@@ -1416,6 +1501,7 @@
             var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
             return bt - at;
           });
+        updateTabCounts();
         renderPremade();
       },
       function (e) {
@@ -1446,6 +1532,7 @@
             };
           });
           currentScripts = scripts;
+          updateTabCounts();
           renderScripts(scripts);
           renderSelectedPlaylistDetail();
         },
@@ -1468,6 +1555,10 @@
       .doc(user.uid)
       .get()
       .then(function (snap) {
+        try {
+          var savedTab = localStorage.getItem(ADMIN_TAB_STORAGE_KEY);
+          if (savedTab) activeAdminTab = savedTab;
+        } catch (_e) {}
         var isAdmin = snap.exists && snap.data().isAdmin === true;
         if (isAdmin) {
           renderAdminShell(user.email, user.displayName);
