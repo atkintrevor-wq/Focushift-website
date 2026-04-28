@@ -23,6 +23,9 @@
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
   var publishCategoryId = "confidence";
+  var publishTextDirty = false;
+  var publishTitleDirty = false;
+  var editingPremadeId = null;
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var availableVoices = [
     { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
@@ -370,16 +373,37 @@
       '    <select id="publish-script-id"></select>' +
       '    <label for="publish-title">Title</label>' +
       '    <input id="publish-title" type="text" maxlength="120" placeholder="Premade title">' +
+      '    <div id="publish-title-dirty" class="app-inline-msg" style="display:none;margin-top:-0.35rem;margin-bottom:0.4rem;">Title edited from selected script.</div>' +
       '    <label for="publish-category">Category</label>' +
       '    <select id="publish-category"></select>' +
       '    <label for="publish-description">Description (optional)</label>' +
       '    <input id="publish-description" type="text" maxlength="180" placeholder="Short description">' +
       '    <label for="publish-script-text">Script text (optional, defaults from selected script)</label>' +
       '    <textarea id="publish-script-text" rows="5" placeholder="If left empty, selected script text is used"></textarea>' +
+      '    <div id="publish-text-dirty" class="app-inline-msg" style="display:none;margin-top:-0.35rem;">Script text edited from selected script.</div>' +
       '    <div id="publish-premade-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="premade-publish-cancel">Cancel</button>' +
       '      <button type="button" class="app-btn" id="premade-publish-submit">Publish</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="premade-edit-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Edit premade">' +
+      "    <h3>Edit premade</h3>" +
+      '    <label for="premade-edit-title">Title</label>' +
+      '    <input id="premade-edit-title" type="text" maxlength="120">' +
+      '    <label for="premade-edit-category">Category</label>' +
+      '    <select id="premade-edit-category"></select>' +
+      '    <label for="premade-edit-description">Description</label>' +
+      '    <input id="premade-edit-description" type="text" maxlength="180">' +
+      '    <label for="premade-edit-text">Script text</label>' +
+      '    <textarea id="premade-edit-text" rows="6"></textarea>' +
+      '    <div id="premade-edit-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn app-btn-danger" id="premade-edit-delete">Unpublish</button>' +
+      '      <button type="button" class="app-btn" id="premade-edit-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn" id="premade-edit-save">Save changes</button>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -469,6 +493,21 @@
     document.getElementById("publish-script-id").addEventListener("change", function () {
       syncPublishFormFromSelectedScript();
     });
+    document.getElementById("publish-title").addEventListener("input", function () {
+      updatePublishDirtyState();
+    });
+    document.getElementById("publish-script-text").addEventListener("input", function () {
+      updatePublishDirtyState();
+    });
+    document.getElementById("premade-edit-cancel").addEventListener("click", function () {
+      closeEditPremadeModal();
+    });
+    document.getElementById("premade-edit-save").addEventListener("click", function () {
+      savePremadeEdits();
+    });
+    document.getElementById("premade-edit-delete").addEventListener("click", function () {
+      unpublishPremade();
+    });
     refreshGenerationQuestions();
     setAdminTab(activeAdminTab);
     updateMiniPlayer();
@@ -504,6 +543,9 @@
     populatePublishScriptOptions();
     populatePublishCategoryOptions();
     syncPublishFormFromSelectedScript();
+    publishTextDirty = false;
+    publishTitleDirty = false;
+    updatePublishDirtyUI();
     setPublishPremadeMessage("", "");
     backdrop.hidden = false;
   }
@@ -511,6 +553,9 @@
   function closePublishPremadeModal() {
     var backdrop = document.getElementById("premade-publish-backdrop");
     if (backdrop) backdrop.hidden = true;
+    publishTextDirty = false;
+    publishTitleDirty = false;
+    updatePublishDirtyUI();
     setPublishPremadeMessage("", "");
   }
 
@@ -573,6 +618,28 @@
     publishCategoryId = s.categoryID || publishCategoryId || "confidence";
     var catSel = document.getElementById("publish-category");
     if (catSel && publishCategoryId) catSel.value = publishCategoryId;
+    publishTextDirty = false;
+    publishTitleDirty = false;
+    updatePublishDirtyUI();
+  }
+
+  function updatePublishDirtyState() {
+    var s = selectedPublishScript();
+    if (!s) return;
+    var titleInput = document.getElementById("publish-title");
+    var textInput = document.getElementById("publish-script-text");
+    var title = ((titleInput && titleInput.value) || "").trim();
+    var text = ((textInput && textInput.value) || "").trim();
+    publishTitleDirty = title !== String(s.title || "").trim();
+    publishTextDirty = text !== String(s.text || "").trim();
+    updatePublishDirtyUI();
+  }
+
+  function updatePublishDirtyUI() {
+    var titleBadge = document.getElementById("publish-title-dirty");
+    var textBadge = document.getElementById("publish-text-dirty");
+    if (titleBadge) titleBadge.style.display = publishTitleDirty ? "block" : "none";
+    if (textBadge) textBadge.style.display = publishTextDirty ? "block" : "none";
   }
 
   function publishPremadeFromModal() {
@@ -612,6 +679,92 @@
       })
       .catch(function (e) {
         setPublishPremadeMessage(e.message || "Could not publish premade.", "error");
+      });
+  }
+
+  function setEditPremadeMessage(text, kind) {
+    var el = document.getElementById("premade-edit-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function openEditPremadeModal(premade) {
+    if (!premade) return;
+    editingPremadeId = premade.id;
+    var backdrop = document.getElementById("premade-edit-backdrop");
+    var title = document.getElementById("premade-edit-title");
+    var category = document.getElementById("premade-edit-category");
+    var desc = document.getElementById("premade-edit-description");
+    var text = document.getElementById("premade-edit-text");
+    if (!backdrop || !title || !category || !desc || !text) return;
+    category.innerHTML = surveyCategories
+      .map(function (c) {
+        var selected = c.id === (premade.categoryID || "") ? " selected" : "";
+        return '<option value="' + escapeHtml(c.id) + '"' + selected + ">" + escapeHtml(c.name) + "</option>";
+      })
+      .join("");
+    title.value = premade.title || "";
+    category.value = premade.categoryID || "confidence";
+    desc.value = premade.description || "";
+    text.value = premade.scriptText || "";
+    setEditPremadeMessage("", "");
+    backdrop.hidden = false;
+  }
+
+  function closeEditPremadeModal() {
+    var backdrop = document.getElementById("premade-edit-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    editingPremadeId = null;
+    setEditPremadeMessage("", "");
+  }
+
+  function savePremadeEdits() {
+    if (!editingPremadeId) return;
+    var title = ((document.getElementById("premade-edit-title").value || "").trim());
+    var categoryID = ((document.getElementById("premade-edit-category").value || "").trim() || "confidence");
+    var description = ((document.getElementById("premade-edit-description").value || "").trim());
+    var scriptText = ((document.getElementById("premade-edit-text").value || "").trim());
+    if (!title) {
+      setEditPremadeMessage("Title is required.", "error");
+      return;
+    }
+    setEditPremadeMessage("Saving...", "");
+    premadeCollection()
+      .doc(editingPremadeId)
+      .set(
+        {
+          title: title,
+          categoryID: categoryID,
+          description: description,
+          scriptText: scriptText,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      .then(function () {
+        setPremadeMessage("Premade updated.", "success");
+        closeEditPremadeModal();
+      })
+      .catch(function (e) {
+        setEditPremadeMessage(e.message || "Could not save changes.", "error");
+      });
+  }
+
+  function unpublishPremade() {
+    if (!editingPremadeId) return;
+    var premade = currentPremade.find(function (x) { return x.id === editingPremadeId; });
+    if (!window.confirm('Unpublish "' + ((premade && premade.title) || "this premade") + '"?')) return;
+    setEditPremadeMessage("Unpublishing...", "");
+    premadeCollection()
+      .doc(editingPremadeId)
+      .delete()
+      .then(function () {
+        setPremadeMessage("Premade unpublished.", "success");
+        closeEditPremadeModal();
+      })
+      .catch(function (e) {
+        setEditPremadeMessage(e.message || "Could not unpublish premade.", "error");
       });
   }
 
@@ -1798,6 +1951,9 @@
           '  <button type="button" class="app-btn" data-premade-action="add-playlist" data-premade-id="' +
           escapeHtml(p.id) +
           '">Save + Add to Playlist</button>' +
+          '  <button type="button" class="app-btn" data-premade-action="edit" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">Edit</button>' +
           '  <button type="button" class="app-btn" data-premade-action="play" data-premade-id="' +
           escapeHtml(p.id) +
           '"' +
@@ -1823,6 +1979,8 @@
           savePremadeToMyLibrary(premade);
         } else if (action === "add-playlist") {
           addPremadeToPlaylist(premade);
+        } else if (action === "edit") {
+          openEditPremadeModal(premade);
         } else if (action === "play") {
           togglePlayScriptAudio(premadeToScript(premade));
         }
