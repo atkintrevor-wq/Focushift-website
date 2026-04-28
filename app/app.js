@@ -9,6 +9,7 @@
   var currentScripts = [];
   var currentPlaylists = [];
   var currentPremade = [];
+  var currentUserProfile = null;
   var isEditing = false;
   var editingScriptId = null;
   var generatingAudioByScriptId = {};
@@ -233,11 +234,6 @@
   }
 
   function renderAdminShell(email, displayName) {
-    var categoryOptions = surveyCategories
-      .map(function (c) {
-        return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name) + "</option>";
-      })
-      .join("");
     var voiceOptions = availableVoices
       .map(function (v) {
         var selected = v.id === selectedVoiceId ? " selected" : "";
@@ -437,7 +433,11 @@
     });
     root.querySelectorAll("[data-admin-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        setAdminTab(btn.getAttribute("data-admin-tab"));
+        var tab = btn.getAttribute("data-admin-tab");
+        if (tab === "home") {
+          setHomeFlowStep("landing", displayName || "");
+        }
+        setAdminTab(tab);
       });
     });
     document.getElementById("mini-player-toggle").addEventListener("click", function () {
@@ -893,6 +893,48 @@
     );
   }
 
+  function scriptsWithAudioCount() {
+    return currentScripts.filter(function (s) {
+      return !!(s.audioURL && String(s.audioURL).trim());
+    }).length;
+  }
+
+  function publishedByMeCount() {
+    if (!currentUser) return 0;
+    return currentPremade.filter(function (p) {
+      return p.createdByUID && p.createdByUID === currentUser.uid;
+    }).length;
+  }
+
+  function mostRecentScriptUpdateLabel() {
+    if (!currentScripts.length) return "No scripts yet";
+    var latest = currentScripts.reduce(function (best, s) {
+      var candidate = s.updatedAt || s.createdAt || null;
+      var bestTs = best && (best.updatedAt || best.createdAt || null);
+      var cMillis =
+        candidate && typeof candidate.toMillis === "function" ? candidate.toMillis() : 0;
+      var bMillis =
+        bestTs && typeof bestTs.toMillis === "function" ? bestTs.toMillis() : 0;
+      return cMillis > bMillis ? s : best;
+    }, null);
+    var ts = latest && (latest.updatedAt || latest.createdAt || null);
+    return "Last script update: " + formatDate(ts);
+  }
+
+  function resolvePlanLabel() {
+    if (!currentUserProfile) return "Plan not set";
+    var candidates = [
+      currentUserProfile.subscriptionTier,
+      currentUserProfile.plan,
+      currentUserProfile.tier,
+    ];
+    for (var i = 0; i < candidates.length; i += 1) {
+      var raw = (candidates[i] || "").toString().trim();
+      if (raw) return raw;
+    }
+    return "Plan not set";
+  }
+
   function setHomeFlowStep(step, displayName) {
     homeFlowStep = step;
     renderHomeFlow(displayName || "");
@@ -908,6 +950,27 @@
         '  <p class="app-muted" style="margin:0;">Welcome' +
         (displayName ? ", <strong>" + escapeHtml(displayName) + "</strong>" : "") +
         '. Where Focus Becomes Power.</p>' +
+        '  <div class="app-card" style="margin:0;padding:0.85rem;border-radius:14px;">' +
+        '    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
+        '      <strong style="font-size:0.95rem;">Your Dashboard</strong>' +
+        '      <span class="app-chip">' + escapeHtml(resolvePlanLabel()) + "</span>" +
+        "    </div>" +
+        '    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.45rem;">' +
+        '      <div class="app-empty-hint" style="margin:0;padding:0.6rem;"><div class="app-muted" style="font-size:0.75rem;">Scripts</div><div style="font-weight:700;font-size:1rem;">' +
+        escapeHtml(String(currentScripts.length)) +
+        "</div></div>" +
+        '      <div class="app-empty-hint" style="margin:0;padding:0.6rem;"><div class="app-muted" style="font-size:0.75rem;">Audio Ready</div><div style="font-weight:700;font-size:1rem;">' +
+        escapeHtml(String(scriptsWithAudioCount())) +
+        "</div></div>" +
+        '      <div class="app-empty-hint" style="margin:0;padding:0.6rem;"><div class="app-muted" style="font-size:0.75rem;">Playlists</div><div style="font-weight:700;font-size:1rem;">' +
+        escapeHtml(String(currentPlaylists.length)) +
+        "</div></div>" +
+        '      <div class="app-empty-hint" style="margin:0;padding:0.6rem;"><div class="app-muted" style="font-size:0.75rem;">Published Premade</div><div style="font-weight:700;font-size:1rem;">' +
+        escapeHtml(String(publishedByMeCount())) +
+        "</div></div>" +
+        "    </div>" +
+        '    <p class="app-muted" style="margin:0.55rem 0 0;">' + escapeHtml(mostRecentScriptUpdateLabel()) + "</p>" +
+        "  </div>" +
         '  <p class="app-muted" style="margin:0;">Create a personalized mental script in a guided flow, just like iOS.</p>' +
         '  <div><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
         "</div>";
@@ -1971,6 +2034,7 @@
           renderScripts(currentScripts);
           updateTabCounts();
           renderPlaylistPickerOptions();
+          if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
         },
         function (e) {
           setPlaylistsMessage(e.message || "Could not load playlists.", "error");
@@ -2177,6 +2241,7 @@
         expandedPremadeTextById = nextExpanded;
         updateTabCounts();
         renderPremade();
+        if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
       },
       function (e) {
         setPremadeMessage(e.message || "Could not load premade library.", "error");
@@ -2210,6 +2275,7 @@
           updateTabCounts();
           renderScripts(scripts);
           renderSelectedPlaylistDetail();
+          if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
         },
         function (e) {
           setMessage(e.message || "Could not load scripts.", "error");
@@ -2234,6 +2300,7 @@
           var savedTab = localStorage.getItem(ADMIN_TAB_STORAGE_KEY);
           if (savedTab) activeAdminTab = savedTab;
         } catch (_e) {}
+        currentUserProfile = snap.exists ? snap.data() || {} : {};
         var isAdmin = snap.exists && snap.data().isAdmin === true;
         if (isAdmin) {
           renderAdminShell(user.email, user.displayName);
