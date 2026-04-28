@@ -80,6 +80,26 @@
     .app-inline-msg { margin: 0.6rem 0; font-size: 0.9rem; }
     .app-inline-msg.error { color: #fca5a5; }
     .app-inline-msg.success { color: #86efac; }
+    .app-tabs {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin: 1rem 0;
+    }
+    .app-tab-btn {
+      border: 1px solid var(--stroke, rgba(255,255,255,0.2));
+      background: rgba(255,255,255,0.05);
+      color: inherit;
+      border-radius: 999px;
+      padding: 0.45rem 0.8rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .app-tab-btn.is-active {
+      background: rgba(37, 99, 235, 0.2);
+      border-color: #2563eb;
+    }
+    .app-section[hidden] { display: none !important; }
   </style>
 </head>
 <body>
@@ -91,6 +111,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=7"></script>
+  <script src="app.js?v=8"></script>
 </body>
 </html>

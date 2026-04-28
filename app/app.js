@@ -17,6 +17,7 @@
   var activePlaylistQueue = [];
   var activePlaylistIndex = -1;
   var selectedPlaylistId = null;
+  var activeAdminTab = "create";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var availableVoices = [
     { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
@@ -236,6 +237,13 @@
       "</strong> (" +
       escapeHtml(displayName || "no display name") +
       "). Stage 4 now includes personalized mental script generation (web) + My Library CRUD.</p>" +
+      '<nav class="app-tabs" aria-label="Admin sections">' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="create">Create</button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="library">My Library</button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists</button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="app-library">App Library</button>' +
+      "</nav>" +
+      '<section id="section-create" class="app-section" aria-label="Create personalized mental script">' +
       '<section class="app-card" aria-label="Create personalized mental script">' +
       '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Create Personalized Mental Script</h2>' +
       '  <p class="app-muted" style="margin-top:0;">Answer two prompts, generate with AI, and save directly to My Library.</p>' +
@@ -267,6 +275,8 @@
       "  </form>" +
       '  <div id="generation-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
+      "</section>" +
+      '<section id="section-library" class="app-section">' +
       '<div class="app-toolbar">' +
       '  <label for="global-voice" style="display:flex;align-items:center;gap:0.5rem;">' +
       '    <span class="app-muted" style="font-size:0.85rem;">Voice</span>' +
@@ -285,6 +295,8 @@
       '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">My Library Scripts</h2>' +
       '  <div id="scripts-list"><p class="app-muted">Loading scripts...</p></div>' +
       "</section>" +
+      "</section>" +
+      '<section id="section-playlists" class="app-section">' +
       '<section aria-label="Playlists" style="margin-top:1rem;">' +
       '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">Playlists</h2>' +
       '  <div class="app-toolbar" style="margin-top:0;">' +
@@ -293,9 +305,12 @@
       '  <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
       '  <div id="playlist-detail" style="margin-top:0.8rem;"></div>' +
       "</section>" +
+      "</section>" +
+      '<section id="section-app-library" class="app-section">' +
       '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
       '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">App Library (Premade)</h2>' +
       '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
+      "</section>" +
       "</section>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
 
@@ -328,7 +343,32 @@
     document.getElementById("btn-create-playlist").addEventListener("click", function () {
       createPlaylist();
     });
+    root.querySelectorAll("[data-admin-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        setAdminTab(btn.getAttribute("data-admin-tab"));
+      });
+    });
     refreshGenerationQuestions();
+    setAdminTab(activeAdminTab);
+  }
+
+  function setAdminTab(tabId) {
+    activeAdminTab = tabId || "create";
+    var sectionMap = {
+      create: "section-create",
+      library: "section-library",
+      playlists: "section-playlists",
+      "app-library": "section-app-library",
+    };
+    Object.keys(sectionMap).forEach(function (key) {
+      var section = document.getElementById(sectionMap[key]);
+      if (!section) return;
+      section.hidden = key !== activeAdminTab;
+    });
+    root.querySelectorAll("[data-admin-tab]").forEach(function (btn) {
+      var isActive = btn.getAttribute("data-admin-tab") === activeAdminTab;
+      btn.classList.toggle("is-active", isActive);
+    });
   }
 
   function generationMessage(text, kind) {
