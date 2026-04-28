@@ -290,20 +290,19 @@
       "    </select>" +
       "  </label>" +
       '  <button type="button" class="app-btn" id="btn-create-script">+ New Script</button>' +
-      '  <button type="button" class="app-btn" id="btn-sign-out">Sign out</button>' +
       "</div>" +
       '<div id="scripts-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="premade-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="script-editor"></div>' +
       '<section aria-label="My Library scripts">' +
-      '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">My Library Scripts</h2>' +
+      '  <div class="app-section-title-row"><h2>My Library Scripts</h2></div>' +
       '  <div id="scripts-list"><p class="app-muted">Loading scripts...</p></div>' +
       "</section>" +
       "</section>" +
       '<section id="section-playlists" class="app-section">' +
       '<section aria-label="Playlists" style="margin-top:1rem;">' +
-      '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">Playlists</h2>' +
+      '  <div class="app-section-title-row"><h2>Playlists</h2></div>' +
       '  <div class="app-toolbar" style="margin-top:0;">' +
       '    <button type="button" class="app-btn" id="btn-create-playlist">+ New Playlist</button>' +
       "  </div>" +
@@ -313,7 +312,7 @@
       "</section>" +
       '<section id="section-app-library" class="app-section">' +
       '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
-      '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">App Library (Premade)</h2>' +
+      '  <div class="app-section-title-row"><h2>App Library (Premade)</h2></div>' +
       '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
       "</section>" +
       "</section>" +
@@ -363,10 +362,6 @@
       "  </div>" +
       "</div>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
-
-    document.getElementById("btn-sign-out").addEventListener("click", function () {
-      auth.signOut().then(redirectLogin);
-    });
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
       openEditor(null);
@@ -799,7 +794,7 @@
     if (!list) return;
     if (!scripts.length) {
       list.innerHTML =
-        '<div class="app-card"><p class="app-muted">No scripts yet. Click "+ New Script" to create your first one.</p></div>';
+        '<div class="app-empty-hint">No scripts yet. Tap <strong>+ New Script</strong> to create one, or use the <strong>Create</strong> tab to generate a personalized mental script and auto-save it here.</div>';
       return;
     }
     list.innerHTML = scripts.map(scriptCardHtml).join("");
@@ -1229,7 +1224,8 @@
     var list = document.getElementById("playlists-list");
     if (!list) return;
     if (!playlists.length) {
-      list.innerHTML = '<div class="app-card"><p class="app-muted">No playlists yet.</p></div>';
+      list.innerHTML =
+        '<div class="app-empty-hint">No playlists yet. Tap <strong>+ New Playlist</strong>, then add scripts from <strong>My Library</strong> using <em>Add to Playlist</em>.</div>';
       renderSelectedPlaylistDetail();
       return;
     }
@@ -1616,7 +1612,8 @@
     var list = document.getElementById("premade-list");
     if (!list) return;
     if (!currentPremade.length) {
-      list.innerHTML = '<div class="app-card"><p class="app-muted">No premade items found.</p></div>';
+      list.innerHTML =
+        '<div class="app-empty-hint">No premade items found in Firestore yet. iOS can also read bundled premade audio, but web only reads published docs from <code>premadeAudio</code>. Once premade is published there, it appears here automatically.</div>';
       return;
     }
     list.innerHTML = currentPremade

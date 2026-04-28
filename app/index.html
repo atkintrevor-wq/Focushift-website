@@ -205,6 +205,63 @@
       gap: 0.5rem;
       margin-top: 0.7rem;
     }
+    .app-empty-hint {
+      border: 1px dashed rgba(255,255,255,0.25);
+      border-radius: 12px;
+      padding: 0.9rem;
+      background: rgba(255,255,255,0.03);
+      font-size: 0.92rem;
+      color: var(--muted, #8b9bb4);
+      line-height: 1.45;
+    }
+    .app-section-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.6rem;
+      margin: 1rem 0 0.5rem;
+    }
+    .app-section-title-row h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+    @media (max-width: 760px) {
+      .app-shell {
+        padding: 1rem 0.7rem 4.8rem;
+      }
+      .app-toolbar {
+        gap: 0.45rem;
+      }
+      .app-btn {
+        padding: 0.55rem 0.75rem;
+        font-size: 0.9rem;
+      }
+      .app-tabs {
+        position: sticky;
+        top: 0;
+        z-index: 1200;
+        padding: 0.4rem 0;
+        margin-top: 0.6rem;
+        background: linear-gradient(to bottom, rgba(8,14,28,0.98), rgba(8,14,28,0.9));
+        backdrop-filter: blur(6px);
+      }
+      .app-card {
+        padding: 0.85rem;
+      }
+      .mini-player-inner {
+        gap: 0.45rem;
+      }
+      .mini-player-btn {
+        min-width: 32px;
+        height: 32px;
+      }
+      .mini-player-title {
+        font-size: 0.84rem;
+      }
+      .mini-player-time {
+        min-width: 48px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -216,6 +273,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>
