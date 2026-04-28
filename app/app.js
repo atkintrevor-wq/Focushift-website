@@ -3,13 +3,18 @@
 
   var root = document.getElementById("root");
   var scriptsUnsubscribe = null;
+  var playlistsUnsubscribe = null;
   var currentUser = null;
   var currentScripts = [];
+  var currentPlaylists = [];
   var isEditing = false;
   var editingScriptId = null;
   var generatingAudioByScriptId = {};
   var activeAudio = null;
   var activeAudioScriptId = null;
+  var activePlaylistQueue = [];
+  var activePlaylistIndex = -1;
+  var selectedPlaylistId = null;
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var availableVoices = [
     { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
@@ -134,6 +139,13 @@
     }
   }
 
+  function teardownPlaylistsListener() {
+    if (typeof playlistsUnsubscribe === "function") {
+      playlistsUnsubscribe();
+      playlistsUnsubscribe = null;
+    }
+  }
+
   function formatDate(ts) {
     if (!ts || typeof ts.toDate !== "function") return "No date";
     try {
@@ -147,6 +159,10 @@
     return db.collection("users").doc(uid).collection("scripts");
   }
 
+  function playlistCollection(uid) {
+    return db.collection("users").doc(uid).collection("playlists");
+  }
+
   function backendBaseURL() {
     if (window.fsFirebaseConfig && window.fsFirebaseConfig.backendURL) {
       return String(window.fsFirebaseConfig.backendURL).replace(/\/+$/, "");
@@ -156,11 +172,13 @@
 
   function renderSignedOut() {
     teardownScriptsListener();
+    teardownPlaylistsListener();
     redirectLogin();
   }
 
   function renderNonAdmin(email, displayName) {
     teardownScriptsListener();
+    teardownPlaylistsListener();
     root.innerHTML =
       "<h1>You're signed in</h1>" +
       "<p class=\"app-muted\">Hi " +
@@ -245,10 +263,19 @@
       '  <button type="button" class="app-btn" id="btn-sign-out">Sign out</button>' +
       "</div>" +
       '<div id="scripts-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '<div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="script-editor"></div>' +
       '<section aria-label="My Library scripts">' +
       '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">My Library Scripts</h2>' +
       '  <div id="scripts-list"><p class="app-muted">Loading scripts...</p></div>' +
+      "</section>" +
+      '<section aria-label="Playlists" style="margin-top:1rem;">' +
+      '  <h2 style="font-size:1.1rem;margin:1rem 0 0.5rem;">Playlists</h2>' +
+      '  <div class="app-toolbar" style="margin-top:0;">' +
+      '    <button type="button" class="app-btn" id="btn-create-playlist">+ New Playlist</button>' +
+      "  </div>" +
+      '  <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
+      '  <div id="playlist-detail" style="margin-top:0.8rem;"></div>' +
       "</section>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
 
@@ -277,6 +304,9 @@
     document.getElementById("generate-form").addEventListener("submit", function (ev) {
       ev.preventDefault();
       generateAndSavePersonalizedScript(displayName || "");
+    });
+    document.getElementById("btn-create-playlist").addEventListener("click", function () {
+      createPlaylist();
     });
     refreshGenerationQuestions();
   }
@@ -417,6 +447,13 @@
     el.textContent = text || "";
   }
 
+  function setPlaylistsMessage(text, kind) {
+    var el = document.getElementById("playlists-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
   function setScriptBusy(scriptId, busy) {
     generatingAudioByScriptId[scriptId] = busy;
     renderScripts(currentScripts);
@@ -465,6 +502,11 @@
       '  <button type="button" class="app-btn app-btn-danger" data-action="delete" data-script-id="' +
       escapeHtml(script.id) +
       '">Delete</button>' +
+      '  <button type="button" class="app-btn" data-action="add-to-playlist" data-script-id="' +
+      escapeHtml(script.id) +
+      '"' +
+      (!currentPlaylists.length ? " disabled" : "") +
+      ">Add to Playlist</button>" +
       "</div>" +
       "</article>"
     );
@@ -489,6 +531,8 @@
           generateAudioForScript(script);
         } else if (action === "play-audio") {
           togglePlayScriptAudio(script);
+        } else if (action === "add-to-playlist") {
+          addScriptToPlaylistPrompt(script);
         }
       });
     });
@@ -621,7 +665,8 @@
       });
   }
 
-  function stopActiveAudio() {
+  function stopActiveAudio(resetQueue) {
+    if (typeof resetQueue === "undefined") resetQueue = true;
     if (activeAudio) {
       try {
         activeAudio.pause();
@@ -629,6 +674,10 @@
     }
     activeAudio = null;
     activeAudioScriptId = null;
+    if (resetQueue) {
+      activePlaylistQueue = [];
+      activePlaylistIndex = -1;
+    }
   }
 
   function togglePlayScriptAudio(script) {
@@ -667,6 +716,52 @@
         stopActiveAudio();
         renderScripts(currentScripts);
       });
+  }
+
+  function playQueueAt(index) {
+    if (!activePlaylistQueue.length) return;
+    if (index < 0 || index >= activePlaylistQueue.length) {
+      stopActiveAudio();
+      renderSelectedPlaylistDetail();
+      renderScripts(currentScripts);
+      return;
+    }
+    var script = activePlaylistQueue[index];
+    var audioURL = script.audioURL && String(script.audioURL).trim();
+    if (!audioURL) {
+      playQueueAt(index + 1);
+      return;
+    }
+    stopActiveAudio(false);
+    activePlaylistIndex = index;
+    activeAudioScriptId = script.id;
+    activeAudio = new Audio(audioURL);
+    activeAudio.addEventListener("ended", function () {
+      playQueueAt(activePlaylistIndex + 1);
+    });
+    activeAudio
+      .play()
+      .then(function () {
+        renderSelectedPlaylistDetail();
+        renderScripts(currentScripts);
+      })
+      .catch(function () {
+        setPlaylistsMessage("Could not play playlist audio in browser.", "error");
+        stopActiveAudio();
+        renderSelectedPlaylistDetail();
+      });
+  }
+
+  function startPlaylistPlayback(playlist) {
+    var scripts = resolvePlaylistScripts(playlist).filter(function (s) {
+      return !!(s.audioURL && String(s.audioURL).trim());
+    });
+    if (!scripts.length) {
+      setPlaylistsMessage("No playable audio in this playlist yet.", "error");
+      return;
+    }
+    activePlaylistQueue = scripts;
+    playQueueAt(0);
   }
 
   function backendRequest(path, token, body) {
@@ -801,6 +896,294 @@
     });
   }
 
+  function parsePlaylistItems(data) {
+    if (Array.isArray(data.items)) {
+      return data.items
+        .filter(function (x) {
+          return x && x.type === "script" && typeof x.id === "string" && x.id.trim();
+        })
+        .map(function (x) {
+          return x.id;
+        });
+    }
+    if (Array.isArray(data.scriptIDs)) return data.scriptIDs.slice();
+    return [];
+  }
+
+  function resolvePlaylistScripts(playlist) {
+    var ids = playlist.scriptIDs || [];
+    var byId = {};
+    currentScripts.forEach(function (s) {
+      byId[s.id] = s;
+    });
+    return ids
+      .map(function (id) {
+        return byId[id] || null;
+      })
+      .filter(function (x) {
+        return !!x;
+      });
+  }
+
+  function renderPlaylists(playlists) {
+    var list = document.getElementById("playlists-list");
+    if (!list) return;
+    if (!playlists.length) {
+      list.innerHTML = '<div class="app-card"><p class="app-muted">No playlists yet.</p></div>';
+      renderSelectedPlaylistDetail();
+      return;
+    }
+    list.innerHTML = playlists
+      .map(function (p) {
+        var selected = p.id === selectedPlaylistId;
+        return (
+          '<article class="app-card" data-playlist-id="' +
+          escapeHtml(p.id) +
+          '" style="' +
+          (selected ? "border-color:#2563eb;" : "") +
+          '">' +
+          "<h3>" +
+          escapeHtml(p.name || "Untitled Playlist") +
+          "</h3>" +
+          '<div class="app-card-meta">' +
+          (p.scriptIDs ? p.scriptIDs.length : 0) +
+          " item(s)</div>" +
+          '<div class="app-card-actions">' +
+          '  <button type="button" class="app-btn" data-playlist-action="open" data-playlist-id="' +
+          escapeHtml(p.id) +
+          '">Open</button>' +
+          '  <button type="button" class="app-btn" data-playlist-action="rename" data-playlist-id="' +
+          escapeHtml(p.id) +
+          '">Rename</button>' +
+          '  <button type="button" class="app-btn app-btn-danger" data-playlist-action="delete" data-playlist-id="' +
+          escapeHtml(p.id) +
+          '">Delete</button>' +
+          "</div>" +
+          "</article>"
+        );
+      })
+      .join("");
+
+    list.querySelectorAll("[data-playlist-action]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var action = btn.getAttribute("data-playlist-action");
+        var pid = btn.getAttribute("data-playlist-id");
+        var playlist = currentPlaylists.find(function (p) {
+          return p.id === pid;
+        });
+        if (!playlist) return;
+        if (action === "open") {
+          selectedPlaylistId = playlist.id;
+          renderPlaylists(currentPlaylists);
+          renderSelectedPlaylistDetail();
+        } else if (action === "rename") {
+          renamePlaylist(playlist);
+        } else if (action === "delete") {
+          deletePlaylist(playlist);
+        }
+      });
+    });
+  }
+
+  function renderSelectedPlaylistDetail() {
+    var el = document.getElementById("playlist-detail");
+    if (!el) return;
+    var p = currentPlaylists.find(function (x) {
+      return x.id === selectedPlaylistId;
+    });
+    if (!p) {
+      el.innerHTML = "";
+      return;
+    }
+    var scripts = resolvePlaylistScripts(p);
+    var isPlayingPlaylist = activePlaylistQueue.length > 0;
+    el.innerHTML =
+      '<article class="app-card">' +
+      "<h3>" +
+      escapeHtml(p.name) +
+      "</h3>" +
+      '<div class="app-card-actions">' +
+      '  <button type="button" class="app-btn" id="btn-play-playlist">' +
+      (isPlayingPlaylist ? "Restart playlist" : "Play playlist") +
+      "</button>" +
+      '  <button type="button" class="app-btn" id="btn-stop-playlist">Stop</button>' +
+      "</div>" +
+      (scripts.length
+        ? '<ul style="margin:0.8rem 0 0;padding-left:1.1rem;">' +
+          scripts
+            .map(function (s, idx) {
+              var marker =
+                activePlaylistQueue.length &&
+                activePlaylistQueue[activePlaylistIndex] &&
+                activePlaylistQueue[activePlaylistIndex].id === s.id
+                  ? " ▶"
+                  : "";
+              return (
+                "<li>" +
+                escapeHtml(s.title || "Untitled") +
+                (s.audioURL ? "" : " (no audio)") +
+                marker +
+                "</li>"
+              );
+            })
+            .join("") +
+          "</ul>"
+        : '<p class="app-muted">No scripts in this playlist yet.</p>') +
+      "</article>";
+
+    document.getElementById("btn-play-playlist").addEventListener("click", function () {
+      startPlaylistPlayback(p);
+    });
+    document.getElementById("btn-stop-playlist").addEventListener("click", function () {
+      stopActiveAudio();
+      renderSelectedPlaylistDetail();
+      renderScripts(currentScripts);
+    });
+  }
+
+  function createPlaylist() {
+    if (!currentUser) return;
+    var name = window.prompt("Playlist name:");
+    if (!name) return;
+    var trimmed = name.trim();
+    if (!trimmed) return;
+    var order = currentPlaylists.reduce(function (max, p) {
+      return Math.max(max, p.order || 0);
+    }, -1);
+    playlistCollection(currentUser.uid)
+      .add({
+        name: trimmed,
+        colorIndex: 0,
+        scriptIDs: [],
+        items: [],
+        loop: false,
+        mixMode: false,
+        order: order + 1,
+      })
+      .then(function () {
+        setPlaylistsMessage('Playlist "' + trimmed + '" created.', "success");
+      })
+      .catch(function (e) {
+        setPlaylistsMessage(e.message || "Could not create playlist.", "error");
+      });
+  }
+
+  function renamePlaylist(playlist) {
+    if (!currentUser) return;
+    var name = window.prompt("Rename playlist:", playlist.name || "");
+    if (!name) return;
+    var trimmed = name.trim();
+    if (!trimmed) return;
+    playlistCollection(currentUser.uid)
+      .doc(playlist.id)
+      .set({ name: trimmed }, { merge: true })
+      .then(function () {
+        setPlaylistsMessage("Playlist renamed.", "success");
+      })
+      .catch(function (e) {
+        setPlaylistsMessage(e.message || "Could not rename playlist.", "error");
+      });
+  }
+
+  function deletePlaylist(playlist) {
+    if (!currentUser) return;
+    if (!window.confirm('Delete playlist "' + playlist.name + '"?')) return;
+    playlistCollection(currentUser.uid)
+      .doc(playlist.id)
+      .delete()
+      .then(function () {
+        if (selectedPlaylistId === playlist.id) selectedPlaylistId = null;
+        setPlaylistsMessage("Playlist deleted.", "success");
+      })
+      .catch(function (e) {
+        setPlaylistsMessage(e.message || "Could not delete playlist.", "error");
+      });
+  }
+
+  function addScriptToPlaylistPrompt(script) {
+    if (!currentUser) return;
+    if (!currentPlaylists.length) {
+      setPlaylistsMessage("Create a playlist first.", "error");
+      return;
+    }
+    var choices = currentPlaylists
+      .map(function (p, i) {
+        return i + 1 + ". " + p.name;
+      })
+      .join("\n");
+    var raw = window.prompt(
+      "Add \"" + script.title + "\" to which playlist?\n\n" + choices + "\n\nEnter number:"
+    );
+    if (!raw) return;
+    var idx = parseInt(raw, 10) - 1;
+    if (isNaN(idx) || idx < 0 || idx >= currentPlaylists.length) {
+      setPlaylistsMessage("Invalid playlist selection.", "error");
+      return;
+    }
+    var p = currentPlaylists[idx];
+    var ids = (p.scriptIDs || []).slice();
+    if (!ids.includes(script.id)) ids.push(script.id);
+    var items = ids.map(function (id) {
+      return { type: "script", id: id };
+    });
+    playlistCollection(currentUser.uid)
+      .doc(p.id)
+      .set(
+        {
+          scriptIDs: ids,
+          items: items,
+        },
+        { merge: true }
+      )
+      .then(function () {
+        setPlaylistsMessage('Added to "' + p.name + '".', "success");
+      })
+      .catch(function (e) {
+        setPlaylistsMessage(e.message || "Could not add to playlist.", "error");
+      });
+  }
+
+  function subscribePlaylists(uid) {
+    teardownPlaylistsListener();
+    playlistsUnsubscribe = playlistCollection(uid)
+      .orderBy("order", "asc")
+      .onSnapshot(
+        function (snap) {
+          currentPlaylists = snap.docs.map(function (doc) {
+            var data = doc.data() || {};
+            return {
+              id: doc.id,
+              name: data.name || "Untitled Playlist",
+              colorIndex: data.colorIndex || 0,
+              order: data.order || 0,
+              scriptIDs: parsePlaylistItems(data),
+              loop: !!data.loop,
+              mixMode: !!data.mixMode,
+            };
+          });
+          if (!selectedPlaylistId && currentPlaylists.length) {
+            selectedPlaylistId = currentPlaylists[0].id;
+          }
+          if (
+            selectedPlaylistId &&
+            !currentPlaylists.some(function (p) {
+              return p.id === selectedPlaylistId;
+            })
+          ) {
+            selectedPlaylistId = currentPlaylists.length ? currentPlaylists[0].id : null;
+          }
+          renderPlaylists(currentPlaylists);
+          renderSelectedPlaylistDetail();
+          renderScripts(currentScripts);
+        },
+        function (e) {
+          setPlaylistsMessage(e.message || "Could not load playlists.", "error");
+          currentPlaylists = [];
+          renderPlaylists([]);
+        }
+      );
+  }
+
   function subscribeScripts(uid) {
     teardownScriptsListener();
     scriptsUnsubscribe = scriptCollection(uid)
@@ -822,6 +1205,7 @@
           });
           currentScripts = scripts;
           renderScripts(scripts);
+          renderSelectedPlaylistDetail();
         },
         function (e) {
           setMessage(e.message || "Could not load scripts.", "error");
@@ -846,6 +1230,7 @@
         if (isAdmin) {
           renderAdminShell(user.email, user.displayName);
           subscribeScripts(user.uid);
+          subscribePlaylists(user.uid);
         } else {
           renderNonAdmin(user.email, user.displayName);
         }
