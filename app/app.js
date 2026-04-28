@@ -349,6 +349,7 @@
       "  </div>" +
       '  <div id="voices-list"></div>' +
       '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '  <input id="voice-upload-input" type="file" accept="audio/*" style="display:none;" />' +
       "</section>" +
       "</section>" +
       '<section id="section-backgrounds" class="app-section">' +
@@ -565,10 +566,13 @@
       });
     });
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
-      setVoicesMessage("Voice cloning UI is next. Backend route is ready: /api/elevenlabs/voices/add.", "success");
+      beginVoiceUploadFlow("clone");
     });
     document.getElementById("btn-voice-upload").addEventListener("click", function () {
-      setVoicesMessage("Voice file upload flow is next. We will connect this to cloned voice creation.", "success");
+      beginVoiceUploadFlow("upload");
+    });
+    document.getElementById("voice-upload-input").addEventListener("change", function (ev) {
+      handleVoiceFileSelected(ev);
     });
     document.getElementById("media-picker-cancel").addEventListener("click", function () {
       closeMediaPicker();
@@ -901,6 +905,11 @@
     var found = availableVoices.find(function (v) {
       return v.id === voiceID;
     });
+    if (!found) {
+      found = currentClonedVoices.find(function (v) {
+        return v.id === voiceID;
+      });
+    }
     return (found && found.name) || "Voice";
   }
 
@@ -1050,6 +1059,124 @@
           });
       });
     });
+  }
+
+  function allVoiceOptionsForSelection() {
+    var map = {};
+    var out = [];
+    function pushVoice(v) {
+      if (!v || !v.id || map[v.id]) return;
+      map[v.id] = true;
+      out.push(v);
+    }
+    currentClonedVoices.forEach(pushVoice);
+    availableVoices.forEach(pushVoice);
+    return out;
+  }
+
+  function beginVoiceUploadFlow(mode) {
+    var input = document.getElementById("voice-upload-input");
+    if (!input) return;
+    input.value = "";
+    input.setAttribute("data-voice-upload-mode", mode || "upload");
+    input.click();
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise(function (resolve, reject) {
+      var reader = new FileReader();
+      reader.onload = function () {
+        var result = String(reader.result || "");
+        var parts = result.split(",");
+        if (parts.length < 2) {
+          reject(new Error("Could not read audio file."));
+          return;
+        }
+        resolve(parts[1]);
+      };
+      reader.onerror = function () {
+        reject(new Error("Could not read audio file."));
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function handleVoiceFileSelected(ev) {
+    if (!currentUser) return;
+    var input = ev && ev.target;
+    var file = input && input.files && input.files[0] ? input.files[0] : null;
+    if (!file) return;
+    if (!file.type || file.type.indexOf("audio/") !== 0) {
+      setVoicesMessage("Please choose an audio file.", "error");
+      return;
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      setVoicesMessage("Audio file is too large (max 20MB).", "error");
+      return;
+    }
+
+    var mode = (input && input.getAttribute("data-voice-upload-mode")) || "upload";
+    var suggested = mode === "clone" ? "My Cloned Voice" : "My Uploaded Voice";
+    var name = window.prompt("Voice name:", suggested);
+    if (!name || !name.trim()) {
+      setVoicesMessage("Voice creation cancelled.", "");
+      return;
+    }
+    var description = window.prompt("Short description (optional):", "") || "";
+
+    setVoicesMessage("Uploading voice sample...", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return readFileAsBase64(file).then(function (audioBase64) {
+          return fetch(backendBaseURL() + "/elevenlabs/voices/add", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: "Bearer " + token,
+            },
+            body: JSON.stringify({
+              name: name.trim(),
+              description: description.trim(),
+              audioBase64: audioBase64,
+              filename: file.name || "voice-sample",
+              mimeType: file.type || "audio/mpeg",
+            }),
+          });
+        });
+      })
+      .then(function (resp) {
+        return resp.json().then(function (json) {
+          if (!resp.ok || !json || !json.voice_id) {
+            throw new Error((json && json.error) || "Voice cloning failed.");
+          }
+          return json.voice_id;
+        });
+      })
+      .then(function (elevenLabsVoiceID) {
+        var docRef = clonedVoicesCollection(currentUser.uid).doc();
+        return clonedVoicesCollection(currentUser.uid)
+          .doc(docRef.id)
+          .set({
+            name: name.trim(),
+            description: (description || "").trim(),
+            elevenLabsVoiceID: elevenLabsVoiceID,
+            sampleFilename: file.name || "",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          })
+          .then(function () {
+            activeVoicesTab = "my-voices";
+            selectedVoiceId = docRef.id;
+            return saveUserDefaults();
+          })
+          .then(function () {
+            setVoicesMessage("Voice created and added to My Voices.", "success");
+          });
+      })
+      .catch(function (e) {
+        setVoicesMessage(e.message || "Could not create voice.", "error");
+      });
   }
 
   function renderBackgrounds() {
@@ -1663,7 +1790,7 @@
     if (!backdrop || !title || !subtitle || !list || !searchInput || !mediaPickerTarget) return;
 
     var isVoice = mediaPickerTarget.field === "voice";
-    var options = isVoice ? availableVoices : availableBackgrounds;
+    var options = isVoice ? allVoiceOptionsForSelection() : availableBackgrounds;
     var currentValue = "";
     if (mediaPickerTarget.kind === "script") {
       var script = currentScripts.find(function (s) {
@@ -1687,9 +1814,20 @@
       subtitle.textContent = premade.title || "Premade";
     }
 
-    function recommendedOptionIDs(kind, categoryID) {
+  function recommendedOptionIDs(kind, categoryID, voiceOptions) {
       if (kind === "voice") {
-        return ["lnieQLGTodpbhjpZtg1k", "YZHSTqsq1isdXNsFLzBw"];
+        var preferred = ["lnieQLGTodpbhjpZtg1k", "YZHSTqsq1isdXNsFLzBw"];
+        var existing = {};
+        (voiceOptions || []).forEach(function (v) {
+          existing[v.id] = true;
+        });
+        var out = preferred.filter(function (id) {
+          return existing[id];
+        });
+        (currentClonedVoices || []).slice(0, 2).forEach(function (v) {
+          if (v && v.id && out.indexOf(v.id) < 0) out.push(v.id);
+        });
+        return out;
       }
       if (!categoryID) return ["bg-none", "bg-rain", "bg-piano"];
       return availableBackgrounds
@@ -1760,7 +1898,11 @@
       var defaultItem = filtered.find(function (opt) {
         return opt.id === (isVoice ? selectedVoiceId : selectedBackgroundId);
       });
-      var recommendedIDs = recommendedOptionIDs(isVoice ? "voice" : "background", activeCategoryID);
+      var recommendedIDs = recommendedOptionIDs(
+        isVoice ? "voice" : "background",
+        activeCategoryID,
+        isVoice ? options : []
+      );
       var recommended = filtered.filter(function (opt) {
         return recommendedIDs.indexOf(opt.id) >= 0;
       });
