@@ -347,9 +347,10 @@
       '    <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
       "  </div>" +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
-      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Clone Voice</button>' +
+      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Clone Voice (from sample)</button>' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-upload">Upload Voice File</button>' +
       "  </div>" +
+      '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.6rem;">Web clone currently uses an audio sample file (no in-browser mic capture yet).</p>' +
       '  <div id="voices-list"></div>' +
       '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '  <input id="voice-upload-input" type="file" accept="audio/*" style="display:none;" />' +
@@ -590,6 +591,7 @@
       });
     });
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
+      setVoicesMessage("Choose a clear voice sample file to clone from.", "");
       beginVoiceUploadFlow("clone");
     });
     document.getElementById("btn-voice-upload").addEventListener("click", function () {
