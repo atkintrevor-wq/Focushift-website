@@ -31,6 +31,7 @@
   var expandedPremadeTextById = {};
   var premadeVoiceOverrideById = {};
   var premadeBackgroundOverrideById = {};
+  var mediaPickerTarget = null;
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
   var availableVoices = [
@@ -432,6 +433,17 @@
       "    </div>" +
       "  </div>" +
       "</div>" +
+      '<div id="media-picker-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Media picker">' +
+      '    <h3 id="media-picker-title">Select option</h3>' +
+      '    <p id="media-picker-subtitle" class="app-muted" style="margin:0 0 0.45rem;"></p>' +
+      '    <div id="media-picker-list" class="app-modal-list"></div>' +
+      '    <div id="media-picker-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="media-picker-cancel">Cancel</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
@@ -533,6 +545,14 @@
     });
     document.getElementById("premade-edit-delete").addEventListener("click", function () {
       unpublishPremade();
+    });
+    document.getElementById("media-picker-cancel").addEventListener("click", function () {
+      closeMediaPicker();
+    });
+    document.getElementById("media-picker-backdrop").addEventListener("click", function (ev) {
+      if (ev.target && ev.target.id === "media-picker-backdrop") {
+        closeMediaPicker();
+      }
     });
     renderHomeFlow(displayName || "");
     renderVoices();
@@ -844,6 +864,27 @@
     if (!el) return;
     el.className = "app-inline-msg" + (kind ? " " + kind : "");
     el.textContent = text || "";
+  }
+
+  function setMediaPickerMessage(text, kind) {
+    var el = document.getElementById("media-picker-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function voiceNameById(voiceID) {
+    var found = availableVoices.find(function (v) {
+      return v.id === voiceID;
+    });
+    return (found && found.name) || "Voice";
+  }
+
+  function backgroundNameById(backgroundID) {
+    var found = availableBackgrounds.find(function (b) {
+      return b.id === backgroundID;
+    });
+    return (found && found.name) || "Background";
   }
 
   function setVoicesMessage(text, kind) {
@@ -1404,18 +1445,6 @@
     var playingThis = activeAudioScriptId === script.id && activeAudio && !activeAudio.paused;
     var scriptVoiceID = (script.voiceID || "").trim() || selectedVoiceId;
     var scriptBackgroundID = (script.backgroundID || "").trim() || selectedBackgroundId;
-    var voiceSelectOptions = availableVoices
-      .map(function (v) {
-        var selected = v.id === scriptVoiceID ? " selected" : "";
-        return '<option value="' + escapeHtml(v.id) + '"' + selected + ">" + escapeHtml(v.name) + "</option>";
-      })
-      .join("");
-    var backgroundSelectOptions = availableBackgrounds
-      .map(function (b) {
-        var selected = b.id === scriptBackgroundID ? " selected" : "";
-        return '<option value="' + escapeHtml(b.id) + '"' + selected + ">" + escapeHtml(b.name) + "</option>";
-      })
-      .join("");
     return (
       '<article class="app-card" data-script-id="' +
       escapeHtml(script.id) +
@@ -1433,16 +1462,16 @@
         ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>"
         : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
-      '  <label class="app-muted" style="font-size:0.75rem;">Voice<select class="app-btn" style="width:100%;margin-top:0.22rem;text-align:left;" data-script-voice="' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
       escapeHtml(script.id) +
-      '">' +
-      voiceSelectOptions +
-      "</select></label>" +
-      '  <label class="app-muted" style="font-size:0.75rem;">Background<select class="app-btn" style="width:100%;margin-top:0.22rem;text-align:left;" data-script-background="' +
+      '" data-script-media-field="voice" style="text-align:left;">Voice: ' +
+      escapeHtml(voiceNameById(scriptVoiceID)) +
+      "</button>" +
+      '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
       escapeHtml(script.id) +
-      '">' +
-      backgroundSelectOptions +
-      "</select></label>" +
+      '" data-script-media-field="background" style="text-align:left;">Background: ' +
+      escapeHtml(backgroundNameById(scriptBackgroundID)) +
+      "</button>" +
       "</div>" +
       '<div class="app-card-actions">' +
       '  <button type="button" class="app-btn app-btn-secondary" data-action="toggle-text" data-script-id="' +
@@ -1507,18 +1536,16 @@
         }
       });
     });
-    list.querySelectorAll("[data-script-voice]").forEach(function (sel) {
-      sel.addEventListener("change", function () {
-        var scriptId = sel.getAttribute("data-script-voice");
-        var voiceID = sel.value || selectedVoiceId;
-        updateScriptMediaSettings(scriptId, { voiceID: voiceID });
-      });
-    });
-    list.querySelectorAll("[data-script-background]").forEach(function (sel) {
-      sel.addEventListener("change", function () {
-        var scriptId = sel.getAttribute("data-script-background");
-        var backgroundID = sel.value || selectedBackgroundId;
-        updateScriptMediaSettings(scriptId, { backgroundID: backgroundID });
+    list.querySelectorAll("[data-script-media-open]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var scriptId = btn.getAttribute("data-script-media-open");
+        var field = btn.getAttribute("data-script-media-field");
+        if (!scriptId || !field) return;
+        openMediaPicker({
+          kind: "script",
+          id: scriptId,
+          field: field,
+        });
       });
     });
   }
@@ -1540,6 +1567,86 @@
       .catch(function (e) {
         setMessage(e.message || "Could not update script settings.", "error");
       });
+  }
+
+  function openMediaPicker(target) {
+    mediaPickerTarget = target || null;
+    var backdrop = document.getElementById("media-picker-backdrop");
+    var title = document.getElementById("media-picker-title");
+    var subtitle = document.getElementById("media-picker-subtitle");
+    var list = document.getElementById("media-picker-list");
+    if (!backdrop || !title || !subtitle || !list || !mediaPickerTarget) return;
+
+    var isVoice = mediaPickerTarget.field === "voice";
+    var options = isVoice ? availableVoices : availableBackgrounds;
+    var currentValue = "";
+    if (mediaPickerTarget.kind === "script") {
+      var script = currentScripts.find(function (s) {
+        return s.id === mediaPickerTarget.id;
+      });
+      if (!script) return;
+      currentValue = isVoice
+        ? (script.voiceID || "").trim() || selectedVoiceId
+        : (script.backgroundID || "").trim() || selectedBackgroundId;
+      title.textContent = isVoice ? "Select Voice" : "Select Background";
+      subtitle.textContent = script.title || "Script";
+    } else {
+      var premade = currentPremade.find(function (p) {
+        return p.id === mediaPickerTarget.id;
+      });
+      if (!premade) return;
+      currentValue = isVoice
+        ? premadeVoiceOverrideById[premade.id] || selectedVoiceId
+        : premadeBackgroundOverrideById[premade.id] || selectedBackgroundId;
+      title.textContent = isVoice ? "Select Voice Override" : "Select Background Override";
+      subtitle.textContent = premade.title || "Premade";
+    }
+
+    list.innerHTML = options
+      .map(function (opt) {
+        var selected = opt.id === currentValue;
+        return (
+          '<button type="button" class="app-btn ' +
+          (selected ? "app-btn-primary" : "app-btn-secondary") +
+          '" style="text-align:left;justify-content:space-between;display:flex;" data-media-option="' +
+          escapeHtml(opt.id) +
+          '">' +
+          '<span>' +
+          escapeHtml(opt.name) +
+          "</span>" +
+          (selected ? '<span aria-hidden="true">✓</span>' : "") +
+          "</button>"
+        );
+      })
+      .join("");
+    list.querySelectorAll("[data-media-option]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var selectedID = btn.getAttribute("data-media-option");
+        if (!selectedID || !mediaPickerTarget) return;
+        if (mediaPickerTarget.kind === "script") {
+          var patch = mediaPickerTarget.field === "voice" ? { voiceID: selectedID } : { backgroundID: selectedID };
+          updateScriptMediaSettings(mediaPickerTarget.id, patch);
+          closeMediaPicker();
+          return;
+        }
+        if (mediaPickerTarget.field === "voice") {
+          premadeVoiceOverrideById[mediaPickerTarget.id] = selectedID;
+        } else {
+          premadeBackgroundOverrideById[mediaPickerTarget.id] = selectedID;
+        }
+        renderPremade();
+        closeMediaPicker();
+      });
+    });
+    setMediaPickerMessage("", "");
+    backdrop.hidden = false;
+  }
+
+  function closeMediaPicker() {
+    var backdrop = document.getElementById("media-picker-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    mediaPickerTarget = null;
+    setMediaPickerMessage("", "");
   }
 
   function renderScripts(scripts) {
@@ -2396,18 +2503,6 @@
         var playingThis = activeAudioScriptId === p.id && activeAudio && !activeAudio.paused;
         var premadeVoiceID = premadeVoiceOverrideById[p.id] || selectedVoiceId;
         var premadeBackgroundID = premadeBackgroundOverrideById[p.id] || selectedBackgroundId;
-        var voiceSelectOptions = availableVoices
-          .map(function (v) {
-            var selected = v.id === premadeVoiceID ? " selected" : "";
-            return '<option value="' + escapeHtml(v.id) + '"' + selected + ">" + escapeHtml(v.name) + "</option>";
-          })
-          .join("");
-        var backgroundSelectOptions = availableBackgrounds
-          .map(function (b) {
-            var selected = b.id === premadeBackgroundID ? " selected" : "";
-            return '<option value="' + escapeHtml(b.id) + '"' + selected + ">" + escapeHtml(b.name) + "</option>";
-          })
-          .join("");
         return (
           '<article class="app-card" data-premade-id="' +
           escapeHtml(p.id) +
@@ -2429,16 +2524,16 @@
               "</p>"
             : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
           '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
-          '  <label class="app-muted" style="font-size:0.75rem;">Voice<select class="app-btn" style="width:100%;margin-top:0.22rem;text-align:left;" data-premade-voice="' +
+          '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
           escapeHtml(p.id) +
-          '">' +
-          voiceSelectOptions +
-          "</select></label>" +
-          '  <label class="app-muted" style="font-size:0.75rem;">Background<select class="app-btn" style="width:100%;margin-top:0.22rem;text-align:left;" data-premade-background="' +
+          '" data-premade-media-field="voice" style="text-align:left;">Voice: ' +
+          escapeHtml(voiceNameById(premadeVoiceID)) +
+          "</button>" +
+          '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
           escapeHtml(p.id) +
-          '">' +
-          backgroundSelectOptions +
-          "</select></label>" +
+          '" data-premade-media-field="background" style="text-align:left;">Background: ' +
+          escapeHtml(backgroundNameById(premadeBackgroundID)) +
+          "</button>" +
           "</div>" +
           '<div class="app-card-actions">' +
           '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
@@ -2490,18 +2585,16 @@
         }
       });
     });
-    list.querySelectorAll("[data-premade-voice]").forEach(function (sel) {
-      sel.addEventListener("change", function () {
-        var pid = sel.getAttribute("data-premade-voice");
-        if (!pid) return;
-        premadeVoiceOverrideById[pid] = sel.value || selectedVoiceId;
-      });
-    });
-    list.querySelectorAll("[data-premade-background]").forEach(function (sel) {
-      sel.addEventListener("change", function () {
-        var pid = sel.getAttribute("data-premade-background");
-        if (!pid) return;
-        premadeBackgroundOverrideById[pid] = sel.value || selectedBackgroundId;
+    list.querySelectorAll("[data-premade-media-open]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var pid = btn.getAttribute("data-premade-media-open");
+        var field = btn.getAttribute("data-premade-media-field");
+        if (!pid || !field) return;
+        openMediaPicker({
+          kind: "premade",
+          id: pid,
+          field: field,
+        });
       });
     });
   }
