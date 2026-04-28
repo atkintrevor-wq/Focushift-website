@@ -22,6 +22,7 @@
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
+  var publishCategoryId = "confidence";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var availableVoices = [
     { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
@@ -312,7 +313,7 @@
       "</section>" +
       '<section id="section-app-library" class="app-section">' +
       '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
-      '  <div class="app-section-title-row"><h2>App Library (Premade)</h2></div>' +
+      '  <div class="app-section-title-row"><h2>App Library (Premade)</h2><button type="button" class="app-btn" id="btn-open-publish-premade">Publish from My Library</button></div>' +
       '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
       "</section>" +
       "</section>" +
@@ -358,6 +359,27 @@
       '    <div id="playlist-picker-list" class="app-modal-list"></div>' +
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="playlist-picker-close">Close</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="premade-publish-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Publish premade">' +
+      "    <h3>Publish to App Library</h3>" +
+      '    <p class="app-muted" style="margin:0 0 0.45rem;">Select one of your scripts and publish it to Firestore <code>premadeAudio</code> so it appears in App Library on web and iOS cloud feeds.</p>' +
+      '    <label for="publish-script-id">Script</label>' +
+      '    <select id="publish-script-id"></select>' +
+      '    <label for="publish-title">Title</label>' +
+      '    <input id="publish-title" type="text" maxlength="120" placeholder="Premade title">' +
+      '    <label for="publish-category">Category</label>' +
+      '    <select id="publish-category"></select>' +
+      '    <label for="publish-description">Description (optional)</label>' +
+      '    <input id="publish-description" type="text" maxlength="180" placeholder="Short description">' +
+      '    <label for="publish-script-text">Script text (optional, defaults from selected script)</label>' +
+      '    <textarea id="publish-script-text" rows="5" placeholder="If left empty, selected script text is used"></textarea>' +
+      '    <div id="publish-premade-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="premade-publish-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn" id="premade-publish-submit">Publish</button>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -435,6 +457,18 @@
         })
         .catch(function () {});
     });
+    document.getElementById("btn-open-publish-premade").addEventListener("click", function () {
+      openPublishPremadeModal();
+    });
+    document.getElementById("premade-publish-cancel").addEventListener("click", function () {
+      closePublishPremadeModal();
+    });
+    document.getElementById("premade-publish-submit").addEventListener("click", function () {
+      publishPremadeFromModal();
+    });
+    document.getElementById("publish-script-id").addEventListener("change", function () {
+      syncPublishFormFromSelectedScript();
+    });
     refreshGenerationQuestions();
     setAdminTab(activeAdminTab);
     updateMiniPlayer();
@@ -455,6 +489,128 @@
     if (backdrop) backdrop.hidden = true;
     playlistPickerScript = null;
     playlistPickerSuccessHandler = null;
+  }
+
+  function setPublishPremadeMessage(text, kind) {
+    var el = document.getElementById("publish-premade-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function openPublishPremadeModal() {
+    var backdrop = document.getElementById("premade-publish-backdrop");
+    if (!backdrop) return;
+    populatePublishScriptOptions();
+    populatePublishCategoryOptions();
+    syncPublishFormFromSelectedScript();
+    setPublishPremadeMessage("", "");
+    backdrop.hidden = false;
+  }
+
+  function closePublishPremadeModal() {
+    var backdrop = document.getElementById("premade-publish-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    setPublishPremadeMessage("", "");
+  }
+
+  function populatePublishScriptOptions() {
+    var sel = document.getElementById("publish-script-id");
+    if (!sel) return;
+    var withAudio = currentScripts.filter(function (s) {
+      return !!(s.audioURL && String(s.audioURL).trim());
+    });
+    if (!withAudio.length) {
+      sel.innerHTML = '<option value="">No scripts with audio available</option>';
+      return;
+    }
+    sel.innerHTML = withAudio
+      .map(function (s) {
+        return (
+          '<option value="' +
+          escapeHtml(s.id) +
+          '">' +
+          escapeHtml(s.title || "Untitled Script") +
+          "</option>"
+        );
+      })
+      .join("");
+  }
+
+  function populatePublishCategoryOptions() {
+    var sel = document.getElementById("publish-category");
+    if (!sel) return;
+    sel.innerHTML = surveyCategories
+      .map(function (c) {
+        var selected = c.id === publishCategoryId ? " selected" : "";
+        return '<option value="' + escapeHtml(c.id) + '"' + selected + ">" + escapeHtml(c.name) + "</option>";
+      })
+      .join("");
+    sel.onchange = function (ev) {
+      publishCategoryId = ev.target.value;
+    };
+  }
+
+  function selectedPublishScript() {
+    var sel = document.getElementById("publish-script-id");
+    var id = sel && sel.value ? sel.value : "";
+    return (
+      currentScripts.find(function (s) {
+        return s.id === id;
+      }) || null
+    );
+  }
+
+  function syncPublishFormFromSelectedScript() {
+    var s = selectedPublishScript();
+    var titleInput = document.getElementById("publish-title");
+    var textInput = document.getElementById("publish-script-text");
+    if (!s) return;
+    if (titleInput && !titleInput.value.trim()) titleInput.value = s.title || "";
+    if (textInput && !textInput.value.trim()) textInput.value = s.text || "";
+    if (!publishCategoryId) publishCategoryId = s.categoryID || "confidence";
+    var catSel = document.getElementById("publish-category");
+    if (catSel && publishCategoryId) catSel.value = publishCategoryId;
+  }
+
+  function publishPremadeFromModal() {
+    if (!currentUser) return;
+    var s = selectedPublishScript();
+    if (!s) {
+      setPublishPremadeMessage("Choose a script with audio first.", "error");
+      return;
+    }
+    var title = ((document.getElementById("publish-title").value || "").trim() || s.title || "Premade Script");
+    var description = (document.getElementById("publish-description").value || "").trim();
+    var categoryID = (document.getElementById("publish-category").value || "").trim() || "confidence";
+    var scriptText = (document.getElementById("publish-script-text").value || "").trim() || s.text || "";
+    var audioURL = (s.audioURL || "").trim();
+    if (!audioURL) {
+      setPublishPremadeMessage("Selected script has no audio URL.", "error");
+      return;
+    }
+    setPublishPremadeMessage("Publishing...", "");
+    var docRef = premadeCollection().doc();
+    docRef
+      .set({
+        title: title,
+        categoryID: categoryID,
+        description: description,
+        scriptText: scriptText,
+        audioURL: audioURL,
+        sourceScriptID: s.id,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      })
+      .then(function () {
+        setPublishPremadeMessage("Published to App Library.", "success");
+        setPremadeMessage('Published "' + title + '" to App Library.', "success");
+        setTimeout(function () {
+          closePublishPremadeModal();
+        }, 600);
+      })
+      .catch(function (e) {
+        setPublishPremadeMessage(e.message || "Could not publish premade.", "error");
+      });
   }
 
   function setAdminTab(tabId) {
@@ -1720,6 +1876,7 @@
               audioURL: data.audioURL || "",
               voiceID: data.voiceID || "",
               backgroundID: data.backgroundID || "",
+              categoryID: data.categoryID || "",
               createdAt: data.createdAt || null,
               updatedAt: data.updatedAt || null,
             };
