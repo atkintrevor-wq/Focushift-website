@@ -246,6 +246,7 @@
       '  <button type="button" class="app-tab-btn" data-admin-tab="library">My Library <span class="app-tab-count" id="count-library">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="account">Account</button>' +
       "</nav>" +
       '<section id="section-create" class="app-section" aria-label="Create personalized mental script">' +
       '<section class="app-card" aria-label="Create personalized mental script">' +
@@ -316,6 +317,27 @@
       '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
       "</section>" +
       "</section>" +
+      '<section id="section-account" class="app-section">' +
+      '<section class="app-card" aria-label="Account settings">' +
+      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Account</h2>' +
+      '  <p class="app-muted" style="margin-top:0;">Signed in as <strong>' +
+      escapeHtml(email || "") +
+      "</strong></p>" +
+      '  <form id="account-form" class="app-form" style="margin:0;">' +
+      '    <label for="account-display-name">Display name</label>' +
+      '    <input id="account-display-name" type="text" maxlength="80" value="' +
+      escapeHtml(displayName || "") +
+      '">' +
+      '    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">' +
+      '      <button type="submit" class="app-btn">Save display name</button>' +
+      '      <button type="button" class="app-btn" id="account-password-reset">Send password reset email</button>' +
+      '      <button type="button" class="app-btn" id="account-refresh-token">Refresh session</button>' +
+      '      <button type="button" class="app-btn app-btn-danger" id="account-signout">Sign out</button>' +
+      "    </div>" +
+      "  </form>" +
+      '  <div id="account-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      "</section>" +
+      "</section>" +
       '<div id="mini-player" class="mini-player" hidden>' +
       '  <div class="mini-player-inner">' +
       '    <div id="mini-player-title" class="mini-player-title">Now playing</div>' +
@@ -370,6 +392,19 @@
     });
     document.getElementById("btn-create-playlist").addEventListener("click", function () {
       createPlaylist();
+    });
+    document.getElementById("account-form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      saveAccountDisplayName();
+    });
+    document.getElementById("account-password-reset").addEventListener("click", function () {
+      sendPasswordResetFromAccount();
+    });
+    document.getElementById("account-refresh-token").addEventListener("click", function () {
+      refreshSessionToken();
+    });
+    document.getElementById("account-signout").addEventListener("click", function () {
+      auth.signOut().then(redirectLogin);
     });
     root.querySelectorAll("[data-admin-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -434,6 +469,7 @@
       library: "section-library",
       playlists: "section-playlists",
       "app-library": "section-app-library",
+      account: "section-account",
     };
     Object.keys(sectionMap).forEach(function (key) {
       var section = document.getElementById(sectionMap[key]);
@@ -454,6 +490,72 @@
     if (!el) return;
     el.className = "app-inline-msg" + (kind ? " " + kind : "");
     el.textContent = text || "";
+  }
+
+  function setAccountMessage(text, kind) {
+    var el = document.getElementById("account-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function saveAccountDisplayName() {
+    if (!currentUser) return;
+    var input = document.getElementById("account-display-name");
+    var name = ((input && input.value) || "").trim();
+    if (!name) {
+      setAccountMessage("Display name cannot be empty.", "error");
+      return;
+    }
+    setAccountMessage("Saving...", "");
+    currentUser
+      .updateProfile({ displayName: name })
+      .then(function () {
+        return db
+          .collection("users")
+          .doc(currentUser.uid)
+          .set(
+            {
+              displayName: name,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+      })
+      .then(function () {
+        setAccountMessage("Display name updated.", "success");
+      })
+      .catch(function (e) {
+        setAccountMessage(e.message || "Could not update display name.", "error");
+      });
+  }
+
+  function sendPasswordResetFromAccount() {
+    if (!currentUser || !currentUser.email) {
+      setAccountMessage("No email found for this account.", "error");
+      return;
+    }
+    auth
+      .sendPasswordResetEmail(currentUser.email)
+      .then(function () {
+        setAccountMessage("Password reset email sent.", "success");
+      })
+      .catch(function (e) {
+        setAccountMessage(e.message || "Could not send reset email.", "error");
+      });
+  }
+
+  function refreshSessionToken() {
+    if (!currentUser) return;
+    setAccountMessage("Refreshing session...", "");
+    currentUser
+      .getIdToken(true)
+      .then(function () {
+        setAccountMessage("Session refreshed.", "success");
+      })
+      .catch(function (e) {
+        setAccountMessage(e.message || "Could not refresh session.", "error");
+      });
   }
 
   function selectedCategory() {
