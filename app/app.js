@@ -7,6 +7,9 @@
   var currentScripts = [];
   var isEditing = false;
   var editingScriptId = null;
+  var generatingAudioByScriptId = {};
+  var activeAudio = null;
+  var activeAudioScriptId = null;
   var activeCategoryId = "confidence";
   var surveyCategories = [
     {
@@ -374,8 +377,20 @@
     el.textContent = text || "";
   }
 
+  function setScriptBusy(scriptId, busy) {
+    generatingAudioByScriptId[scriptId] = busy;
+    renderScripts(currentScripts);
+  }
+
+  function isScriptBusy(scriptId) {
+    return generatingAudioByScriptId[scriptId] === true;
+  }
+
   function scriptCardHtml(script) {
     var plainText = script.text && script.text.trim() ? script.text : "(No text yet)";
+    var isBusy = isScriptBusy(script.id);
+    var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
+    var playingThis = activeAudioScriptId === script.id && activeAudio && !activeAudio.paused;
     return (
       '<article class="app-card" data-script-id="' +
       escapeHtml(script.id) +
@@ -390,6 +405,20 @@
       escapeHtml(plainText) +
       "</p>" +
       '<div class="app-card-actions">' +
+      '  <button type="button" class="app-btn" data-action="generate-audio" data-script-id="' +
+      escapeHtml(script.id) +
+      '"' +
+      (isBusy ? " disabled" : "") +
+      ">" +
+      (isBusy ? "Generating audio..." : "Generate Audio") +
+      "</button>" +
+      '  <button type="button" class="app-btn" data-action="play-audio" data-script-id="' +
+      escapeHtml(script.id) +
+      '"' +
+      (!hasAudio || isBusy ? " disabled" : "") +
+      ">" +
+      (playingThis ? "Pause" : "Play") +
+      "</button>" +
       '  <button type="button" class="app-btn" data-action="edit" data-script-id="' +
       escapeHtml(script.id) +
       '">Edit</button>' +
@@ -416,6 +445,10 @@
           openEditor(script);
         } else if (action === "delete") {
           deleteScript(script);
+        } else if (action === "generate-audio") {
+          generateAudioForScript(script);
+        } else if (action === "play-audio") {
+          togglePlayScriptAudio(script);
         }
       });
     });
@@ -548,6 +581,183 @@
       });
   }
 
+  function stopActiveAudio() {
+    if (activeAudio) {
+      try {
+        activeAudio.pause();
+      } catch (_e) {}
+    }
+    activeAudio = null;
+    activeAudioScriptId = null;
+  }
+
+  function togglePlayScriptAudio(script) {
+    var audioURL = script.audioURL && String(script.audioURL).trim();
+    if (!audioURL) {
+      setMessage("No audio yet for this script.", "error");
+      return;
+    }
+    if (activeAudioScriptId === script.id && activeAudio) {
+      if (activeAudio.paused) {
+        activeAudio.play().catch(function () {
+          setMessage("Could not play audio in browser.", "error");
+        });
+      } else {
+        activeAudio.pause();
+      }
+      renderScripts(currentScripts);
+      return;
+    }
+
+    stopActiveAudio();
+    activeAudio = new Audio(audioURL);
+    activeAudioScriptId = script.id;
+    activeAudio.addEventListener("ended", function () {
+      activeAudioScriptId = null;
+      activeAudio = null;
+      renderScripts(currentScripts);
+    });
+    activeAudio
+      .play()
+      .then(function () {
+        renderScripts(currentScripts);
+      })
+      .catch(function () {
+        setMessage("Could not play audio in browser.", "error");
+        stopActiveAudio();
+        renderScripts(currentScripts);
+      });
+  }
+
+  function backendRequest(path, token, body) {
+    return fetch(backendBaseURL() + path, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token,
+      },
+      body: JSON.stringify(body),
+    }).then(function (resp) {
+      return resp.json().then(function (json) {
+        if (!resp.ok) {
+          throw new Error((json && json.error) || "Request failed");
+        }
+        return json;
+      });
+    });
+  }
+
+  function generateAudioForScript(script) {
+    if (!currentUser) return;
+    var text = (script.text || "").trim();
+    if (!text) {
+      setMessage("Script text is empty. Add text before generating audio.", "error");
+      return;
+    }
+    setScriptBusy(script.id, true);
+    setMessage('Submitting audio job for "' + script.title + '"...', "");
+
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        var payload = {
+          scriptId: script.id,
+          text: text,
+          scriptTitle: script.title || "Untitled Script",
+          voiceID: script.voiceID || "default",
+          backgroundID: script.backgroundID || "",
+          createdAt:
+            script.createdAt && typeof script.createdAt.toDate === "function"
+              ? script.createdAt.toDate().getTime() / 1000
+              : Date.now() / 1000,
+        };
+        return backendRequest("/audio-jobs", token, payload).then(function (json) {
+          if (!json || json.ok !== true || !json.jobId) {
+            throw new Error("Audio job did not return a job id.");
+          }
+          return { token: token, jobId: json.jobId };
+        });
+      })
+      .then(function (ctx) {
+        return waitForAudioJob(script, ctx.jobId);
+      })
+      .then(function (result) {
+        return scriptCollection(currentUser.uid)
+          .doc(script.id)
+          .set(
+            {
+              audioURL: result.audioURL,
+              audioCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          )
+          .then(function () {
+            setMessage('Audio generated for "' + script.title + '".', "success");
+          });
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Audio generation failed.", "error");
+      })
+      .finally(function () {
+        setScriptBusy(script.id, false);
+      });
+  }
+
+  function waitForAudioJob(script, jobId) {
+    return new Promise(function (resolve, reject) {
+      var timeout = setTimeout(function () {
+        cleanup();
+        reject(new Error("Audio generation timed out. Please try again."));
+      }, 240000);
+      var unsub = db
+        .collection("users")
+        .doc(currentUser.uid)
+        .collection("audioJobs")
+        .doc(jobId)
+        .onSnapshot(
+          function (snap) {
+            var data = (snap && snap.data()) || {};
+            var status = data.status;
+            if (!status) return;
+
+            if (status === "failed") {
+              cleanup();
+              reject(new Error(data.error || "Audio job failed."));
+              return;
+            }
+            if (status === "awaiting_client_mix") {
+              cleanup();
+              reject(
+                new Error(
+                  "This script needs client-side background mixing which is not supported on web yet. Try with no background."
+                )
+              );
+              return;
+            }
+            if (status === "completed") {
+              var audioURL = data.persistentAudioURL || data.finalDownloadURL;
+              cleanup();
+              if (!audioURL) {
+                reject(new Error("Audio completed but no download URL was returned."));
+                return;
+              }
+              resolve({ audioURL: audioURL });
+            }
+          },
+          function (err) {
+            cleanup();
+            reject(new Error(err && err.message ? err.message : "Could not watch audio job."));
+          }
+        );
+
+      function cleanup() {
+        clearTimeout(timeout);
+        if (typeof unsub === "function") unsub();
+      }
+    });
+  }
+
   function subscribeScripts(uid) {
     teardownScriptsListener();
     scriptsUnsubscribe = scriptCollection(uid)
@@ -560,6 +770,9 @@
               id: doc.id,
               title: data.title || "",
               text: data.text || "",
+              audioURL: data.audioURL || "",
+              voiceID: data.voiceID || "",
+              backgroundID: data.backgroundID || "",
               createdAt: data.createdAt || null,
               updatedAt: data.updatedAt || null,
             };
