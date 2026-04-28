@@ -153,6 +153,58 @@
       min-width: 58px;
       text-align: right;
     }
+    .app-modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      z-index: 1400;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    .app-modal-backdrop[hidden] { display: none !important; }
+    .app-modal {
+      width: 100%;
+      max-width: 520px;
+      background: #0d1529;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px;
+      padding: 1rem;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+    }
+    .app-modal h3 { margin: 0 0 0.35rem; }
+    .app-modal-list {
+      margin: 0.75rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      max-height: 42vh;
+      overflow: auto;
+    }
+    .app-modal-row {
+      display: flex;
+      gap: 0.45rem;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 0.55rem 0.7rem;
+      background: rgba(255,255,255,0.03);
+    }
+    .app-modal-row-name {
+      font-size: 0.92rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 280px;
+    }
+    .app-modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+      margin-top: 0.7rem;
+    }
   </style>
 </head>
 <body>
@@ -164,6 +216,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

@@ -20,6 +20,8 @@
   var selectedPlaylistId = null;
   var activeAdminTab = "create";
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
+  var playlistPickerScript = null;
+  var playlistPickerSuccessHandler = null;
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var availableVoices = [
     { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
@@ -324,6 +326,20 @@
       '    <div id="mini-player-time" class="mini-player-time">0:00</div>' +
       "  </div>" +
       "</div>" +
+      '<div id="playlist-picker-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Select playlist">' +
+      "    <h3>Select playlist</h3>" +
+      '    <p class="app-muted" style="margin:0 0 0.45rem;">Choose a playlist for this script, or create a new one.</p>' +
+      '    <div class="app-modal-row">' +
+      '      <input id="playlist-new-name" type="text" placeholder="New playlist name" style="flex:1;min-width:0;">' +
+      '      <button type="button" class="app-btn" id="playlist-create-btn">Create</button>' +
+      "    </div>" +
+      '    <div id="playlist-picker-list" class="app-modal-list"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="playlist-picker-close">Close</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
 
     document.getElementById("btn-sign-out").addEventListener("click", function () {
@@ -374,10 +390,41 @@
       renderScripts(currentScripts);
       renderSelectedPlaylistDetail();
     });
+    document.getElementById("playlist-picker-close").addEventListener("click", function () {
+      closePlaylistPicker();
+    });
+    document.getElementById("playlist-create-btn").addEventListener("click", function () {
+      var input = document.getElementById("playlist-new-name");
+      var name = ((input && input.value) || "").trim();
+      if (!name) return;
+      createPlaylistNamed(name)
+        .then(function (playlist) {
+          if (input) input.value = "";
+          if (!playlist) return;
+          renderPlaylistPickerOptions();
+        })
+        .catch(function () {});
+    });
     refreshGenerationQuestions();
     setAdminTab(activeAdminTab);
     updateMiniPlayer();
     updateTabCounts();
+  }
+
+  function openPlaylistPicker(script, onSuccess) {
+    playlistPickerScript = script;
+    playlistPickerSuccessHandler = typeof onSuccess === "function" ? onSuccess : null;
+    var backdrop = document.getElementById("playlist-picker-backdrop");
+    if (!backdrop) return;
+    backdrop.hidden = false;
+    renderPlaylistPickerOptions();
+  }
+
+  function closePlaylistPicker() {
+    var backdrop = document.getElementById("playlist-picker-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    playlistPickerScript = null;
+    playlistPickerSuccessHandler = null;
   }
 
   function setAdminTab(tabId) {
@@ -1198,10 +1245,17 @@
     if (!name) return;
     var trimmed = name.trim();
     if (!trimmed) return;
+    createPlaylistNamed(trimmed).catch(function () {});
+  }
+
+  function createPlaylistNamed(name) {
+    if (!currentUser) return Promise.resolve(null);
+    var trimmed = (name || "").trim();
+    if (!trimmed) return Promise.resolve(null);
     var order = currentPlaylists.reduce(function (max, p) {
       return Math.max(max, p.order || 0);
     }, -1);
-    playlistCollection(currentUser.uid)
+    return playlistCollection(currentUser.uid)
       .add({
         name: trimmed,
         colorIndex: 0,
@@ -1211,11 +1265,21 @@
         mixMode: false,
         order: order + 1,
       })
-      .then(function () {
+      .then(function (ref) {
         setPlaylistsMessage('Playlist "' + trimmed + '" created.', "success");
+        return {
+          id: ref.id,
+          name: trimmed,
+          scriptIDs: [],
+          order: order + 1,
+          colorIndex: 0,
+          loop: false,
+          mixMode: false,
+        };
       })
       .catch(function (e) {
         setPlaylistsMessage(e.message || "Could not create playlist.", "error");
+        throw e;
       });
   }
 
@@ -1252,27 +1316,9 @@
   }
 
   function addScriptToPlaylistPrompt(script) {
-    if (!currentUser) return;
-    if (!currentPlaylists.length) {
-      setPlaylistsMessage("Create a playlist first.", "error");
-      return;
-    }
-    var choices = currentPlaylists
-      .map(function (p, i) {
-        return i + 1 + ". " + p.name;
-      })
-      .join("\n");
-    var raw = window.prompt(
-      "Add \"" + script.title + "\" to which playlist?\n\n" + choices + "\n\nEnter number:"
-    );
-    if (!raw) return;
-    var idx = parseInt(raw, 10) - 1;
-    if (isNaN(idx) || idx < 0 || idx >= currentPlaylists.length) {
-      setPlaylistsMessage("Invalid playlist selection.", "error");
-      return;
-    }
-    var p = currentPlaylists[idx];
-    addScriptToPlaylist(script, p);
+    openPlaylistPicker(script, function (playlist) {
+      setPlaylistsMessage('Added to "' + playlist.name + '".', "success");
+    });
   }
 
   function addScriptToPlaylist(script, p) {
@@ -1282,7 +1328,7 @@
     var items = ids.map(function (id) {
       return { type: "script", id: id };
     });
-    playlistCollection(currentUser.uid)
+    return playlistCollection(currentUser.uid)
       .doc(p.id)
       .set(
         {
@@ -1292,11 +1338,54 @@
         { merge: true }
       )
       .then(function () {
-        setPlaylistsMessage('Added to "' + p.name + '".', "success");
+        return p;
       })
       .catch(function (e) {
         setPlaylistsMessage(e.message || "Could not add to playlist.", "error");
+        throw e;
       });
+  }
+
+  function renderPlaylistPickerOptions() {
+    var list = document.getElementById("playlist-picker-list");
+    if (!list) return;
+    if (!playlistPickerScript) {
+      list.innerHTML = '<p class="app-muted">Select a script first.</p>';
+      return;
+    }
+    if (!currentPlaylists.length) {
+      list.innerHTML = '<p class="app-muted">No playlists yet. Create one above.</p>';
+      return;
+    }
+    list.innerHTML = currentPlaylists
+      .map(function (p) {
+        return (
+          '<div class="app-modal-row">' +
+          '  <div class="app-modal-row-name">' +
+          escapeHtml(p.name || "Untitled Playlist") +
+          "</div>" +
+          '  <button type="button" class="app-btn" data-picker-playlist-id="' +
+          escapeHtml(p.id) +
+          '">Add</button>' +
+          "</div>"
+        );
+      })
+      .join("");
+    list.querySelectorAll("[data-picker-playlist-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var pid = btn.getAttribute("data-picker-playlist-id");
+        var p = currentPlaylists.find(function (x) {
+          return x.id === pid;
+        });
+        if (!p || !playlistPickerScript) return;
+        addScriptToPlaylist(playlistPickerScript, p)
+          .then(function () {
+            if (playlistPickerSuccessHandler) playlistPickerSuccessHandler(p);
+            closePlaylistPicker();
+          })
+          .catch(function () {});
+      });
+    });
   }
 
   function subscribePlaylists(uid) {
@@ -1332,6 +1421,7 @@
           renderSelectedPlaylistDetail();
           renderScripts(currentScripts);
           updateTabCounts();
+          renderPlaylistPickerOptions();
         },
         function (e) {
           setPlaylistsMessage(e.message || "Could not load playlists.", "error");
@@ -1408,8 +1498,12 @@
           voiceID: selectedVoiceId,
           backgroundID: "",
         };
-        addScriptToPlaylistPrompt(savedScript);
-        setPremadeMessage('Saved "' + tempTitle + '" then choose a playlist.', "success");
+        openPlaylistPicker(savedScript, function (playlist) {
+          setPremadeMessage(
+            'Saved "' + tempTitle + '" and added to "' + playlist.name + '".',
+            "success"
+          );
+        });
       })
       .catch(function (e) {
         setPremadeMessage(e.message || "Could not save premade script.", "error");
