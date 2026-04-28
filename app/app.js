@@ -10,6 +10,15 @@
   var generatingAudioByScriptId = {};
   var activeAudio = null;
   var activeAudioScriptId = null;
+  var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
+  var availableVoices = [
+    { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
+    { id: "YZHSTqsq1isdXNsFLzBw", name: "Isa" },
+    { id: "rJ9XoWu8gbUhVKZnKY8X", name: "Lori" },
+    { id: "1wGbFxmAM3Fgw63G1zZJ", name: "Allison" },
+    { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark" },
+    { id: "EiNlNiXeDU1pqqOPrYMO", name: "Paul" },
+  ];
   var activeCategoryId = "confidence";
   var surveyCategories = [
     {
@@ -173,6 +182,20 @@
         return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name) + "</option>";
       })
       .join("");
+    var voiceOptions = availableVoices
+      .map(function (v) {
+        var selected = v.id === selectedVoiceId ? " selected" : "";
+        return (
+          '<option value="' +
+          escapeHtml(v.id) +
+          '"' +
+          selected +
+          ">" +
+          escapeHtml(v.name) +
+          "</option>"
+        );
+      })
+      .join("");
     root.innerHTML =
       "<h1>Focus Shift — admin</h1>" +
       "<p class=\"app-muted\">Signed in as <strong>" +
@@ -212,6 +235,12 @@
       '  <div id="generation-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
       '<div class="app-toolbar">' +
+      '  <label for="global-voice" style="display:flex;align-items:center;gap:0.5rem;">' +
+      '    <span class="app-muted" style="font-size:0.85rem;">Voice</span>' +
+      '    <select id="global-voice" class="app-btn" style="min-width:170px;text-align:left;">' +
+      voiceOptions +
+      "    </select>" +
+      "  </label>" +
       '  <button type="button" class="app-btn" id="btn-create-script">+ New Script</button>' +
       '  <button type="button" class="app-btn" id="btn-sign-out">Sign out</button>' +
       "</div>" +
@@ -229,6 +258,17 @@
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
       openEditor(null);
+    });
+    document.getElementById("global-voice").addEventListener("change", function (ev) {
+      selectedVoiceId = ev.target.value;
+      generationMessage(
+        "Voice set to " +
+          (availableVoices.find(function (v) {
+            return v.id === selectedVoiceId;
+          }) || { name: "selected voice" }).name +
+          ".",
+        "success"
+      );
     });
     document.getElementById("gen-category").addEventListener("change", function (ev) {
       activeCategoryId = ev.target.value;
@@ -354,7 +394,7 @@
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             audioURL: "",
             backgroundID: "",
-            voiceID: "",
+            voiceID: selectedVoiceId,
             audioCreatedAt: null,
             categoryID: cat.id,
           })
@@ -664,7 +704,10 @@
           scriptId: script.id,
           text: text,
           scriptTitle: script.title || "Untitled Script",
-          voiceID: script.voiceID || "default",
+          voiceID:
+            script.voiceID && script.voiceID !== "default"
+              ? script.voiceID
+              : selectedVoiceId,
           backgroundID: script.backgroundID || "",
           createdAt:
             script.createdAt && typeof script.createdAt.toDate === "function"
