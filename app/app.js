@@ -4,8 +4,84 @@
   var root = document.getElementById("root");
   var scriptsUnsubscribe = null;
   var currentUser = null;
+  var currentScripts = [];
   var isEditing = false;
   var editingScriptId = null;
+  var activeCategoryId = "confidence";
+  var surveyCategories = [
+    {
+      id: "confidence",
+      name: "Confidence & Self-Worth",
+      questions: [
+        "What's one area where you'd like to feel more confident or worthy right now?",
+        "How do you want to feel about yourself on a great day?",
+      ],
+    },
+    {
+      id: "relationships",
+      name: "Relationships & Love",
+      questions: [
+        "What aspect of your relationships would you most like to improve or attract?",
+        "What does an ideal relationship feel like to you?",
+      ],
+    },
+    {
+      id: "success-prosperity",
+      name: "Success & Prosperity",
+      questions: [
+        "What's your main goal right now in career, money, or abundance?",
+        "What would success or prosperity look and feel like day-to-day?",
+      ],
+    },
+    {
+      id: "mental-wellbeing",
+      name: "Mental Well-Being",
+      questions: [
+        "What's the biggest mental or emotional challenge you're facing lately?",
+        "How do you want to feel most of the time?",
+      ],
+    },
+    {
+      id: "health-fitness",
+      name: "Health & Fitness",
+      questions: [
+        "What's your primary health or fitness focus right now?",
+        "When your body and energy are at their best, what does that feel like?",
+      ],
+    },
+    {
+      id: "sports-performance",
+      name: "Sports Performance",
+      questions: [
+        "What aspect of your mental game do you want to strengthen for peak performance?",
+        "When you're at your best in your sport, what do you feel or tell yourself?",
+      ],
+    },
+    {
+      id: "sleep-rest",
+      name: "Sleep & Rest",
+      questions: [
+        "What gets in the way of good sleep or rest for you right now?",
+        "How do you want to feel when falling asleep or waking up rested?",
+      ],
+    },
+    {
+      id: "i-am",
+      name: "I am…",
+      questions: [
+        "What do you most want to believe or embody about yourself right now?",
+        "How would life feel different if you fully lived this daily?",
+      ],
+    },
+    {
+      id: "other",
+      name: "Custom Topic",
+      questions: [
+        "Describe the specific area or theme you'd like this script for.",
+        "What's one key challenge or desired feeling in this area?",
+      ],
+    },
+  ];
 
   function redirectLogin() {
     window.location.href = "/login/";
@@ -59,6 +135,13 @@
     return db.collection("users").doc(uid).collection("scripts");
   }
 
+  function backendBaseURL() {
+    if (window.fsFirebaseConfig && window.fsFirebaseConfig.backendURL) {
+      return String(window.fsFirebaseConfig.backendURL).replace(/\/+$/, "");
+    }
+    return "https://us-central1-focushift-eeb60.cloudfunctions.net/api";
+  }
+
   function renderSignedOut() {
     teardownScriptsListener();
     redirectLogin();
@@ -82,13 +165,49 @@
   }
 
   function renderAdminShell(email, displayName) {
+    var categoryOptions = surveyCategories
+      .map(function (c) {
+        return '<option value="' + escapeHtml(c.id) + '">' + escapeHtml(c.name) + "</option>";
+      })
+      .join("");
     root.innerHTML =
       "<h1>Focus Shift — admin</h1>" +
       "<p class=\"app-muted\">Signed in as <strong>" +
       escapeHtml(email || "") +
       "</strong> (" +
       escapeHtml(displayName || "no display name") +
-      "). This is Stage 3: My Library scripts CRUD in the browser.</p>" +
+      "). Stage 4 now includes personalized mental script generation (web) + My Library CRUD.</p>" +
+      '<section class="app-card" aria-label="Create personalized mental script">' +
+      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Create Personalized Mental Script</h2>' +
+      '  <p class="app-muted" style="margin-top:0;">Answer two prompts, generate with AI, and save directly to My Library.</p>' +
+      '  <form id="generate-form" class="app-form" style="margin:0;">' +
+      '    <label for="gen-category">Focus area</label>' +
+      '    <select id="gen-category" class="app-btn" style="width:100%;text-align:left;">' +
+      categoryOptions +
+      "    </select>" +
+      '    <label id="gen-q1-label" for="gen-q1" style="margin-top:0.8rem;">Question 1</label>' +
+      '    <textarea id="gen-q1" required></textarea>' +
+      '    <label id="gen-q2-label" for="gen-q2">Question 2</label>' +
+      '    <textarea id="gen-q2" required></textarea>' +
+      '    <label for="gen-tone">Tone</label>' +
+      '    <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
+      '      <option value="Calming">Calming</option>' +
+      '      <option value="Motivational">Motivational</option>' +
+      '      <option value="Compassionate">Compassionate</option>' +
+      '      <option value="Assertive">Assertive</option>' +
+      "    </select>" +
+      '    <label for="gen-length" style="margin-top:0.8rem;">Length</label>' +
+      '    <select id="gen-length" class="app-btn" style="width:100%;text-align:left;">' +
+      '      <option value="Short">Short</option>' +
+      '      <option value="Medium" selected>Medium</option>' +
+      '      <option value="Long">Long</option>' +
+      "    </select>" +
+      '    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.9rem;">' +
+      '      <button type="submit" class="app-btn">Generate & Save</button>' +
+      "    </div>" +
+      "  </form>" +
+      '  <div id="generation-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      "</section>" +
       '<div class="app-toolbar">' +
       '  <button type="button" class="app-btn" id="btn-create-script">+ New Script</button>' +
       '  <button type="button" class="app-btn" id="btn-sign-out">Sign out</button>' +
@@ -108,6 +227,144 @@
     document.getElementById("btn-create-script").addEventListener("click", function () {
       openEditor(null);
     });
+    document.getElementById("gen-category").addEventListener("change", function (ev) {
+      activeCategoryId = ev.target.value;
+      refreshGenerationQuestions();
+    });
+    document.getElementById("generate-form").addEventListener("submit", function (ev) {
+      ev.preventDefault();
+      generateAndSavePersonalizedScript(displayName || "");
+    });
+    refreshGenerationQuestions();
+  }
+
+  function generationMessage(text, kind) {
+    var el = document.getElementById("generation-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function selectedCategory() {
+    return (
+      surveyCategories.find(function (c) {
+        return c.id === activeCategoryId;
+      }) || surveyCategories[0]
+    );
+  }
+
+  function refreshGenerationQuestions() {
+    var cat = selectedCategory();
+    var q1Label = document.getElementById("gen-q1-label");
+    var q2Label = document.getElementById("gen-q2-label");
+    if (q1Label) q1Label.textContent = cat.questions[0] || "Question 1";
+    if (q2Label) q2Label.textContent = cat.questions[1] || "Question 2";
+  }
+
+  function uniqueScriptTitle(base) {
+    var root = (base || "Generated Script").trim();
+    var taken = {};
+    currentScripts.forEach(function (s) {
+      taken[(s.title || "").trim().toLowerCase()] = true;
+    });
+    if (!taken[root.toLowerCase()]) return root;
+    var n = 2;
+    while (n < 10000) {
+      var candidate = root + " (" + n + ")";
+      if (!taken[candidate.toLowerCase()]) return candidate;
+      n += 1;
+    }
+    return root + " (" + Date.now() + ")";
+  }
+
+  function userTierFallback() {
+    // TODO: replace with exact subscription field mapping once web account settings are in place.
+    return "starter";
+  }
+
+  function generateAndSavePersonalizedScript(displayName) {
+    if (!currentUser) return;
+    var cat = selectedCategory();
+    var q1 = (document.getElementById("gen-q1").value || "").trim();
+    var q2 = (document.getElementById("gen-q2").value || "").trim();
+    var tone = document.getElementById("gen-tone").value || "Calming";
+    var length = document.getElementById("gen-length").value || "Medium";
+    if (!q1 || !q2) {
+      generationMessage("Please answer both questions first.", "error");
+      return;
+    }
+
+    generationMessage("Generating script...", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        var payload = {
+          categories: [
+            {
+              id: cat.id,
+              name: cat.name,
+              questions: cat.questions,
+            },
+          ],
+          answers: (function () {
+            var map = {};
+            map[cat.id] = [q1, q2];
+            return map;
+          })(),
+          clarifyingAnswers: {},
+          tone: tone,
+          length: length,
+          clarifyCount: 0,
+          tier: userTierFallback(),
+          perspective: "First person",
+          useNameInScript: false,
+          userName: displayName || "",
+        };
+
+        return fetch(backendBaseURL() + "/generate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify(payload),
+        });
+      })
+      .then(function (resp) {
+        return resp.json().then(function (json) {
+          if (!resp.ok || !json || json.ok !== true || !json.content) {
+            var msg = (json && json.error) || "Generation failed.";
+            throw new Error(msg);
+          }
+          return json;
+        });
+      })
+      .then(function (json) {
+        var title = uniqueScriptTitle(cat.name + " Script");
+        var docRef = scriptCollection(currentUser.uid).doc();
+        return scriptCollection(currentUser.uid)
+          .doc(docRef.id)
+          .set({
+            title: title,
+            text: String(json.content).trim(),
+            createdAt: firebase.firestore.Timestamp.now(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            audioURL: "",
+            backgroundID: "",
+            voiceID: "",
+            audioCreatedAt: null,
+            categoryID: cat.id,
+          })
+          .then(function () {
+            generationMessage("Generated and saved as \"" + title + "\".", "success");
+            document.getElementById("gen-q1").value = "";
+            document.getElementById("gen-q2").value = "";
+            setMessage("Generated script saved to My Library.", "success");
+          });
+      })
+      .catch(function (e) {
+        generationMessage(e.message || "Could not generate script.", "error");
+      });
   }
 
   function setMessage(text, kind) {
@@ -307,6 +564,7 @@
               updatedAt: data.updatedAt || null,
             };
           });
+          currentScripts = scripts;
           renderScripts(scripts);
         },
         function (e) {
