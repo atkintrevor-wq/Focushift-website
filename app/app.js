@@ -18,7 +18,7 @@
   var activePlaylistQueue = [];
   var activePlaylistIndex = -1;
   var selectedPlaylistId = null;
-  var activeAdminTab = "create";
+  var activeAdminTab = "home";
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
@@ -38,6 +38,7 @@
     { id: "EiNlNiXeDU1pqqOPrYMO", name: "Paul" },
   ];
   var activeCategoryId = "confidence";
+  var homeFlowStep = "landing";
   var surveyCategories = [
     {
       id: "confidence",
@@ -259,42 +260,16 @@
       escapeHtml(displayName || "no display name") +
       "). Stage 4 now includes personalized mental script generation (web) + My Library CRUD.</p>" +
       '<nav class="app-tabs" aria-label="Admin sections">' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="create">Create</button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="library">My Library <span class="app-tab-count" id="count-library">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="account">Account</button>' +
       "</nav>" +
-      '<section id="section-create" class="app-section" aria-label="Create personalized mental script">' +
-      '<section class="app-card" aria-label="Create personalized mental script">' +
-      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Create Personalized Mental Script</h2>' +
-      '  <p class="app-muted" style="margin-top:0;">Answer two prompts, generate with AI, and save directly to My Library.</p>' +
-      '  <form id="generate-form" class="app-form" style="margin:0;">' +
-      '    <label for="gen-category">Focus area</label>' +
-      '    <select id="gen-category" class="app-btn" style="width:100%;text-align:left;">' +
-      categoryOptions +
-      "    </select>" +
-      '    <label id="gen-q1-label" for="gen-q1" style="margin-top:0.8rem;">Question 1</label>' +
-      '    <textarea id="gen-q1" required></textarea>' +
-      '    <label id="gen-q2-label" for="gen-q2">Question 2</label>' +
-      '    <textarea id="gen-q2" required></textarea>' +
-      '    <label for="gen-tone">Tone</label>' +
-      '    <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
-      '      <option value="Calming">Calming</option>' +
-      '      <option value="Motivational">Motivational</option>' +
-      '      <option value="Compassionate">Compassionate</option>' +
-      '      <option value="Assertive">Assertive</option>' +
-      "    </select>" +
-      '    <label for="gen-length" style="margin-top:0.8rem;">Length</label>' +
-      '    <select id="gen-length" class="app-btn" style="width:100%;text-align:left;">' +
-      '      <option value="Short">Short</option>' +
-      '      <option value="Medium" selected>Medium</option>' +
-      '      <option value="Long">Long</option>' +
-      "    </select>" +
-      '    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.9rem;">' +
-      '      <button type="submit" class="app-btn">Generate & Save</button>' +
-      "    </div>" +
-      "  </form>" +
+      '<section id="section-home" class="app-section" aria-label="Home">' +
+      '<section class="app-card" aria-label="Focus Shift home">' +
+      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Home</h2>' +
+      '  <div id="home-flow"></div>' +
       '  <div id="generation-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
       "</section>" +
@@ -444,14 +419,6 @@
         "success"
       );
     });
-    document.getElementById("gen-category").addEventListener("change", function (ev) {
-      activeCategoryId = ev.target.value;
-      refreshGenerationQuestions();
-    });
-    document.getElementById("generate-form").addEventListener("submit", function (ev) {
-      ev.preventDefault();
-      generateAndSavePersonalizedScript(displayName || "");
-    });
     document.getElementById("btn-create-playlist").addEventListener("click", function () {
       createPlaylist();
     });
@@ -529,7 +496,7 @@
     document.getElementById("premade-edit-delete").addEventListener("click", function () {
       unpublishPremade();
     });
-    refreshGenerationQuestions();
+    renderHomeFlow(displayName || "");
     setAdminTab(activeAdminTab);
     updateMiniPlayer();
     updateTabCounts();
@@ -806,9 +773,11 @@
   }
 
   function setAdminTab(tabId) {
-    activeAdminTab = tabId || "create";
+    var normalized = tabId || "home";
+    if (normalized === "create") normalized = "home";
+    activeAdminTab = normalized;
     var sectionMap = {
-      create: "section-create",
+      home: "section-home",
       library: "section-library",
       playlists: "section-playlists",
       "app-library": "section-app-library",
@@ -924,12 +893,111 @@
     );
   }
 
-  function refreshGenerationQuestions() {
+  function setHomeFlowStep(step, displayName) {
+    homeFlowStep = step;
+    renderHomeFlow(displayName || "");
+  }
+
+  function renderHomeFlow(displayName) {
+    var el = document.getElementById("home-flow");
+    if (!el) return;
     var cat = selectedCategory();
-    var q1Label = document.getElementById("gen-q1-label");
-    var q2Label = document.getElementById("gen-q2-label");
-    if (q1Label) q1Label.textContent = cat.questions[0] || "Question 1";
-    if (q2Label) q2Label.textContent = cat.questions[1] || "Question 2";
+    if (homeFlowStep === "landing") {
+      el.innerHTML =
+        '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
+        '  <p class="app-muted" style="margin:0;">Welcome' +
+        (displayName ? ", <strong>" + escapeHtml(displayName) + "</strong>" : "") +
+        '. Where Focus Becomes Power.</p>' +
+        '  <p class="app-muted" style="margin:0;">Create a personalized mental script in a guided flow, just like iOS.</p>' +
+        '  <div><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
+        "</div>";
+      var startBtn = document.getElementById("home-start-create");
+      if (startBtn) {
+        startBtn.addEventListener("click", function () {
+          setHomeFlowStep("category", displayName);
+        });
+      }
+      return;
+    }
+    if (homeFlowStep === "category") {
+      el.innerHTML =
+        '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
+        '  <p class="app-muted" style="margin:0;">Choose a category to personalize your script.</p>' +
+        '  <div id="home-category-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.5rem;"></div>' +
+        '  <div><button type="button" class="app-btn app-btn-secondary" id="home-back-landing">Back</button></div>' +
+        "</div>";
+      var list = document.getElementById("home-category-list");
+      if (list) {
+        list.innerHTML = surveyCategories
+          .map(function (c) {
+            return (
+              '<button type="button" class="app-btn app-btn-secondary" data-home-category="' +
+              escapeHtml(c.id) +
+              '" style="text-align:left;">' +
+              escapeHtml(c.name) +
+              "</button>"
+            );
+          })
+          .join("");
+        list.querySelectorAll("[data-home-category]").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            activeCategoryId = btn.getAttribute("data-home-category") || "confidence";
+            setHomeFlowStep("survey", displayName);
+          });
+        });
+      }
+      var backLanding = document.getElementById("home-back-landing");
+      if (backLanding) {
+        backLanding.addEventListener("click", function () {
+          setHomeFlowStep("landing", displayName);
+        });
+      }
+      return;
+    }
+    el.innerHTML =
+      '<form id="generate-form" class="app-form" style="margin:0;">' +
+      '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
+      escapeHtml(cat.name) +
+      "</strong></p>" +
+      '  <label id="gen-q1-label" for="gen-q1" style="margin-top:0.2rem;">' +
+      escapeHtml(cat.questions[0] || "Question 1") +
+      "</label>" +
+      '  <textarea id="gen-q1" required></textarea>' +
+      '  <label id="gen-q2-label" for="gen-q2">' +
+      escapeHtml(cat.questions[1] || "Question 2") +
+      "</label>" +
+      '  <textarea id="gen-q2" required></textarea>' +
+      '  <label for="gen-tone">Tone</label>' +
+      '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
+      '    <option value="Calming">Calming</option>' +
+      '    <option value="Motivational">Motivational</option>' +
+      '    <option value="Compassionate">Compassionate</option>' +
+      '    <option value="Assertive">Assertive</option>' +
+      "  </select>" +
+      '  <label for="gen-length" style="margin-top:0.8rem;">Length</label>' +
+      '  <select id="gen-length" class="app-btn" style="width:100%;text-align:left;">' +
+      '    <option value="Short">Short</option>' +
+      '    <option value="Medium" selected>Medium</option>' +
+      '    <option value="Long">Long</option>' +
+      "  </select>" +
+      '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.9rem;">' +
+      '    <button type="button" class="app-btn app-btn-secondary" id="home-back-category">Back to Categories</button>' +
+      '    <button type="submit" class="app-btn app-btn-primary">Generate & Save</button>' +
+      "  </div>" +
+      "</form>";
+    var form = document.getElementById("generate-form");
+    if (form) {
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        generateAndSavePersonalizedScript(displayName || "");
+      });
+    }
+    var backCategory = document.getElementById("home-back-category");
+    if (backCategory) {
+      backCategory.addEventListener("click", function () {
+        setHomeFlowStep("category", displayName);
+      });
+    }
   }
 
   function uniqueScriptTitle(base) {
@@ -1028,9 +1096,12 @@
           })
           .then(function () {
             generationMessage("Generated and saved as \"" + title + "\".", "success");
-            document.getElementById("gen-q1").value = "";
-            document.getElementById("gen-q2").value = "";
+            var q1El = document.getElementById("gen-q1");
+            var q2El = document.getElementById("gen-q2");
+            if (q1El) q1El.value = "";
+            if (q2El) q2El.value = "";
             setMessage("Generated script saved to My Library.", "success");
+            setHomeFlowStep("landing", displayName || "");
           });
       })
       .catch(function (e) {
