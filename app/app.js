@@ -947,32 +947,52 @@
     if (homeFlowStep === "landing") {
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
-        '  <p class="app-muted" style="margin:0;">Welcome' +
+        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
+        '    <div class="app-home-hero">' +
+        '      <div>' +
+        '        <p class="app-home-hero-title">Welcome' +
         (displayName ? ", <strong>" + escapeHtml(displayName) + "</strong>" : "") +
-        '. Where Focus Becomes Power.</p>' +
-        '  <div class="app-card" style="margin:0;padding:0.85rem;border-radius:14px;">' +
-        '    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
-        '      <strong style="font-size:0.95rem;">Your Dashboard</strong>' +
+        ".</p>" +
+        '        <p class="app-home-hero-subtitle">Where Focus Becomes Power.</p>' +
+        "      </div>" +
         '      <span class="app-chip">' + escapeHtml(resolvePlanLabel()) + "</span>" +
         "    </div>" +
-        '    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:0.45rem;">' +
-        '      <div class="app-empty-hint" style="margin:0;padding:0.6rem;"><div class="app-muted" style="font-size:0.75rem;">Scripts</div><div style="font-weight:700;font-size:1rem;">' +
+        '    <div style="display:flex;justify-content:space-between;align-items:center;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
+        '      <strong style="font-size:0.95rem;">Your Dashboard</strong>' +
+        '      <span class="app-muted" style="font-size:0.8rem;">Cross-device sync</span>' +
+        "    </div>" +
+        '    <div class="app-stat-grid">' +
+        '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📝</span> Scripts</div><div class="app-stat-value">' +
         escapeHtml(String(currentScripts.length)) +
         "</div></div>" +
-        '      <div class="app-empty-hint" style="margin:0;padding:0.6rem;"><div class="app-muted" style="font-size:0.75rem;">Audio Ready</div><div style="font-weight:700;font-size:1rem;">' +
+        '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">🎧</span> Audio Ready</div><div class="app-stat-value">' +
         escapeHtml(String(scriptsWithAudioCount())) +
         "</div></div>" +
-        '      <div class="app-empty-hint" style="margin:0;padding:0.6rem;"><div class="app-muted" style="font-size:0.75rem;">Playlists</div><div style="font-weight:700;font-size:1rem;">' +
+        '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📚</span> Playlists</div><div class="app-stat-value">' +
         escapeHtml(String(currentPlaylists.length)) +
         "</div></div>" +
-        '      <div class="app-empty-hint" style="margin:0;padding:0.6rem;"><div class="app-muted" style="font-size:0.75rem;">Published Premade</div><div style="font-weight:700;font-size:1rem;">' +
+        '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">☁️</span> Published</div><div class="app-stat-value">' +
         escapeHtml(String(publishedByMeCount())) +
         "</div></div>" +
         "    </div>" +
         '    <p class="app-muted" style="margin:0.55rem 0 0;">' + escapeHtml(mostRecentScriptUpdateLabel()) + "</p>" +
         "  </div>" +
-        '  <p class="app-muted" style="margin:0;">Create a personalized mental script in a guided flow, just like iOS.</p>' +
-        '  <div><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
+        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
+        '    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">' +
+        "      <div>" +
+        '        <strong style="font-size:1rem;">Create Personalized Mental Script</strong>' +
+        '        <p class="app-muted" style="margin:0.25rem 0 0;">Follow category selection, then answer your survey questions.</p>' +
+        "      </div>" +
+        "    </div>" +
+        '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
+        "  </div>" +
+        '  <div class="app-card" style="margin:0;padding:0.85rem;border-radius:14px;">' +
+        '    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
+        '      <strong style="font-size:0.95rem;">Account-linked data</strong>' +
+        '      <span class="app-chip">' + escapeHtml(resolvePlanLabel()) + "</span>" +
+        "    </div>" +
+        '    <p class="app-muted" style="margin:0;">This dashboard is pulled from your Firebase account data so your numbers stay consistent across devices.</p>' +
+        "  </div>" +
         "</div>";
       var startBtn = document.getElementById("home-start-create");
       if (startBtn) {
