@@ -173,6 +173,17 @@
     }
   }
 
+  function formatDateString(dateLike) {
+    if (!dateLike) return "Unknown";
+    var d = new Date(dateLike);
+    if (isNaN(d.getTime())) return "Unknown";
+    try {
+      return d.toLocaleString();
+    } catch (_e) {
+      return "Unknown";
+    }
+  }
+
   function scriptCollection(uid) {
     return db.collection("users").doc(uid).collection("scripts");
   }
@@ -326,6 +337,9 @@
       '  <p class="app-muted" style="margin-top:0;">Signed in as <strong>' +
       escapeHtml(email || "") +
       "</strong></p>" +
+      '  <p class="app-muted" style="margin:0 0 0.7rem;">Last login: <strong id="account-last-login">' +
+      escapeHtml(formatDateString(currentUser && currentUser.metadata && currentUser.metadata.lastSignInTime)) +
+      "</strong></p>" +
       '  <form id="account-form" class="app-form" style="margin:0;">' +
       '    <label for="account-display-name">Display name</label>' +
       '    <input id="account-display-name" type="text" maxlength="80" value="' +
@@ -391,6 +405,11 @@
       '<div id="premade-edit-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Edit premade">' +
       "    <h3>Edit premade</h3>" +
+      '    <div class="app-empty-hint" style="margin-bottom:0.7rem;padding:0.7rem;">' +
+      '      <div><strong>Created:</strong> <span id="premade-edit-created-at">-</span></div>' +
+      '      <div><strong>Source Script ID:</strong> <code id="premade-edit-source-script-id">-</code></div>' +
+      '      <div><strong>Publisher:</strong> <span id="premade-edit-publisher">-</span></div>' +
+      "    </div>" +
       '    <label for="premade-edit-title">Title</label>' +
       '    <input id="premade-edit-title" type="text" maxlength="120">' +
       '    <label for="premade-edit-category">Category</label>' +
@@ -668,6 +687,9 @@
         scriptText: scriptText,
         audioURL: audioURL,
         sourceScriptID: s.id,
+        createdByUID: currentUser.uid,
+        createdByEmail: currentUser.email || "",
+        createdByName: currentUser.displayName || "",
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       })
       .then(function () {
@@ -697,6 +719,9 @@
     var category = document.getElementById("premade-edit-category");
     var desc = document.getElementById("premade-edit-description");
     var text = document.getElementById("premade-edit-text");
+    var createdAtEl = document.getElementById("premade-edit-created-at");
+    var sourceScriptEl = document.getElementById("premade-edit-source-script-id");
+    var publisherEl = document.getElementById("premade-edit-publisher");
     if (!backdrop || !title || !category || !desc || !text) return;
     category.innerHTML = surveyCategories
       .map(function (c) {
@@ -708,6 +733,16 @@
     category.value = premade.categoryID || "confidence";
     desc.value = premade.description || "";
     text.value = premade.scriptText || "";
+    if (createdAtEl) createdAtEl.textContent = formatDate(premade.createdAt);
+    if (sourceScriptEl) sourceScriptEl.textContent = premade.sourceScriptID || "-";
+    if (publisherEl) {
+      var publisherText =
+        premade.createdByName ||
+        premade.createdByEmail ||
+        premade.createdByUID ||
+        "Unknown";
+      publisherEl.textContent = publisherText;
+    }
     setEditPremadeMessage("", "");
     backdrop.hidden = false;
   }
@@ -805,6 +840,16 @@
     el.textContent = text || "";
   }
 
+  function updateAccountLastLoginLabel() {
+    var el = document.getElementById("account-last-login");
+    if (!el) return;
+    var lastLogin =
+      currentUser &&
+      currentUser.metadata &&
+      currentUser.metadata.lastSignInTime;
+    el.textContent = formatDateString(lastLogin);
+  }
+
   function saveAccountDisplayName() {
     if (!currentUser) return;
     var input = document.getElementById("account-display-name");
@@ -829,10 +874,10 @@
           );
       })
       .then(function () {
-        setAccountMessage("Display name updated.", "success");
+        setAccountMessage("Display name saved successfully.", "success");
       })
       .catch(function (e) {
-        setAccountMessage(e.message || "Could not update display name.", "error");
+        setAccountMessage(e.message || "Could not save display name. Please try again.", "error");
       });
   }
 
@@ -844,10 +889,10 @@
     auth
       .sendPasswordResetEmail(currentUser.email)
       .then(function () {
-        setAccountMessage("Password reset email sent.", "success");
+        setAccountMessage("Password reset email sent. Check your inbox.", "success");
       })
       .catch(function (e) {
-        setAccountMessage(e.message || "Could not send reset email.", "error");
+        setAccountMessage(e.message || "Could not send reset email. Please try again.", "error");
       });
   }
 
@@ -857,10 +902,15 @@
     currentUser
       .getIdToken(true)
       .then(function () {
-        setAccountMessage("Session refreshed.", "success");
+        return currentUser.reload();
+      })
+      .then(function () {
+        currentUser = auth.currentUser || currentUser;
+        updateAccountLastLoginLabel();
+        setAccountMessage("Session refreshed. Account details are up to date.", "success");
       })
       .catch(function (e) {
-        setAccountMessage(e.message || "Could not refresh session.", "error");
+        setAccountMessage(e.message || "Could not refresh session. Please try again.", "error");
       });
   }
 
@@ -2002,6 +2052,10 @@
               description: data.description || "",
               scriptText: data.scriptText || "",
               audioURL: data.audioURL || "",
+              sourceScriptID: data.sourceScriptID || "",
+              createdByUID: data.createdByUID || "",
+              createdByEmail: data.createdByEmail || "",
+              createdByName: data.createdByName || "",
               createdAt: data.createdAt || null,
             };
           })

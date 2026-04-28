@@ -13,9 +13,9 @@
   <link rel="stylesheet" href="../styles.css?v=8" />
   <link rel="stylesheet" href="../login/auth.css?v=1" />
   <style>
-    .app-shell { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
-    .app-shell h1 { font-size: 1.5rem; margin-top: 0; }
-    .app-muted { color: var(--muted, #8b9bb4); font-size: 0.95rem; line-height: 1.5; }
+    .app-shell { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    .app-shell h1 { font-size: 1.6rem; margin-top: 0; letter-spacing: -0.01em; }
+    .app-muted { color: var(--muted, #8b9bb4); font-size: 0.94rem; line-height: 1.5; }
     .app-admin-links { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
     .app-admin-links a {
       display: block;
@@ -37,23 +37,24 @@
       border: 1px solid var(--stroke, rgba(255,255,255,0.12));
       background: rgba(255,255,255,0.06);
       color: inherit;
-      border-radius: 10px;
-      padding: 0.6rem 0.9rem;
+      border-radius: 12px;
+      padding: 0.62rem 0.95rem;
       font-weight: 600;
       cursor: pointer;
+      letter-spacing: 0.01em;
     }
     .app-btn:hover { border-color: #2563eb; }
     .app-btn-danger { border-color: rgba(220,38,38,0.5); }
     .app-card {
       background: rgba(255,255,255,0.06);
       border: 1px solid var(--stroke, rgba(255,255,255,0.12));
-      border-radius: 14px;
-      padding: 1rem;
-      margin-bottom: 0.85rem;
+      border-radius: 16px;
+      padding: 1.1rem 1rem;
+      margin-bottom: 0.95rem;
     }
-    .app-card h3 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+    .app-card h3 { margin: 0 0 0.4rem; font-size: 1.08rem; letter-spacing: -0.01em; }
     .app-card-meta { font-size: 0.82rem; color: var(--muted, #8b9bb4); margin-bottom: 0.6rem; }
-    .app-card-text { white-space: pre-wrap; margin: 0; line-height: 1.45; }
+    .app-card-text { white-space: pre-wrap; margin: 0; line-height: 1.52; }
     .app-card-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
     .app-form { margin: 1rem 0; }
     .app-form label {
@@ -91,9 +92,10 @@
       background: rgba(255,255,255,0.05);
       color: inherit;
       border-radius: 999px;
-      padding: 0.45rem 0.8rem;
+      padding: 0.48rem 0.86rem;
       cursor: pointer;
       font-weight: 600;
+      letter-spacing: 0.01em;
     }
     .app-tab-btn.is-active {
       background: rgba(37, 99, 235, 0.2);
@@ -261,7 +263,7 @@
         backdrop-filter: blur(6px);
       }
       .app-card {
-        padding: 0.85rem;
+        padding: 0.9rem;
       }
       .mini-player-inner {
         gap: 0.45rem;
@@ -288,6 +290,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>
