@@ -250,27 +250,13 @@
   }
 
   function renderAdminShell(email, displayName) {
-    var voiceOptions = availableVoices
-      .map(function (v) {
-        var selected = v.id === selectedVoiceId ? " selected" : "";
-        return (
-          '<option value="' +
-          escapeHtml(v.id) +
-          '"' +
-          selected +
-          ">" +
-          escapeHtml(v.name) +
-          "</option>"
-        );
-      })
-      .join("");
     root.innerHTML =
       "<h1>Focus Shift — admin</h1>" +
       "<p class=\"app-muted\">Signed in as <strong>" +
       escapeHtml(email || "") +
       "</strong> (" +
       escapeHtml(displayName || "no display name") +
-      "). Stage 4 now includes personalized mental script generation (web) + My Library CRUD.</p>" +
+      "). Web workspace is live with Home flow, My Library, Playlists, Voices, Backgrounds, and App Library tools.</p>" +
       '<nav class="app-tabs" aria-label="Admin sections">' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="library">My Library <span class="app-tab-count" id="count-library">0</span></button>' +
@@ -289,12 +275,6 @@
       "</section>" +
       '<section id="section-library" class="app-section">' +
       '<div class="app-toolbar">' +
-      '  <label for="global-voice" style="display:flex;align-items:center;gap:0.5rem;">' +
-      '    <span class="app-muted" style="font-size:0.85rem;">Voice</span>' +
-      '    <select id="global-voice" class="app-btn" style="min-width:170px;text-align:left;">' +
-      voiceOptions +
-      "    </select>" +
-      "  </label>" +
       '  <button type="button" class="app-btn" id="btn-create-script">+ New Script</button>' +
       "</div>" +
       '<div id="scripts-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
@@ -449,22 +429,6 @@
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
       openEditor(null);
-    });
-    document.getElementById("global-voice").addEventListener("change", function (ev) {
-      selectedVoiceId = ev.target.value;
-      saveUserDefaults()
-        .then(function () {
-          renderVoices();
-          generationMessage(
-            "Voice set to " +
-              (availableVoices.find(function (v) {
-                return v.id === selectedVoiceId;
-              }) || { name: "selected voice" }).name +
-              ".",
-            "success"
-          );
-        })
-        .catch(function () {});
     });
     document.getElementById("btn-create-playlist").addEventListener("click", function () {
       createPlaylist();
@@ -954,8 +918,6 @@
         var voiceID = btn.getAttribute("data-voice-id");
         if (!voiceID || voiceID === selectedVoiceId) return;
         selectedVoiceId = voiceID;
-        var globalVoice = document.getElementById("global-voice");
-        if (globalVoice) globalVoice.value = selectedVoiceId;
         setVoicesMessage("Saving default voice...", "");
         saveUserDefaults()
           .then(function () {
@@ -1751,7 +1713,7 @@
     if (!list) return;
     if (!scripts.length) {
       list.innerHTML =
-        '<div class="app-empty-hint">No scripts yet. Tap <strong>+ New Script</strong> to create one, or use the <strong>Create</strong> tab to generate a personalized mental script and auto-save it here.</div>';
+        '<div class="app-empty-hint">No scripts yet. Tap <strong>+ New Script</strong> to create one, or use the <strong>Home</strong> tab flow to generate a personalized mental script and auto-save it here.</div>';
       return;
     }
     var nextExpanded = {};
