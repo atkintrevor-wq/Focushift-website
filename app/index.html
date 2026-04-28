@@ -16,13 +16,70 @@
     .app-shell { max-width: 720px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
     .app-shell h1 { font-size: 1.5rem; margin-top: 0; }
     .app-muted { color: var(--muted, #8b9bb4); font-size: 0.95rem; line-height: 1.5; }
-    .app-admin-links { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem; }
+    .app-admin-links { margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem; }
     .app-admin-links a {
-      display: block; padding: 0.85rem 1rem; border-radius: 12px;
+      display: block;
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
       background: rgba(255,255,255,0.06); border: 1px solid var(--stroke, rgba(255,255,255,0.12));
       color: inherit; text-decoration: none; font-weight: 600;
     }
     .app-admin-links a:hover { border-color: #2563eb; }
+    .app-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin: 1rem 0;
+    }
+    .app-btn {
+      border: 1px solid var(--stroke, rgba(255,255,255,0.12));
+      background: rgba(255,255,255,0.06);
+      color: inherit;
+      border-radius: 10px;
+      padding: 0.6rem 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .app-btn:hover { border-color: #2563eb; }
+    .app-btn-danger { border-color: rgba(220,38,38,0.5); }
+    .app-card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid var(--stroke, rgba(255,255,255,0.12));
+      border-radius: 14px;
+      padding: 1rem;
+      margin-bottom: 0.85rem;
+    }
+    .app-card h3 { margin: 0 0 0.35rem; font-size: 1.05rem; }
+    .app-card-meta { font-size: 0.82rem; color: var(--muted, #8b9bb4); margin-bottom: 0.6rem; }
+    .app-card-text { white-space: pre-wrap; margin: 0; line-height: 1.45; }
+    .app-card-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; }
+    .app-form { margin: 1rem 0; }
+    .app-form label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted, #8b9bb4);
+      margin-bottom: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .app-form input, .app-form textarea {
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: 1px solid var(--stroke, rgba(255,255,255,0.15));
+      background: rgba(0, 0, 0, 0.2);
+      color: inherit;
+      padding: 0.72rem 0.85rem;
+      margin-bottom: 0.8rem;
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    .app-form textarea { min-height: 160px; resize: vertical; }
+    .app-inline-msg { margin: 0.6rem 0; font-size: 0.9rem; }
+    .app-inline-msg.error { color: #fca5a5; }
+    .app-inline-msg.success { color: #86efac; }
   </style>
 </head>
 <body>
@@ -34,6 +91,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=1"></script>
+  <script src="app.js?v=2"></script>
 </body>
 </html>
