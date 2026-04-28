@@ -5,10 +5,12 @@
   var scriptsUnsubscribe = null;
   var playlistsUnsubscribe = null;
   var premadeUnsubscribe = null;
+  var clonedVoicesUnsubscribe = null;
   var currentUser = null;
   var currentScripts = [];
   var currentPlaylists = [];
   var currentPremade = [];
+  var currentClonedVoices = [];
   var currentUserProfile = null;
   var isEditing = false;
   var editingScriptId = null;
@@ -32,15 +34,39 @@
   var premadeVoiceOverrideById = {};
   var premadeBackgroundOverrideById = {};
   var mediaPickerTarget = null;
+  var activeVoicesTab = "my-voices";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
   var availableVoices = [
-    { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
-    { id: "YZHSTqsq1isdXNsFLzBw", name: "Isa" },
-    { id: "rJ9XoWu8gbUhVKZnKY8X", name: "Lori" },
-    { id: "1wGbFxmAM3Fgw63G1zZJ", name: "Allison" },
-    { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark" },
-    { id: "EiNlNiXeDU1pqqOPrYMO", name: "Paul" },
+    { id: "YZHSTqsq1isdXNsFLzBw", name: "Isa", description: "smooth, charming female" },
+    { id: "rJ9XoWu8gbUhVKZnKY8X", name: "Lori", description: "Warm, Engaging and Caring" },
+    { id: "l32B8XDoylOsZKiSdfhE", name: "Carla", description: "Sweet, Soft and Meditative" },
+    { id: "1wGbFxmAM3Fgw63G1zZJ", name: "Allison", description: "Calm, Soothing and Meditative" },
+    { id: "tOEwa4nCo7gciO1FbUBK", name: "Stephen", description: "Raspy Senior Narrator" },
+    { id: "87tjwokZlpNU7QL3HaLP", name: "Zane", description: "Raspy and Convincing" },
+    { id: "7dEuJHhweR5AFXA4INkB", name: "Carol", description: "Warm, Smooth & Luxurious" },
+    { id: "xctasy8XvGp2cVO9HL9k", name: "Samantha", description: "Energetic, Clear and Bubbly" },
+    { id: "6F5Zhi321D3Oq7v1oNT4", name: "Hank", description: "Deep and Engaging Narrator" },
+    { id: "FVQMzxJGPUBtfz1Azdoy", name: "Danielle", description: "Gentle and Engaging Narrator" },
+    { id: "NNl6r8mD7vthiJatiJt1", name: "Bradford", description: "Expressive and Articulate" },
+    { id: "gUABw7pXQjhjt0kNFBTF", name: "Andrew", description: "Smooth, Smart and Clear" },
+    { id: "kqVT88a5QfII1HNAEPTJ", name: "Sage", description: "Wise and Captivating" },
+    { id: "EkK5I93UQWFDigLMpZcX", name: "James", description: "Husky, Engaging and Bold" },
+    { id: "NtS6nEHDYMQC9QczMQuq", name: "Katherine", description: "Calm Luxury Narrator" },
+    { id: "BpjGufoPiobT79j2vtj4", name: "Priyanka", description: "Calm, Neutral and Relaxed" },
+    { id: "wAGzRVkxKEs8La0lmdrE", name: "Sully", description: "Mature, Deep and Intriguing" },
+    { id: "dPah2VEoifKnZT37774q", name: "Knox", description: "Serious, Deep, and Steady" },
+    { id: "MFZUKuGQUsGJPQjTS4wC", name: "Jon", description: "Warm & Grounded Storyteller" },
+    { id: "uju3wxzG5OhpWcoi3SMy", name: "Michael", description: "Confident, Expressive" },
+    { id: "lnieQLGTodpbhjpZtg1k", name: "Bill", description: "Clear and Articulate" },
+    { id: "ZthjuvLPty3kTMaNKVKb", name: "Jackson", description: "Confident and Reliable" },
+    { id: "lxYfHSkYm1EzQzGhdbfc", name: "Jessica", description: "Confident. Conversational" },
+    { id: "8LVfoRdkh4zgjr8v5ObE", name: "Clara", description: "Soothing, Warm and Friendly" },
+    { id: "EiNlNiXeDU1pqqOPrYMO", name: "Paul", description: "Deep Voice" },
+    { id: "YgzytRZyVmEux6PCtJYB", name: "Ivanna", description: "Sultry & Captivating" },
+    { id: "A7LE95x99tn9HChsblA6", name: "Rebecca", description: "Hypnotic Female voice" },
+    { id: "iZURAYccQtQd12U8kEcq", name: "Roland", description: "Middle-aged male voice" },
+    { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark", description: "Very Deep, Confident, Professional" },
   ];
   var availableBackgrounds = [
     { id: "bg-none", name: "No Background", categoryID: "general" },
@@ -184,6 +210,13 @@
     }
   }
 
+  function teardownClonedVoicesListener() {
+    if (typeof clonedVoicesUnsubscribe === "function") {
+      clonedVoicesUnsubscribe();
+      clonedVoicesUnsubscribe = null;
+    }
+  }
+
   function formatDate(ts) {
     if (!ts || typeof ts.toDate !== "function") return "No date";
     try {
@@ -216,6 +249,10 @@
     return db.collection("premadeAudio");
   }
 
+  function clonedVoicesCollection(uid) {
+    return db.collection("users").doc(uid).collection("clonedVoices");
+  }
+
   function backendBaseURL() {
     if (window.fsFirebaseConfig && window.fsFirebaseConfig.backendURL) {
       return String(window.fsFirebaseConfig.backendURL).replace(/\/+$/, "");
@@ -227,6 +264,7 @@
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
+    teardownClonedVoicesListener();
     redirectLogin();
   }
 
@@ -234,6 +272,7 @@
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
+    teardownClonedVoicesListener();
     root.innerHTML =
       "<h1>You're signed in</h1>" +
       "<p class=\"app-muted\">Hi " +
@@ -299,7 +338,15 @@
       '<section id="section-voices" class="app-section">' +
       '<section class="app-card" aria-label="Voice settings">' +
       '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Voices</h2>' +
-      '  <p class="app-muted" style="margin-top:0;">Set your default voice for generated scripts and web audio jobs.</p>' +
+      '  <p class="app-muted" style="margin-top:0;">Choose from App Voices or manage My Voices (saved + cloned), then set defaults.</p>' +
+      '  <div class="app-tabs" style="margin-top:0.5rem;">' +
+      '    <button type="button" class="app-tab-btn" id="voices-tab-my" data-voices-tab="my-voices">My Voices</button>' +
+      '    <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
+      "  </div>" +
+      '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
+      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Clone Voice</button>' +
+      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-upload">Upload Voice File</button>' +
+      "  </div>" +
       '  <div id="voices-list"></div>' +
       '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
@@ -510,6 +557,18 @@
     });
     document.getElementById("premade-edit-delete").addEventListener("click", function () {
       unpublishPremade();
+    });
+    root.querySelectorAll("[data-voices-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        activeVoicesTab = btn.getAttribute("data-voices-tab") || "my-voices";
+        renderVoices();
+      });
+    });
+    document.getElementById("btn-voice-clone").addEventListener("click", function () {
+      setVoicesMessage("Voice cloning UI is next. Backend route is ready: /api/elevenlabs/voices/add.", "success");
+    });
+    document.getElementById("btn-voice-upload").addEventListener("click", function () {
+      setVoicesMessage("Voice file upload flow is next. We will connect this to cloned voice creation.", "success");
     });
     document.getElementById("media-picker-cancel").addEventListener("click", function () {
       closeMediaPicker();
@@ -896,19 +955,59 @@
   function renderVoices() {
     var list = document.getElementById("voices-list");
     if (!list) return;
-    list.innerHTML = availableVoices
+    var tabMy = document.getElementById("voices-tab-my");
+    var tabApp = document.getElementById("voices-tab-app");
+    if (tabMy) tabMy.classList.toggle("is-active", activeVoicesTab === "my-voices");
+    if (tabApp) tabApp.classList.toggle("is-active", activeVoicesTab === "app-voices");
+
+    var savedAppVoiceIDs = Array.isArray((currentUserProfile || {}).savedAppVoiceIDs)
+      ? (currentUserProfile || {}).savedAppVoiceIDs
+      : [];
+    var savedSet = {};
+    savedAppVoiceIDs.forEach(function (id) {
+      savedSet[id] = true;
+    });
+
+    var myVoices = []
+      .concat(currentClonedVoices)
+      .concat(
+        availableVoices.filter(function (v) {
+          return savedSet[v.id] === true;
+        })
+      );
+    var sourceVoices = activeVoicesTab === "my-voices" ? myVoices : availableVoices;
+    if (!sourceVoices.length) {
+      list.innerHTML = '<div class="app-empty-hint">No voices here yet. Save from App Voices or create a cloned voice.</div>';
+      return;
+    }
+
+    list.innerHTML = sourceVoices
       .map(function (v) {
         var isSelected = v.id === selectedVoiceId;
+        var inMyVoices = !!savedSet[v.id] || currentClonedVoices.some(function (cv) { return cv.id === v.id; });
+        var supportsSaveToggle = activeVoicesTab === "app-voices";
         return (
           '<div class="app-modal-row" style="margin-bottom:0.45rem;">' +
-          '  <div class="app-modal-row-name">' + escapeHtml(v.name) + "</div>" +
-          '  <button type="button" class="app-btn ' +
+          '  <div class="app-modal-row-name">' +
+          escapeHtml(v.name) +
+          (v.description ? '<div class="app-muted" style="font-size:0.75rem;">' + escapeHtml(v.description) + "</div>" : "") +
+          "</div>" +
+          '<div style="display:flex;gap:0.4rem;flex-wrap:wrap;justify-content:flex-end;">' +
+          (supportsSaveToggle
+            ? '<button type="button" class="app-btn app-btn-ghost" data-voice-save-id="' +
+              escapeHtml(v.id) +
+              '">' +
+              (inMyVoices ? "Saved" : "Add to My Voices") +
+              "</button>"
+            : "") +
+          '<button type="button" class="app-btn ' +
           (isSelected ? "app-btn-primary" : "app-btn-secondary") +
           '" data-voice-id="' +
           escapeHtml(v.id) +
           '">' +
           (isSelected ? "Default" : "Set Default") +
           "</button>" +
+          "</div>" +
           "</div>"
         );
       })
@@ -926,6 +1025,28 @@
           })
           .catch(function (e) {
             setVoicesMessage(e.message || "Could not save default voice.", "error");
+          });
+      });
+    });
+    list.querySelectorAll("[data-voice-save-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var voiceID = btn.getAttribute("data-voice-save-id");
+        if (!voiceID) return;
+        var currentIDs = Array.isArray((currentUserProfile || {}).savedAppVoiceIDs)
+          ? (currentUserProfile || {}).savedAppVoiceIDs.slice()
+          : [];
+        var has = currentIDs.indexOf(voiceID) >= 0;
+        var nextIDs = has
+          ? currentIDs.filter(function (id) { return id !== voiceID; })
+          : currentIDs.concat([voiceID]);
+        setVoicesMessage(has ? "Removing from My Voices..." : "Adding to My Voices...", "");
+        saveUserDefaults({ savedAppVoiceIDs: nextIDs })
+          .then(function () {
+            setVoicesMessage(has ? "Removed from My Voices." : "Added to My Voices.", "success");
+            renderVoices();
+          })
+          .catch(function (e) {
+            setVoicesMessage(e.message || "Could not update My Voices.", "error");
           });
       });
     });
@@ -2701,6 +2822,28 @@
     );
   }
 
+  function subscribeClonedVoices(uid) {
+    teardownClonedVoicesListener();
+    clonedVoicesUnsubscribe = clonedVoicesCollection(uid).onSnapshot(
+      function (snap) {
+        currentClonedVoices = snap.docs.map(function (doc) {
+          var data = doc.data() || {};
+          return {
+            id: doc.id,
+            name: data.name || data.voiceName || "Cloned Voice",
+            description: data.description || "Cloned voice",
+            elevenLabsVoiceID: data.elevenLabsVoiceID || "",
+          };
+        });
+        if (activeAdminTab === "voices") renderVoices();
+      },
+      function (_e) {
+        currentClonedVoices = [];
+        if (activeAdminTab === "voices") renderVoices();
+      }
+    );
+  }
+
   function subscribeScripts(uid) {
     teardownScriptsListener();
     scriptsUnsubscribe = scriptCollection(uid)
@@ -2775,6 +2918,7 @@
           subscribeScripts(user.uid);
           subscribePlaylists(user.uid);
           subscribePremade();
+          subscribeClonedVoices(user.uid);
         } else {
           renderNonAdmin(user.email, user.displayName);
         }
