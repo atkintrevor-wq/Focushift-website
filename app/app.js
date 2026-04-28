@@ -437,6 +437,7 @@
       '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Media picker">' +
       '    <h3 id="media-picker-title">Select option</h3>' +
       '    <p id="media-picker-subtitle" class="app-muted" style="margin:0 0 0.45rem;"></p>' +
+      '    <input id="media-picker-search" type="text" placeholder="Search...">' +
       '    <div id="media-picker-list" class="app-modal-list"></div>' +
       '    <div id="media-picker-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '    <div class="app-modal-actions">' +
@@ -1575,7 +1576,8 @@
     var title = document.getElementById("media-picker-title");
     var subtitle = document.getElementById("media-picker-subtitle");
     var list = document.getElementById("media-picker-list");
-    if (!backdrop || !title || !subtitle || !list || !mediaPickerTarget) return;
+    var searchInput = document.getElementById("media-picker-search");
+    if (!backdrop || !title || !subtitle || !list || !searchInput || !mediaPickerTarget) return;
 
     var isVoice = mediaPickerTarget.field === "voice";
     var options = isVoice ? availableVoices : availableBackgrounds;
@@ -1602,24 +1604,107 @@
       subtitle.textContent = premade.title || "Premade";
     }
 
-    list.innerHTML = options
-      .map(function (opt) {
-        var selected = opt.id === currentValue;
-        return (
-          '<button type="button" class="app-btn ' +
-          (selected ? "app-btn-primary" : "app-btn-secondary") +
-          '" style="text-align:left;justify-content:space-between;display:flex;" data-media-option="' +
-          escapeHtml(opt.id) +
-          '">' +
-          '<span>' +
-          escapeHtml(opt.name) +
-          "</span>" +
-          (selected ? '<span aria-hidden="true">✓</span>' : "") +
-          "</button>"
-        );
-      })
-      .join("");
-    list.querySelectorAll("[data-media-option]").forEach(function (btn) {
+    function recommendedOptionIDs(kind, categoryID) {
+      if (kind === "voice") {
+        return ["lnieQLGTodpbhjpZtg1k", "YZHSTqsq1isdXNsFLzBw"];
+      }
+      if (!categoryID) return ["bg-none", "bg-rain", "bg-piano"];
+      return availableBackgrounds
+        .filter(function (b) {
+          return b.id === "bg-none" || b.categoryID === categoryID || b.categoryID === "general";
+        })
+        .slice(0, 4)
+        .map(function (b) {
+          return b.id;
+        });
+    }
+
+    var activeCategoryID = null;
+    if (mediaPickerTarget.kind === "script") {
+      var categoryScript = currentScripts.find(function (s) {
+        return s.id === mediaPickerTarget.id;
+      });
+      activeCategoryID = categoryScript && categoryScript.categoryID ? categoryScript.categoryID : null;
+    } else {
+      var categoryPremade = currentPremade.find(function (p) {
+        return p.id === mediaPickerTarget.id;
+      });
+      activeCategoryID = categoryPremade && categoryPremade.categoryID ? categoryPremade.categoryID : null;
+    }
+
+    function optionRowHtml(opt, selected) {
+      return (
+        '<button type="button" class="app-picker-option' +
+        (selected ? " is-selected" : "") +
+        '" data-media-option="' +
+        escapeHtml(opt.id) +
+        '">' +
+        '<span>' +
+        escapeHtml(opt.name) +
+        "</span>" +
+        '<span class="app-picker-check" aria-hidden="true">' +
+        (selected ? "✓" : "") +
+        "</span>" +
+        "</button>"
+      );
+    }
+
+    function sectionHtml(titleText, items, selectedID) {
+      if (!items.length) return "";
+      return (
+        '<div class="app-picker-group">' +
+        '<p class="app-picker-group-title">' +
+        escapeHtml(titleText) +
+        "</p>" +
+        items
+          .map(function (opt) {
+            return optionRowHtml(opt, opt.id === selectedID);
+          })
+          .join("") +
+        "</div>"
+      );
+    }
+
+    function renderPickerOptions(filterText) {
+      var q = (filterText || "").trim().toLowerCase();
+      var filtered = options.filter(function (opt) {
+        if (!q) return true;
+        var name = (opt.name || "").toLowerCase();
+        var id = (opt.id || "").toLowerCase();
+        var cat = (opt.categoryID || "").toLowerCase();
+        return name.indexOf(q) >= 0 || id.indexOf(q) >= 0 || cat.indexOf(q) >= 0;
+      });
+      var defaultItem = filtered.find(function (opt) {
+        return opt.id === (isVoice ? selectedVoiceId : selectedBackgroundId);
+      });
+      var recommendedIDs = recommendedOptionIDs(isVoice ? "voice" : "background", activeCategoryID);
+      var recommended = filtered.filter(function (opt) {
+        return recommendedIDs.indexOf(opt.id) >= 0;
+      });
+      var groupedIDs = {};
+      if (defaultItem) groupedIDs[defaultItem.id] = true;
+      recommended.forEach(function (opt) {
+        groupedIDs[opt.id] = true;
+      });
+      var allRemaining = filtered.filter(function (opt) {
+        return !groupedIDs[opt.id];
+      });
+
+      if (!filtered.length) {
+        list.innerHTML = '<p class="app-muted">No results found.</p>';
+        bindPickerOptionClicks();
+        return;
+      }
+
+      list.innerHTML =
+        sectionHtml("Default", defaultItem ? [defaultItem] : [], currentValue) +
+        sectionHtml("Recommended", recommended, currentValue) +
+        sectionHtml("All", allRemaining, currentValue);
+      bindPickerOptionClicks();
+    }
+
+    function bindPickerOptionClicks() {
+      list.querySelectorAll("[data-media-option]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var selectedID = btn.getAttribute("data-media-option");
         if (!selectedID || !mediaPickerTarget) return;
@@ -1637,9 +1722,21 @@
         renderPremade();
         closeMediaPicker();
       });
-    });
+      });
+    }
+
+    searchInput.value = "";
+    searchInput.oninput = function () {
+      renderPickerOptions(searchInput.value || "");
+    };
+    renderPickerOptions("");
     setMediaPickerMessage("", "");
     backdrop.hidden = false;
+    setTimeout(function () {
+      try {
+        searchInput.focus();
+      } catch (_e) {}
+    }, 0);
   }
 
   function closeMediaPicker() {

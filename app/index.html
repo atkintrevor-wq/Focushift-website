@@ -294,6 +294,49 @@
       white-space: nowrap;
       max-width: 280px;
     }
+    .app-picker-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.15rem;
+    }
+    .app-picker-group-title {
+      margin: 0.22rem 0 0.1rem;
+      font-size: 0.73rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted, #9bb0d0);
+    }
+    .app-picker-option {
+      width: 100%;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.03);
+      color: #fff;
+      border-radius: 10px;
+      min-height: 40px;
+      padding: 0.48rem 0.65rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-align: left;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .app-picker-option:hover {
+      border-color: rgba(96,165,250,0.65);
+      background: rgba(37,99,235,0.10);
+    }
+    .app-picker-option.is-selected {
+      border-color: rgba(96,165,250,0.88);
+      background: rgba(37,99,235,0.16);
+    }
+    .app-picker-check {
+      font-size: 0.9rem;
+      color: #93c5fd;
+      font-weight: 700;
+      margin-left: 0.45rem;
+      min-width: 0.9rem;
+      text-align: right;
+    }
     .app-modal-actions {
       display: flex;
       justify-content: flex-end;
@@ -383,6 +426,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=24"></script>
+  <script src="app.js?v=26"></script>
 </body>
 </html>
