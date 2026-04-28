@@ -29,7 +29,10 @@
   var editingPremadeId = null;
   var expandedScriptTextById = {};
   var expandedPremadeTextById = {};
+  var premadeVoiceOverrideById = {};
+  var premadeBackgroundOverrideById = {};
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
+  var selectedBackgroundId = "bg-none";
   var availableVoices = [
     { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
     { id: "YZHSTqsq1isdXNsFLzBw", name: "Isa" },
@@ -37,6 +40,18 @@
     { id: "1wGbFxmAM3Fgw63G1zZJ", name: "Allison" },
     { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark" },
     { id: "EiNlNiXeDU1pqqOPrYMO", name: "Paul" },
+  ];
+  var availableBackgrounds = [
+    { id: "bg-none", name: "No Background", categoryID: "general" },
+    { id: "bg-rain", name: "Rain", categoryID: "general" },
+    { id: "bg-calm-night", name: "Calm Night", categoryID: "general" },
+    { id: "bg-meditation", name: "Meditation Background", categoryID: "general" },
+    { id: "bg-piano", name: "Piano Background", categoryID: "general" },
+    { id: "bg-soft-calm-piano", name: "Soft Calm Piano", categoryID: "general" },
+    { id: "bg-inner-calm", name: "Inner Calm", categoryID: "mental-wellbeing" },
+    { id: "bg-calm-groove", name: "Calm Groove", categoryID: "confidence" },
+    { id: "bg-warm-melody", name: "Warm Melody", categoryID: "relationships" },
+    { id: "bg-calm-piano-whisper", name: "Calm Piano Whisper", categoryID: "sleep-rest" },
   ];
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
@@ -259,6 +274,8 @@
       '  <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="library">My Library <span class="app-tab-count" id="count-library">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="account">Account</button>' +
       "</nav>" +
@@ -296,6 +313,22 @@
       "  </div>" +
       '  <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
       '  <div id="playlist-detail" style="margin-top:0.8rem;"></div>' +
+      "</section>" +
+      "</section>" +
+      '<section id="section-voices" class="app-section">' +
+      '<section class="app-card" aria-label="Voice settings">' +
+      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Voices</h2>' +
+      '  <p class="app-muted" style="margin-top:0;">Set your default voice for generated scripts and web audio jobs.</p>' +
+      '  <div id="voices-list"></div>' +
+      '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      "</section>" +
+      "</section>" +
+      '<section id="section-backgrounds" class="app-section">' +
+      '<section class="app-card" aria-label="Background settings">' +
+      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Backgrounds</h2>' +
+      '  <p class="app-muted" style="margin-top:0;">Set your default background for new scripts and audio generation.</p>' +
+      '  <div id="backgrounds-list"></div>' +
+      '  <div id="backgrounds-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
       "</section>" +
       '<section id="section-app-library" class="app-section">' +
@@ -406,14 +439,19 @@
     });
     document.getElementById("global-voice").addEventListener("change", function (ev) {
       selectedVoiceId = ev.target.value;
-      generationMessage(
-        "Voice set to " +
-          (availableVoices.find(function (v) {
-            return v.id === selectedVoiceId;
-          }) || { name: "selected voice" }).name +
-          ".",
-        "success"
-      );
+      saveUserDefaults()
+        .then(function () {
+          renderVoices();
+          generationMessage(
+            "Voice set to " +
+              (availableVoices.find(function (v) {
+                return v.id === selectedVoiceId;
+              }) || { name: "selected voice" }).name +
+              ".",
+            "success"
+          );
+        })
+        .catch(function () {});
     });
     document.getElementById("btn-create-playlist").addEventListener("click", function () {
       createPlaylist();
@@ -497,6 +535,8 @@
       unpublishPremade();
     });
     renderHomeFlow(displayName || "");
+    renderVoices();
+    renderBackgrounds();
     setAdminTab(activeAdminTab);
     updateMiniPlayer();
     updateTabCounts();
@@ -780,6 +820,8 @@
       home: "section-home",
       library: "section-library",
       playlists: "section-playlists",
+      voices: "section-voices",
+      backgrounds: "section-backgrounds",
       "app-library": "section-app-library",
       account: "section-account",
     };
@@ -802,6 +844,129 @@
     if (!el) return;
     el.className = "app-inline-msg" + (kind ? " " + kind : "");
     el.textContent = text || "";
+  }
+
+  function setVoicesMessage(text, kind) {
+    var el = document.getElementById("voices-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function setBackgroundsMessage(text, kind) {
+    var el = document.getElementById("backgrounds-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function saveUserDefaults(partial) {
+    if (!currentUser) return Promise.resolve();
+    return db
+      .collection("users")
+      .doc(currentUser.uid)
+      .set(
+        {
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          defaultVoiceID: selectedVoiceId,
+          defaultBackgroundID: selectedBackgroundId,
+          webDefaultsUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          webDefaults: {
+            voiceID: selectedVoiceId,
+            backgroundID: selectedBackgroundId,
+          },
+          ...(partial || {}),
+        },
+        { merge: true }
+      )
+      .then(function () {
+        currentUserProfile = Object.assign({}, currentUserProfile || {}, partial || {}, {
+          defaultVoiceID: selectedVoiceId,
+          defaultBackgroundID: selectedBackgroundId,
+        });
+      });
+  }
+
+  function renderVoices() {
+    var list = document.getElementById("voices-list");
+    if (!list) return;
+    list.innerHTML = availableVoices
+      .map(function (v) {
+        var isSelected = v.id === selectedVoiceId;
+        return (
+          '<div class="app-modal-row" style="margin-bottom:0.45rem;">' +
+          '  <div class="app-modal-row-name">' + escapeHtml(v.name) + "</div>" +
+          '  <button type="button" class="app-btn ' +
+          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+          '" data-voice-id="' +
+          escapeHtml(v.id) +
+          '">' +
+          (isSelected ? "Default" : "Set Default") +
+          "</button>" +
+          "</div>"
+        );
+      })
+      .join("");
+    list.querySelectorAll("[data-voice-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var voiceID = btn.getAttribute("data-voice-id");
+        if (!voiceID || voiceID === selectedVoiceId) return;
+        selectedVoiceId = voiceID;
+        var globalVoice = document.getElementById("global-voice");
+        if (globalVoice) globalVoice.value = selectedVoiceId;
+        setVoicesMessage("Saving default voice...", "");
+        saveUserDefaults()
+          .then(function () {
+            renderVoices();
+            setVoicesMessage("Default voice saved.", "success");
+          })
+          .catch(function (e) {
+            setVoicesMessage(e.message || "Could not save default voice.", "error");
+          });
+      });
+    });
+  }
+
+  function renderBackgrounds() {
+    var list = document.getElementById("backgrounds-list");
+    if (!list) return;
+    list.innerHTML = availableBackgrounds
+      .map(function (b) {
+        var isSelected = b.id === selectedBackgroundId;
+        return (
+          '<div class="app-modal-row" style="margin-bottom:0.45rem;">' +
+          '  <div class="app-modal-row-name">' +
+          escapeHtml(b.name) +
+          ' <span class="app-muted" style="font-size:0.78rem;">(' +
+          escapeHtml(b.categoryID || "general") +
+          ")</span></div>" +
+          '  <button type="button" class="app-btn ' +
+          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+          '" data-background-id="' +
+          escapeHtml(b.id) +
+          '">' +
+          (isSelected ? "Default" : "Set Default") +
+          "</button>" +
+          "</div>"
+        );
+      })
+      .join("");
+    list.querySelectorAll("[data-background-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var backgroundID = btn.getAttribute("data-background-id");
+        if (!backgroundID || backgroundID === selectedBackgroundId) return;
+        selectedBackgroundId = backgroundID;
+        setBackgroundsMessage("Saving default background...", "");
+        saveUserDefaults()
+          .then(function () {
+            renderBackgrounds();
+            setBackgroundsMessage("Default background saved.", "success");
+          })
+          .catch(function (e) {
+            setBackgroundsMessage(e.message || "Could not save default background.", "error");
+          });
+      });
+    });
   }
 
   function setAccountMessage(text, kind) {
@@ -1172,7 +1337,7 @@
             createdAt: firebase.firestore.Timestamp.now(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             audioURL: "",
-            backgroundID: "",
+            backgroundID: selectedBackgroundId,
             voiceID: selectedVoiceId,
             audioCreatedAt: null,
             categoryID: cat.id,
@@ -1237,6 +1402,20 @@
     var isBusy = isScriptBusy(script.id);
     var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
     var playingThis = activeAudioScriptId === script.id && activeAudio && !activeAudio.paused;
+    var scriptVoiceID = (script.voiceID || "").trim() || selectedVoiceId;
+    var scriptBackgroundID = (script.backgroundID || "").trim() || selectedBackgroundId;
+    var voiceSelectOptions = availableVoices
+      .map(function (v) {
+        var selected = v.id === scriptVoiceID ? " selected" : "";
+        return '<option value="' + escapeHtml(v.id) + '"' + selected + ">" + escapeHtml(v.name) + "</option>";
+      })
+      .join("");
+    var backgroundSelectOptions = availableBackgrounds
+      .map(function (b) {
+        var selected = b.id === scriptBackgroundID ? " selected" : "";
+        return '<option value="' + escapeHtml(b.id) + '"' + selected + ">" + escapeHtml(b.name) + "</option>";
+      })
+      .join("");
     return (
       '<article class="app-card" data-script-id="' +
       escapeHtml(script.id) +
@@ -1253,6 +1432,18 @@
       (isExpanded
         ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>"
         : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
+      '  <label class="app-muted" style="font-size:0.75rem;">Voice<select class="app-btn" style="width:100%;margin-top:0.22rem;text-align:left;" data-script-voice="' +
+      escapeHtml(script.id) +
+      '">' +
+      voiceSelectOptions +
+      "</select></label>" +
+      '  <label class="app-muted" style="font-size:0.75rem;">Background<select class="app-btn" style="width:100%;margin-top:0.22rem;text-align:left;" data-script-background="' +
+      escapeHtml(script.id) +
+      '">' +
+      backgroundSelectOptions +
+      "</select></label>" +
+      "</div>" +
       '<div class="app-card-actions">' +
       '  <button type="button" class="app-btn app-btn-secondary" data-action="toggle-text" data-script-id="' +
       escapeHtml(script.id) +
@@ -1316,6 +1507,39 @@
         }
       });
     });
+    list.querySelectorAll("[data-script-voice]").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        var scriptId = sel.getAttribute("data-script-voice");
+        var voiceID = sel.value || selectedVoiceId;
+        updateScriptMediaSettings(scriptId, { voiceID: voiceID });
+      });
+    });
+    list.querySelectorAll("[data-script-background]").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        var scriptId = sel.getAttribute("data-script-background");
+        var backgroundID = sel.value || selectedBackgroundId;
+        updateScriptMediaSettings(scriptId, { backgroundID: backgroundID });
+      });
+    });
+  }
+
+  function updateScriptMediaSettings(scriptId, patch) {
+    if (!currentUser || !scriptId || !patch) return;
+    scriptCollection(currentUser.uid)
+      .doc(scriptId)
+      .set(
+        {
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          ...(patch || {}),
+        },
+        { merge: true }
+      )
+      .then(function () {
+        setMessage("Script audio settings updated.", "success");
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Could not update script settings.", "error");
+      });
   }
 
   function renderScripts(scripts) {
@@ -1419,8 +1643,8 @@
         createdAt: firebase.firestore.Timestamp.now(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         audioURL: "",
-        backgroundID: "",
-        voiceID: "",
+        backgroundID: selectedBackgroundId,
+        voiceID: selectedVoiceId,
         audioCreatedAt: null,
         categoryID: "",
       })
@@ -1632,7 +1856,7 @@
             script.voiceID && script.voiceID !== "default"
               ? script.voiceID
               : selectedVoiceId,
-          backgroundID: script.backgroundID || "",
+          backgroundID: script.backgroundID || selectedBackgroundId || "",
           createdAt:
             script.createdAt && typeof script.createdAt.toDate === "function"
               ? script.createdAt.toDate().getTime() / 1000
@@ -2076,9 +2300,21 @@
     };
   }
 
+  function resolvePremadeVoiceSelection(premade) {
+    if (!premade) return selectedVoiceId;
+    return premadeVoiceOverrideById[premade.id] || selectedVoiceId;
+  }
+
+  function resolvePremadeBackgroundSelection(premade) {
+    if (!premade) return selectedBackgroundId;
+    return premadeBackgroundOverrideById[premade.id] || selectedBackgroundId;
+  }
+
   function savePremadeToMyLibrary(premade) {
     if (!currentUser) return;
     var title = uniqueScriptTitle(premade.title || "Premade Script");
+    var voiceID = resolvePremadeVoiceSelection(premade);
+    var backgroundID = resolvePremadeBackgroundSelection(premade);
     var docRef = scriptCollection(currentUser.uid).doc();
     scriptCollection(currentUser.uid)
       .doc(docRef.id)
@@ -2088,8 +2324,8 @@
         createdAt: firebase.firestore.Timestamp.now(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         audioURL: premade.audioURL || "",
-        backgroundID: "",
-        voiceID: selectedVoiceId,
+        backgroundID: backgroundID,
+        voiceID: voiceID,
         audioCreatedAt: premade.audioURL ? firebase.firestore.FieldValue.serverTimestamp() : null,
         categoryID: premade.categoryID || "",
       })
@@ -2107,6 +2343,8 @@
       return;
     }
     var s = premadeToScript(premade);
+    var voiceID = resolvePremadeVoiceSelection(premade);
+    var backgroundID = resolvePremadeBackgroundSelection(premade);
     var tempTitle = uniqueScriptTitle(premade.title || "Premade Script");
     var docRef = scriptCollection(currentUser.uid).doc();
     scriptCollection(currentUser.uid)
@@ -2117,8 +2355,8 @@
         createdAt: firebase.firestore.Timestamp.now(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         audioURL: s.audioURL || "",
-        backgroundID: "",
-        voiceID: selectedVoiceId,
+        backgroundID: backgroundID,
+        voiceID: voiceID,
         audioCreatedAt: s.audioURL ? firebase.firestore.FieldValue.serverTimestamp() : null,
         categoryID: premade.categoryID || "",
       })
@@ -2128,8 +2366,8 @@
           title: tempTitle,
           text: s.text,
           audioURL: s.audioURL || "",
-          voiceID: selectedVoiceId,
-          backgroundID: "",
+          voiceID: voiceID,
+          backgroundID: backgroundID,
         };
         openPlaylistPicker(savedScript, function (playlist) {
           setPremadeMessage(
@@ -2156,6 +2394,20 @@
         var isExpanded = expandedPremadeTextById[p.id] === true;
         var hasAudio = !!(p.audioURL && String(p.audioURL).trim());
         var playingThis = activeAudioScriptId === p.id && activeAudio && !activeAudio.paused;
+        var premadeVoiceID = premadeVoiceOverrideById[p.id] || selectedVoiceId;
+        var premadeBackgroundID = premadeBackgroundOverrideById[p.id] || selectedBackgroundId;
+        var voiceSelectOptions = availableVoices
+          .map(function (v) {
+            var selected = v.id === premadeVoiceID ? " selected" : "";
+            return '<option value="' + escapeHtml(v.id) + '"' + selected + ">" + escapeHtml(v.name) + "</option>";
+          })
+          .join("");
+        var backgroundSelectOptions = availableBackgrounds
+          .map(function (b) {
+            var selected = b.id === premadeBackgroundID ? " selected" : "";
+            return '<option value="' + escapeHtml(b.id) + '"' + selected + ">" + escapeHtml(b.name) + "</option>";
+          })
+          .join("");
         return (
           '<article class="app-card" data-premade-id="' +
           escapeHtml(p.id) +
@@ -2176,6 +2428,18 @@
               escapeHtml((p.scriptText || "").trim() || "(No script text)") +
               "</p>"
             : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
+          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
+          '  <label class="app-muted" style="font-size:0.75rem;">Voice<select class="app-btn" style="width:100%;margin-top:0.22rem;text-align:left;" data-premade-voice="' +
+          escapeHtml(p.id) +
+          '">' +
+          voiceSelectOptions +
+          "</select></label>" +
+          '  <label class="app-muted" style="font-size:0.75rem;">Background<select class="app-btn" style="width:100%;margin-top:0.22rem;text-align:left;" data-premade-background="' +
+          escapeHtml(p.id) +
+          '">' +
+          backgroundSelectOptions +
+          "</select></label>" +
+          "</div>" +
           '<div class="app-card-actions">' +
           '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
           escapeHtml(p.id) +
@@ -2224,6 +2488,20 @@
         } else if (action === "play") {
           togglePlayScriptAudio(premadeToScript(premade));
         }
+      });
+    });
+    list.querySelectorAll("[data-premade-voice]").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        var pid = sel.getAttribute("data-premade-voice");
+        if (!pid) return;
+        premadeVoiceOverrideById[pid] = sel.value || selectedVoiceId;
+      });
+    });
+    list.querySelectorAll("[data-premade-background]").forEach(function (sel) {
+      sel.addEventListener("change", function () {
+        var pid = sel.getAttribute("data-premade-background");
+        if (!pid) return;
+        premadeBackgroundOverrideById[pid] = sel.value || selectedBackgroundId;
       });
     });
   }
@@ -2321,6 +2599,24 @@
           if (savedTab) activeAdminTab = savedTab;
         } catch (_e) {}
         currentUserProfile = snap.exists ? snap.data() || {} : {};
+        var profileVoiceID = (currentUserProfile.defaultVoiceID || "").trim();
+        if (
+          profileVoiceID &&
+          availableVoices.some(function (v) {
+            return v.id === profileVoiceID;
+          })
+        ) {
+          selectedVoiceId = profileVoiceID;
+        }
+        var profileBackgroundID = (currentUserProfile.defaultBackgroundID || "").trim();
+        if (
+          profileBackgroundID &&
+          availableBackgrounds.some(function (b) {
+            return b.id === profileBackgroundID;
+          })
+        ) {
+          selectedBackgroundId = profileBackgroundID;
+        }
         var isAdmin = snap.exists && snap.data().isAdmin === true;
         if (isAdmin) {
           renderAdminShell(user.email, user.displayName);
