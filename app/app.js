@@ -26,6 +26,8 @@
   var publishTextDirty = false;
   var publishTitleDirty = false;
   var editingPremadeId = null;
+  var expandedScriptTextById = {};
+  var expandedPremadeTextById = {};
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var availableVoices = [
     { id: "lnieQLGTodpbhjpZtg1k", name: "Bill" },
@@ -1077,6 +1079,7 @@
 
   function scriptCardHtml(script) {
     var plainText = script.text && script.text.trim() ? script.text : "(No text yet)";
+    var isExpanded = expandedScriptTextById[script.id] === true;
     var isBusy = isScriptBusy(script.id);
     var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
     var playingThis = activeAudioScriptId === script.id && activeAudio && !activeAudio.paused;
@@ -1087,38 +1090,46 @@
       "<h3>" +
       escapeHtml(script.title || "Untitled Script") +
       "</h3>" +
+      '<div class="app-card-meta-row">' +
       '<div class="app-card-meta">Created: ' +
       escapeHtml(formatDate(script.createdAt)) +
       "</div>" +
-      '<p class="app-card-text">' +
-      escapeHtml(plainText) +
-      "</p>" +
+      '<span class="app-chip">My Library</span>' +
+      "</div>" +
+      (isExpanded
+        ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>"
+        : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
       '<div class="app-card-actions">' +
-      '  <button type="button" class="app-btn" data-action="generate-audio" data-script-id="' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-action="toggle-text" data-script-id="' +
+      escapeHtml(script.id) +
+      '">' +
+      (isExpanded ? "Hide Text" : "Show Text") +
+      "</button>" +
+      '  <button type="button" class="app-btn app-btn-primary" data-action="generate-audio" data-script-id="' +
       escapeHtml(script.id) +
       '"' +
       (isBusy ? " disabled" : "") +
       ">" +
       (isBusy ? "Generating audio..." : "Generate Audio") +
       "</button>" +
-      '  <button type="button" class="app-btn" data-action="play-audio" data-script-id="' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-action="play-audio" data-script-id="' +
       escapeHtml(script.id) +
       '"' +
       (!hasAudio || isBusy ? " disabled" : "") +
       ">" +
       (playingThis ? "Pause" : "Play") +
       "</button>" +
-      '  <button type="button" class="app-btn" data-action="edit" data-script-id="' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-action="edit" data-script-id="' +
       escapeHtml(script.id) +
       '">Edit</button>' +
-      '  <button type="button" class="app-btn app-btn-danger" data-action="delete" data-script-id="' +
-      escapeHtml(script.id) +
-      '">Delete</button>' +
-      '  <button type="button" class="app-btn" data-action="add-to-playlist" data-script-id="' +
+      '  <button type="button" class="app-btn app-btn-ghost" data-action="add-to-playlist" data-script-id="' +
       escapeHtml(script.id) +
       '"' +
       (!currentPlaylists.length ? " disabled" : "") +
       ">Add to Playlist</button>" +
+      '  <button type="button" class="app-btn app-btn-danger" data-action="delete" data-script-id="' +
+      escapeHtml(script.id) +
+      '">Delete</button>' +
       "</div>" +
       "</article>"
     );
@@ -1135,7 +1146,10 @@
           return s.id === scriptId;
         });
         if (!script) return;
-        if (action === "edit") {
+        if (action === "toggle-text") {
+          expandedScriptTextById[script.id] = expandedScriptTextById[script.id] !== true;
+          renderScripts(currentScripts);
+        } else if (action === "edit") {
           openEditor(script);
         } else if (action === "delete") {
           deleteScript(script);
@@ -1158,6 +1172,11 @@
         '<div class="app-empty-hint">No scripts yet. Tap <strong>+ New Script</strong> to create one, or use the <strong>Create</strong> tab to generate a personalized mental script and auto-save it here.</div>';
       return;
     }
+    var nextExpanded = {};
+    scripts.forEach(function (s) {
+      if (expandedScriptTextById[s.id] === true) nextExpanded[s.id] = true;
+    });
+    expandedScriptTextById = nextExpanded;
     list.innerHTML = scripts.map(scriptCardHtml).join("");
     bindScriptCardActions(scripts);
   }
@@ -1979,6 +1998,7 @@
     }
     list.innerHTML = currentPremade
       .map(function (p) {
+        var isExpanded = expandedPremadeTextById[p.id] === true;
         var hasAudio = !!(p.audioURL && String(p.audioURL).trim());
         var playingThis = activeAudioScriptId === p.id && activeAudio && !activeAudio.paused;
         return (
@@ -1988,29 +2008,41 @@
           "<h3>" +
           escapeHtml(p.title || "Untitled Premade") +
           "</h3>" +
+          '<div class="app-card-meta-row">' +
           '<div class="app-card-meta">' +
-          escapeHtml(p.categoryID || "general") +
+          escapeHtml(p.description || "No description") +
           "</div>" +
-          '<p class="app-card-text">' +
-          escapeHtml((p.scriptText || "").slice(0, 220) || "(No script text)") +
-          "</p>" +
+          '<span class="app-chip">' +
+          escapeHtml(p.categoryID || "general") +
+          "</span>" +
+          "</div>" +
+          (isExpanded
+            ? '<p class="app-card-text">' +
+              escapeHtml((p.scriptText || "").trim() || "(No script text)") +
+              "</p>"
+            : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
           '<div class="app-card-actions">' +
-          '  <button type="button" class="app-btn" data-premade-action="save" data-premade-id="' +
+          '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">' +
+          (isExpanded ? "Hide Text" : "Show Text") +
+          "</button>" +
+          '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
           escapeHtml(p.id) +
           '">Save to My Library</button>' +
-          '  <button type="button" class="app-btn" data-premade-action="add-playlist" data-premade-id="' +
-          escapeHtml(p.id) +
-          '">Save + Add to Playlist</button>' +
-          '  <button type="button" class="app-btn" data-premade-action="edit" data-premade-id="' +
-          escapeHtml(p.id) +
-          '">Edit</button>' +
-          '  <button type="button" class="app-btn" data-premade-action="play" data-premade-id="' +
+          '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
           escapeHtml(p.id) +
           '"' +
           (!hasAudio ? " disabled" : "") +
           ">" +
           (playingThis ? "Pause" : "Play") +
           "</button>" +
+          '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="add-playlist" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">Save + Add to Playlist</button>' +
+          '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="edit" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">Edit</button>' +
           "</div>" +
           "</article>"
         );
@@ -2025,7 +2057,10 @@
           return x.id === pid;
         });
         if (!premade) return;
-        if (action === "save") {
+        if (action === "toggle-text") {
+          expandedPremadeTextById[premade.id] = expandedPremadeTextById[premade.id] !== true;
+          renderPremade();
+        } else if (action === "save") {
           savePremadeToMyLibrary(premade);
         } else if (action === "add-playlist") {
           addPremadeToPlaylist(premade);
@@ -2064,6 +2099,11 @@
             var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
             return bt - at;
           });
+        var nextExpanded = {};
+        currentPremade.forEach(function (p) {
+          if (expandedPremadeTextById[p.id] === true) nextExpanded[p.id] = true;
+        });
+        expandedPremadeTextById = nextExpanded;
         updateTabCounts();
         renderPremade();
       },
