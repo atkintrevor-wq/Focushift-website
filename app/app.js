@@ -39,6 +39,8 @@
   var expandedPremadeTextById = {};
   var premadeVoiceOverrideById = {};
   var premadeBackgroundOverrideById = {};
+  var premadeRenderGeneration = 0;
+  var GENERATED_PREMADE_HASH_PREFIX = "generatedHashPremade_";
   var mediaPickerTarget = null;
   var editingVoiceSettingsId = null;
   var editingVoiceSettingsToken = "";
@@ -3103,6 +3105,37 @@
     return stored !== contentHashHex;
   }
 
+  function getStoredGeneratedHashPremade(premadeId) {
+    try {
+      return localStorage.getItem(GENERATED_PREMADE_HASH_PREFIX + premadeId) || "";
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function setStoredGeneratedHashPremade(premadeId, hex) {
+    try {
+      if (!premadeId || !hex) return;
+      localStorage.setItem(GENERATED_PREMADE_HASH_PREFIX + premadeId, hex);
+    } catch (_e) {}
+  }
+
+  function premadeDigestSourceFromPremade(premade) {
+    return {
+      text: (premade && premade.scriptText) || "",
+      voiceID: String(resolvePremadeVoiceSelection(premade) || "").trim(),
+      backgroundID: String(resolvePremadeBackgroundSelection(premade) || "").trim(),
+    };
+  }
+
+  function shouldEnableGeneratePremadeFromHash(premade, contentHashHex) {
+    var hasAudio = !!(premade.audioURL && String(premade.audioURL).trim());
+    if (!hasAudio) return true;
+    var stored = getStoredGeneratedHashPremade(premade.id);
+    if (!stored) return true;
+    return stored !== contentHashHex;
+  }
+
   function controlsStorageKey(scriptId) {
     return CARD_AUDIO_EXPAND_STORAGE_PREFIX + scriptId;
   }
@@ -3173,6 +3206,20 @@
 
   function isScriptBusy(scriptId) {
     return generatingAudioByScriptId[scriptId] === true;
+  }
+
+  function premadeBusyKey(premadeId) {
+    return "__premade_busy__" + premadeId;
+  }
+
+  function setPremadeBusy(premadeId, busy) {
+    if (busy) generatingAudioByScriptId[premadeBusyKey(premadeId)] = true;
+    else delete generatingAudioByScriptId[premadeBusyKey(premadeId)];
+    renderPremade();
+  }
+
+  function isPremadeBusy(premadeId) {
+    return generatingAudioByScriptId[premadeBusyKey(premadeId)] === true;
   }
 
   function scriptCardHtml(script, contentHashHex) {
@@ -3976,6 +4023,92 @@
       });
   }
 
+  function deleteTempPremadeJobScript(jobScriptId) {
+    if (!currentUser || !jobScriptId) return Promise.resolve();
+    return scriptCollection(currentUser.uid)
+      .doc(jobScriptId)
+      .delete()
+      .catch(function () {});
+  }
+
+  function generateAudioForPremade(premade) {
+    if (!currentUser || !premade) return;
+    var text = (premade.scriptText || "").trim();
+    if (!text) {
+      setPremadeMessage("This premade has no script text to synthesize.", "error");
+      return;
+    }
+    var jobScriptId = premadeJobScriptId(premade);
+    scriptContentSha256Hex(premadeDigestSourceFromPremade(premade)).then(function (hex) {
+      if (!shouldEnableGeneratePremadeFromHash(premade, hex)) {
+        setPremadeMessage("Audio already matches this script text, voice, and background.", "");
+        return;
+      }
+      setPremadeBusy(premade.id, true);
+      setPremadeMessage('Submitting audio job for "' + (premade.title || "Premade") + '"...', "");
+
+      currentUser
+        .getIdToken(true)
+        .then(function (token) {
+          var payload = {
+            scriptId: jobScriptId,
+            text: text,
+            scriptTitle: premade.title || "Premade",
+            voiceID: resolvePremadeVoiceSelection(premade),
+            backgroundID: resolvePremadeBackgroundSelection(premade) || "",
+            createdAt:
+              premade.createdAt && typeof premade.createdAt.toMillis === "function"
+                ? premade.createdAt.toMillis() / 1000
+                : Date.now() / 1000,
+          };
+          return backendRequest("/audio-jobs", token, payload).then(function (json) {
+            if (!json || json.ok !== true || !json.jobId) {
+              throw new Error("Audio job did not return a job id.");
+            }
+            return { token: token, jobId: json.jobId };
+          });
+        })
+        .then(function (ctx) {
+          return waitForAudioJob({ id: jobScriptId, title: premade.title }, ctx.jobId);
+        })
+        .then(function (result) {
+          var vId = String(resolvePremadeVoiceSelection(premade) || "").trim();
+          var bId = String(resolvePremadeBackgroundSelection(premade) || "").trim();
+          var digestSource = {
+            text: premade.scriptText || "",
+            voiceID: vId,
+            backgroundID: bId,
+          };
+          return scriptContentSha256Hex(digestSource).then(function (digest) {
+            return premadeCollection()
+              .doc(premade.id)
+              .set(
+                {
+                  audioURL: result.audioURL,
+                  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                },
+                { merge: true }
+              )
+              .then(function () {
+                setStoredGeneratedHashPremade(premade.id, digest);
+                return deleteTempPremadeJobScript(jobScriptId);
+              })
+              .then(function () {
+                setPremadeMessage('Audio generated for "' + (premade.title || "Premade") + '".', "success");
+              });
+          });
+        })
+        .catch(function (e) {
+          setPremadeMessage(e.message || "Audio generation failed.", "error");
+        })
+        .finally(function () {
+          setPremadeBusy(premade.id, false);
+        });
+    }).catch(function (e) {
+      setPremadeMessage((e && e.message) || "Could not verify premade state.", "error");
+    });
+  }
+
   function waitForAudioJob(script, jobId) {
     return new Promise(function (resolve, reject) {
       var timeout = setTimeout(function () {
@@ -4369,6 +4502,12 @@
       );
   }
 
+  function premadeJobScriptId(premade) {
+    var raw = (premade && premade.id) || "unknown";
+    var safe = String(raw).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 80);
+    return "__fsPremadeJob_v1_" + safe;
+  }
+
   function premadeToScript(premade) {
     return {
       id: premade.id,
@@ -4462,81 +4601,106 @@
       });
   }
 
-  function renderPremade() {
+  function premadeCardHtml(p, contentHashHex) {
+    var isExpanded = expandedPremadeTextById[p.id] === true;
+    var hasAudio = !!(p.audioURL && String(p.audioURL).trim());
+    var playingThis = activeAudioScriptId === p.id && activeAudio && !activeAudio.paused;
+    var premadeVoiceID = resolvePremadeVoiceSelection(p);
+    var premadeBackgroundID = resolvePremadeBackgroundSelection(p);
+    var isBusy = isPremadeBusy(p.id);
+    var canGen = !!(p.scriptText && String(p.scriptText).trim());
+    var genEnabled = canGen && shouldEnableGeneratePremadeFromHash(p, contentHashHex);
+    var genLabel = isBusy ? "Generating audio..." : hasAudio ? "Regenerate" : "Generate";
+    var genClasses = "app-btn";
+    if (isBusy) {
+      genClasses += " app-btn-secondary";
+    } else if (!canGen || !genEnabled) {
+      genClasses += " app-btn-secondary app-btn-generate-muted";
+    } else if (hasAudio) {
+      genClasses += " app-btn-generate-warn";
+    } else {
+      genClasses += " app-btn-generate-fresh";
+    }
+    var genDisabled = isBusy || !canGen || !genEnabled;
+    var genTitle = !canGen
+      ? "This premade has no script text to turn into audio."
+      : !genEnabled && !isBusy
+        ? "Audio already matches this text, voice, and background."
+        : "";
+    return (
+      '<article class="app-card" data-premade-id="' +
+      escapeHtml(p.id) +
+      '">' +
+      "<h3>" +
+      escapeHtml(p.title || "Untitled Premade") +
+      "</h3>" +
+      '<div class="app-card-meta-row">' +
+      '<div class="app-card-meta">' +
+      escapeHtml(p.description || "No description") +
+      "</div>" +
+      '<span class="app-chip">' +
+      escapeHtml(p.categoryID || "general") +
+      "</span>" +
+      "</div>" +
+      (isExpanded
+        ? '<p class="app-card-text">' +
+          escapeHtml((p.scriptText || "").trim() || "(No script text)") +
+          "</p>"
+        : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
+      escapeHtml(p.id) +
+      '" data-premade-media-field="voice" style="text-align:left;">Voice: ' +
+      escapeHtml(voiceNameById(premadeVoiceID)) +
+      "</button>" +
+      '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
+      escapeHtml(p.id) +
+      '" data-premade-media-field="background" style="text-align:left;">Background: ' +
+      escapeHtml(backgroundNameById(premadeBackgroundID)) +
+      "</button>" +
+      "</div>" +
+      '<div class="app-card-actions">' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
+      escapeHtml(p.id) +
+      '">' +
+      (isExpanded ? "Hide Text" : "Show Text") +
+      "</button>" +
+      '  <button type="button" class="' +
+      genClasses +
+      '" data-premade-action="generate-audio" data-premade-id="' +
+      escapeHtml(p.id) +
+      '"' +
+      (genDisabled ? " disabled" : "") +
+      (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
+      ">" +
+      genLabel +
+      "</button>" +
+      '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
+      escapeHtml(p.id) +
+      '">Save to My Library</button>' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
+      escapeHtml(p.id) +
+      '"' +
+      (!hasAudio || isBusy ? " disabled" : "") +
+      ">" +
+      (playingThis ? "Pause" : "Play") +
+      "</button>" +
+      '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="add-playlist" data-premade-id="' +
+      escapeHtml(p.id) +
+      '"' +
+      (!currentPlaylists.length ? " disabled" : "") +
+      ">Save + Add to Playlist</button>" +
+      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="edit" data-premade-id="' +
+      escapeHtml(p.id) +
+      '">Edit</button>' +
+      "</div>" +
+      "</article>"
+    );
+  }
+
+  function bindPremadeCardActions() {
     var list = document.getElementById("premade-list");
     if (!list) return;
-    if (!currentPremade.length) {
-      list.innerHTML =
-        '<div class="app-empty-hint">No premade items found in Firestore yet. iOS can also read bundled premade audio, but web only reads published docs from <code>premadeAudio</code>. Once premade is published there, it appears here automatically.</div>';
-      return;
-    }
-    list.innerHTML = currentPremade
-      .map(function (p) {
-        var isExpanded = expandedPremadeTextById[p.id] === true;
-        var hasAudio = !!(p.audioURL && String(p.audioURL).trim());
-        var playingThis = activeAudioScriptId === p.id && activeAudio && !activeAudio.paused;
-        var premadeVoiceID = premadeVoiceOverrideById[p.id] || selectedVoiceId;
-        var premadeBackgroundID = premadeBackgroundOverrideById[p.id] || selectedBackgroundId;
-        return (
-          '<article class="app-card" data-premade-id="' +
-          escapeHtml(p.id) +
-          '">' +
-          "<h3>" +
-          escapeHtml(p.title || "Untitled Premade") +
-          "</h3>" +
-          '<div class="app-card-meta-row">' +
-          '<div class="app-card-meta">' +
-          escapeHtml(p.description || "No description") +
-          "</div>" +
-          '<span class="app-chip">' +
-          escapeHtml(p.categoryID || "general") +
-          "</span>" +
-          "</div>" +
-          (isExpanded
-            ? '<p class="app-card-text">' +
-              escapeHtml((p.scriptText || "").trim() || "(No script text)") +
-              "</p>"
-            : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
-          '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
-          '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
-          escapeHtml(p.id) +
-          '" data-premade-media-field="voice" style="text-align:left;">Voice: ' +
-          escapeHtml(voiceNameById(premadeVoiceID)) +
-          "</button>" +
-          '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
-          escapeHtml(p.id) +
-          '" data-premade-media-field="background" style="text-align:left;">Background: ' +
-          escapeHtml(backgroundNameById(premadeBackgroundID)) +
-          "</button>" +
-          "</div>" +
-          '<div class="app-card-actions">' +
-          '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
-          escapeHtml(p.id) +
-          '">' +
-          (isExpanded ? "Hide Text" : "Show Text") +
-          "</button>" +
-          '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
-          escapeHtml(p.id) +
-          '">Save to My Library</button>' +
-          '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
-          escapeHtml(p.id) +
-          '"' +
-          (!hasAudio ? " disabled" : "") +
-          ">" +
-          (playingThis ? "Pause" : "Play") +
-          "</button>" +
-          '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="add-playlist" data-premade-id="' +
-          escapeHtml(p.id) +
-          '">Save + Add to Playlist</button>' +
-          '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="edit" data-premade-id="' +
-          escapeHtml(p.id) +
-          '">Edit</button>' +
-          "</div>" +
-          "</article>"
-        );
-      })
-      .join("");
-
     list.querySelectorAll("[data-premade-action]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var action = btn.getAttribute("data-premade-action");
@@ -4548,6 +4712,8 @@
         if (action === "toggle-text") {
           expandedPremadeTextById[premade.id] = expandedPremadeTextById[premade.id] !== true;
           renderPremade();
+        } else if (action === "generate-audio") {
+          generateAudioForPremade(premade);
         } else if (action === "save") {
           savePremadeToMyLibrary(premade);
         } else if (action === "add-playlist") {
@@ -4570,6 +4736,30 @@
           field: field,
         });
       });
+    });
+  }
+
+  function renderPremade() {
+    var list = document.getElementById("premade-list");
+    if (!list) return;
+    if (!currentPremade.length) {
+      list.innerHTML =
+        '<div class="app-empty-hint">No premade items found in Firestore yet. iOS can also read bundled premade audio, but web only reads published docs from <code>premadeAudio</code>. Once premade is published there, it appears here automatically.</div>';
+      return;
+    }
+    var gen = ++premadeRenderGeneration;
+    Promise.all(
+      currentPremade.map(function (p) {
+        return scriptContentSha256Hex(premadeDigestSourceFromPremade(p));
+      })
+    ).then(function (hashes) {
+      if (gen !== premadeRenderGeneration) return;
+      list.innerHTML = currentPremade
+        .map(function (p, i) {
+          return premadeCardHtml(p, hashes[i]);
+        })
+        .join("");
+      bindPremadeCardActions();
     });
   }
 
