@@ -45,6 +45,14 @@
   var hasVoiceCloneConsent = false;
   var voiceProcessingStatusTimer = null;
   var activeVoiceScriptParagraphIndex = -1;
+  var recordedSampleFile = null;
+  var recordedSampleBlobURL = null;
+  var recordedSampleAudio = null;
+  var recordedSampleDurationSec = 0;
+  var cloneAdjustLocalVoiceId = "";
+  var cloneAdjustElevenLabsVoiceId = "";
+  var cloneAdjustVoiceName = "";
+  var cloneAdjustToken = "";
   var voiceCloneReadScript =
     "Hello, this is my voice sample for cloning. I'm speaking naturally and clearly, just like I would in a normal conversation with a friend.\n\n" +
     "I want this recording to capture the full range of my voice - from high to low pitches, from soft to loud volumes, and from different emotional tones. I'm speaking at a comfortable pace, not too fast and not too slow.\n\n" +
@@ -284,7 +292,9 @@
     stopVoiceRecorderStream();
     setVoiceRecordingGuideVisible(false);
     closeVoiceProcessingModal();
+    closeVoiceAdjustModal();
     closeVoiceCompleteModal();
+    closeVoiceMicHelpModal();
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -298,7 +308,9 @@
     stopVoiceRecorderStream();
     setVoiceRecordingGuideVisible(false);
     closeVoiceProcessingModal();
+    closeVoiceAdjustModal();
     closeVoiceCompleteModal();
+    closeVoiceMicHelpModal();
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -378,6 +390,15 @@
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Clone Voice</button>' +
       "  </div>" +
       '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.35rem;">Use <strong>Upload Voice Audio</strong> for an existing file, or <strong>Clone Voice</strong> to record a guided sample in-browser.</p>' +
+      '  <div class="app-empty-hint" style="border-style:solid;padding:0.65rem;margin-top:0;margin-bottom:0.55rem;">' +
+      '    <div style="display:flex;flex-direction:column;gap:0.2rem;">' +
+      '      <div class="app-muted"><strong>Recording tips</strong></div>' +
+      '      <div class="app-muted">- Record 1-2 minutes of clear speech</div>' +
+      '      <div class="app-muted">- Speak naturally at a consistent volume</div>' +
+      '      <div class="app-muted">- Minimize background noise</div>' +
+      '      <div class="app-muted">- Supported formats: MP3, WAV, M4A (upload)</div>' +
+      "    </div>" +
+      "  </div>" +
       '  <div id="voice-recording-status" class="app-inline-msg" style="margin-top:0;margin-bottom:0.6rem;"></div>' +
       '  <div id="voice-recording-guide" class="app-empty-hint voice-recording-guide" style="display:none;margin-top:0;margin-bottom:0.7rem;">' +
       '    <div class="voice-recording-guide-head">' +
@@ -389,6 +410,18 @@
       "    </div>" +
       '    <div class="voice-recording-guide-sub">Speak clearly in a quiet place. Aim for 30s minimum, 1-2 minutes best.</div>' +
       '    <div id="voice-recording-script" class="voice-recording-script"></div>' +
+      '    <div id="voice-recording-review" style="display:none;margin-top:0.6rem;">' +
+      '      <div class="app-empty-hint" style="border-style:solid;padding:0.62rem;">' +
+      '        <div style="display:flex;justify-content:space-between;gap:0.6rem;align-items:center;">' +
+      '          <div><strong>Review your recording</strong><div id="voice-recording-review-duration" class="app-muted">0:00</div></div>' +
+      '          <div style="display:flex;gap:0.4rem;flex-wrap:wrap;justify-content:flex-end;">' +
+      '            <button type="button" class="app-btn app-btn-secondary" id="voice-recording-play">Play</button>' +
+      '            <button type="button" class="app-btn app-btn-ghost" id="voice-recording-again">Record Again</button>' +
+      '            <button type="button" class="app-btn" id="voice-recording-use">Use Recording</button>' +
+      "          </div>" +
+      "        </div>" +
+      "      </div>" +
+      "    </div>" +
       "  </div>" +
       '  <div id="voices-list"></div>' +
       '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
@@ -538,8 +571,12 @@
       "  </div>" +
       "</div>" +
       '<div id="voice-consent-backdrop" class="app-modal-backdrop" hidden>' +
-      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice cloning consent">' +
-      "    <h3>Voice Cloning Consent</h3>" +
+      '  <div class="app-modal voice-consent-modal" role="dialog" aria-modal="true" aria-label="Voice cloning consent">' +
+      '    <div class="voice-modal-hero">' +
+      '      <div class="voice-modal-icon-wrap voice-modal-icon-consent"><span class="voice-modal-icon" aria-hidden="true">🎤</span></div>' +
+      "      <h3>Voice Cloning Consent</h3>" +
+      '      <p class="app-muted" style="margin:0;">Review and accept before creating your cloned voice.</p>' +
+      "    </div>" +
       '    <div style="max-height:50vh;overflow:auto;display:flex;flex-direction:column;gap:0.55rem;margin-bottom:0.6rem;padding-right:0.1rem;">' +
       '      <div class="app-empty-hint" style="border-style:solid;background:rgba(59,130,246,0.08);padding:0.65rem;">' +
       '        <div style="font-weight:700;margin-bottom:0.22rem;">What is Voice Cloning?</div>' +
@@ -576,10 +613,13 @@
       "  </div>" +
       "</div>" +
       '<div id="voice-processing-backdrop" class="app-modal-backdrop" hidden>' +
-      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice cloning processing">' +
-      "    <h3>Creating Your Cloned Voice</h3>" +
-      '    <p id="voice-processing-status" class="app-muted" style="margin:0 0 0.5rem;">Preparing your voice sample...</p>' +
-      '    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;">' +
+      '  <div class="app-modal voice-processing-modal" role="dialog" aria-modal="true" aria-label="Voice cloning processing">' +
+      '    <div class="voice-modal-hero">' +
+      '      <div class="voice-modal-icon-wrap voice-modal-icon-processing"><span class="voice-modal-spinner" aria-hidden="true">◌</span></div>' +
+      "      <h3>Creating Your Cloned Voice</h3>" +
+      '      <p id="voice-processing-status" class="app-muted" style="margin:0;">Preparing your voice sample...</p>' +
+      "    </div>" +
+      '    <div style="display:flex;align-items:center;justify-content:center;gap:0.6rem;margin-bottom:0.6rem;">' +
       '      <span class="app-muted">Please wait, this may take 30-60 seconds.</span>' +
       "    </div>" +
       '    <div class="app-empty-hint" style="border-style:solid;padding:0.7rem;">' +
@@ -589,16 +629,67 @@
       "  </div>" +
       "</div>" +
       '<div id="voice-complete-backdrop" class="app-modal-backdrop" hidden>' +
-      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice cloning complete">' +
-      "    <h3>Voice Cloned Successfully!</h3>" +
-      '    <p id="voice-complete-subtitle" class="app-muted" style="margin:0 0 0.5rem;">Your cloned voice is ready.</p>' +
-      '    <div class="app-empty-hint" style="border-style:solid;padding:0.7rem;">' +
-      "      <div>- Your cloned voice is available in My Voices</div>" +
-      "      <div>- You can adjust settings anytime</div>" +
-      "      <div>- Delete it anytime from voice settings</div>" +
+      '  <div class="app-modal voice-complete-modal" role="dialog" aria-modal="true" aria-label="Voice cloning complete">' +
+      '    <div class="voice-complete-hero">' +
+      '      <div class="voice-complete-icon-wrap"><span class="voice-complete-icon">✓</span></div>' +
+      "      <h3>Voice Cloned Successfully!</h3>" +
+      '      <p id="voice-complete-subtitle" class="app-muted" style="margin:0;">Your cloned voice is ready.</p>' +
+      "    </div>" +
+      '    <div class="app-empty-hint voice-complete-info" style="border-style:solid;padding:0.7rem;">' +
+      '      <div class="voice-complete-row"><span aria-hidden="true">🎙️</span><span>Your cloned voice is available in My Voices</span></div>' +
+      '      <div class="voice-complete-row"><span aria-hidden="true">🎛️</span><span>You can adjust settings anytime</span></div>' +
+      '      <div class="voice-complete-row"><span aria-hidden="true">🗑️</span><span>Delete it anytime from voice settings</span></div>' +
       "    </div>" +
       '    <div class="app-modal-actions">' +
-      '      <button type="button" class="app-btn" id="voice-complete-done">Done</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="voice-complete-done">Done</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="voice-adjust-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal voice-adjust-modal" role="dialog" aria-modal="true" aria-label="Adjust your inner voice">' +
+      "    <h3>Adjust Your Inner Voice</h3>" +
+      '    <p id="voice-adjust-subtitle" class="app-muted" style="margin:0 0 0.55rem;">Fine-tune how your cloned voice sounds.</p>' +
+      '    <div class="voice-adjust-presets">' +
+      '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="natural">Natural</button>' +
+      '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="energetic">Energetic</button>' +
+      '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="calm">Calm</button>' +
+      '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="clear">Clear</button>' +
+      "    </div>" +
+      '    <label for="voice-adjust-stability">Consistency <span id="voice-adjust-stability-value" class="app-muted">0.50</span></label>' +
+      '    <input id="voice-adjust-stability" type="range" min="0" max="1" step="0.01" value="0.5">' +
+      '    <label for="voice-adjust-similarity">Clarity <span id="voice-adjust-similarity-value" class="app-muted">0.80</span></label>' +
+      '    <input id="voice-adjust-similarity" type="range" min="0" max="1" step="0.01" value="0.8">' +
+      '    <label for="voice-adjust-style">Expressiveness <span id="voice-adjust-style-value" class="app-muted">0.30</span></label>' +
+      '    <input id="voice-adjust-style" type="range" min="0" max="1" step="0.01" value="0.3">' +
+      '    <label for="voice-adjust-speaker-boost" style="display:flex;align-items:center;gap:0.45rem;cursor:pointer;">' +
+      '      <input id="voice-adjust-speaker-boost" type="checkbox" checked style="width:auto;margin:0;">' +
+      "      Speaker boost" +
+      "    </label>" +
+      '    <div id="voice-adjust-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn app-btn-ghost" id="voice-adjust-skip">Skip</button>' +
+      '      <button type="button" class="app-btn app-btn-secondary" id="voice-adjust-preview">Play Preview</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="voice-adjust-save">Save Settings</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="voice-mic-help-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal voice-consent-modal" role="dialog" aria-modal="true" aria-label="Microphone help">' +
+      '    <div class="voice-modal-hero">' +
+      '      <div class="voice-modal-icon-wrap voice-modal-icon-consent"><span class="voice-modal-icon" aria-hidden="true">🎙️</span></div>' +
+      "      <h3>Microphone Access Needed</h3>" +
+      '      <p id="voice-mic-help-subtitle" class="app-muted" style="margin:0;">Enable microphone access to record your voice sample.</p>' +
+      "    </div>" +
+      '    <div class="app-empty-hint" style="border-style:solid;padding:0.7rem;">' +
+      "      <div><strong>Try this:</strong></div>" +
+      "      <div>- Click the lock icon in your browser address bar</div>" +
+      "      <div>- Set Microphone permission to Allow</div>" +
+      "      <div>- Close this dialog and tap Start Recording again</div>" +
+      "    </div>" +
+      '    <div id="voice-mic-help-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="voice-mic-help-close">Close</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="voice-mic-help-retry">Try Again</button>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -707,6 +798,16 @@
     document.getElementById("voice-recording-toggle").addEventListener("click", function () {
       toggleVoiceRecording();
     });
+    document.getElementById("voice-recording-play").addEventListener("click", function () {
+      togglePlayRecordedSample();
+    });
+    document.getElementById("voice-recording-again").addEventListener("click", function () {
+      clearRecordedSample();
+      setVoicesMessage("Ready to record again.", "");
+    });
+    document.getElementById("voice-recording-use").addEventListener("click", function () {
+      useRecordedSampleForClone();
+    });
     renderVoiceRecordingScript(-1);
     document.getElementById("voice-consent-cancel").addEventListener("click", function () {
       closeVoiceConsentModal();
@@ -726,6 +827,44 @@
     });
     document.getElementById("voice-complete-done").addEventListener("click", function () {
       closeVoiceCompleteModal();
+    });
+    document.getElementById("voice-adjust-backdrop").addEventListener("click", function (ev) {
+      if (ev.target && ev.target.id === "voice-adjust-backdrop") {
+        closeVoiceAdjustModal();
+      }
+    });
+    document.getElementById("voice-adjust-preview").addEventListener("click", function () {
+      previewVoiceAdjust();
+    });
+    document.getElementById("voice-adjust-skip").addEventListener("click", function () {
+      skipVoiceAdjust();
+    });
+    document.getElementById("voice-adjust-save").addEventListener("click", function () {
+      saveVoiceAdjust();
+    });
+    document.getElementById("voice-mic-help-close").addEventListener("click", function () {
+      closeVoiceMicHelpModal();
+    });
+    document.getElementById("voice-mic-help-retry").addEventListener("click", function () {
+      closeVoiceMicHelpModal();
+      startVoiceRecording();
+    });
+    document.getElementById("voice-mic-help-backdrop").addEventListener("click", function (ev) {
+      if (ev.target && ev.target.id === "voice-mic-help-backdrop") {
+        closeVoiceMicHelpModal();
+      }
+    });
+    ["stability", "similarity", "style"].forEach(function (k) {
+      var el = document.getElementById("voice-adjust-" + k);
+      if (!el) return;
+      el.addEventListener("input", function () {
+        updateVoiceAdjustReadout(k);
+      });
+    });
+    document.querySelectorAll("[data-voice-adjust-preset]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        applyVoiceAdjustPreset(btn.getAttribute("data-voice-adjust-preset"));
+      });
     });
     document.getElementById("media-picker-cancel").addEventListener("click", function () {
       closeMediaPicker();
@@ -1341,11 +1480,96 @@
     el.textContent = text || "";
   }
 
+  function formatDurationShort(seconds) {
+    var sec = Math.max(0, Math.floor(Number(seconds) || 0));
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function clearRecordedSample() {
+    if (recordedSampleAudio) {
+      try { recordedSampleAudio.pause(); } catch (_e) {}
+      recordedSampleAudio = null;
+    }
+    if (recordedSampleBlobURL) {
+      try { URL.revokeObjectURL(recordedSampleBlobURL); } catch (_e2) {}
+      recordedSampleBlobURL = null;
+    }
+    recordedSampleFile = null;
+    recordedSampleDurationSec = 0;
+    var review = document.getElementById("voice-recording-review");
+    if (review) review.style.display = "none";
+    var play = document.getElementById("voice-recording-play");
+    if (play) play.textContent = "Play";
+    var dur = document.getElementById("voice-recording-review-duration");
+    if (dur) dur.textContent = "0:00";
+  }
+
+  function showRecordedSampleReview() {
+    var review = document.getElementById("voice-recording-review");
+    if (review) review.style.display = "block";
+    var dur = document.getElementById("voice-recording-review-duration");
+    if (dur) dur.textContent = formatDurationShort(recordedSampleDurationSec);
+    var play = document.getElementById("voice-recording-play");
+    if (play) play.textContent = "Play";
+  }
+
+  function togglePlayRecordedSample() {
+    if (!recordedSampleBlobURL) return;
+    var play = document.getElementById("voice-recording-play");
+    if (recordedSampleAudio && !recordedSampleAudio.paused) {
+      try { recordedSampleAudio.pause(); } catch (_e) {}
+      if (play) play.textContent = "Play";
+      return;
+    }
+    if (!recordedSampleAudio) {
+      recordedSampleAudio = new Audio(recordedSampleBlobURL);
+      recordedSampleAudio.onended = function () {
+        if (play) play.textContent = "Play";
+      };
+    }
+    recordedSampleAudio.currentTime = 0;
+    recordedSampleAudio.play().then(function () {
+      if (play) play.textContent = "Stop";
+    }).catch(function () {});
+  }
+
+  function useRecordedSampleForClone() {
+    if (!recordedSampleFile) {
+      setVoicesMessage("Record a sample first.", "error");
+      return;
+    }
+    uploadVoiceSample(recordedSampleFile, "clone");
+  }
+
   function setVoiceConsentMessage(text, kind) {
     var el = document.getElementById("voice-consent-message");
     if (!el) return;
     el.className = "app-inline-msg" + (kind ? " " + kind : "");
     el.textContent = text || "";
+  }
+
+  function setVoiceMicHelpMessage(text, kind) {
+    var el = document.getElementById("voice-mic-help-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function openVoiceMicHelpModal(reasonText) {
+    var backdrop = document.getElementById("voice-mic-help-backdrop");
+    var subtitle = document.getElementById("voice-mic-help-subtitle");
+    if (!backdrop || !subtitle) return;
+    subtitle.textContent = reasonText || "Enable microphone access to record your voice sample.";
+    setVoiceMicHelpMessage("", "");
+    backdrop.hidden = false;
+  }
+
+  function closeVoiceMicHelpModal() {
+    var backdrop = document.getElementById("voice-mic-help-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    setVoiceMicHelpMessage("", "");
   }
 
   function clearVoiceProcessingStatusTicker() {
@@ -1394,6 +1618,206 @@
   function closeVoiceCompleteModal() {
     var backdrop = document.getElementById("voice-complete-backdrop");
     if (backdrop) backdrop.hidden = true;
+  }
+
+  function setVoiceAdjustMessage(text, kind) {
+    var el = document.getElementById("voice-adjust-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function updateVoiceAdjustReadout(kind) {
+    var input = document.getElementById("voice-adjust-" + kind);
+    var out = document.getElementById("voice-adjust-" + kind + "-value");
+    if (!input || !out) return;
+    var val = Number(input.value || 0);
+    if (!isFinite(val)) val = 0;
+    out.textContent = val.toFixed(2);
+  }
+
+  function currentVoiceAdjustPayload() {
+    function clamp01(n, fallback) {
+      var x = Number(n);
+      if (!isFinite(x)) return fallback;
+      return Math.max(0, Math.min(1, x));
+    }
+    var stability = document.getElementById("voice-adjust-stability");
+    var similarity = document.getElementById("voice-adjust-similarity");
+    var style = document.getElementById("voice-adjust-style");
+    var speaker = document.getElementById("voice-adjust-speaker-boost");
+    return {
+      stability: clamp01(stability && stability.value, 0.5),
+      similarity_boost: clamp01(similarity && similarity.value, 0.8),
+      style: clamp01(style && style.value, 0.3),
+      use_speaker_boost: !!(speaker && speaker.checked),
+    };
+  }
+
+  function applyVoiceAdjustPreset(preset) {
+    var s = document.getElementById("voice-adjust-stability");
+    var m = document.getElementById("voice-adjust-similarity");
+    var y = document.getElementById("voice-adjust-style");
+    var b = document.getElementById("voice-adjust-speaker-boost");
+    if (!s || !m || !y || !b) return;
+    if (preset === "energetic") {
+      s.value = "0.60"; m.value = "0.80"; y.value = "0.50"; b.checked = true;
+    } else if (preset === "calm") {
+      s.value = "0.70"; m.value = "0.70"; y.value = "0.00"; b.checked = true;
+    } else if (preset === "clear") {
+      s.value = "0.60"; m.value = "0.90"; y.value = "0.20"; b.checked = true;
+    } else {
+      s.value = "0.50"; m.value = "0.75"; y.value = "0.00"; b.checked = true;
+    }
+    updateVoiceAdjustReadout("stability");
+    updateVoiceAdjustReadout("similarity");
+    updateVoiceAdjustReadout("style");
+  }
+
+  function openVoiceAdjustModal(localVoiceId, elevenLabsVoiceId, voiceName) {
+    if (!localVoiceId || !elevenLabsVoiceId || !currentUser) {
+      openVoiceCompleteModal(voiceName || "Voice");
+      return;
+    }
+    cloneAdjustLocalVoiceId = localVoiceId;
+    cloneAdjustElevenLabsVoiceId = elevenLabsVoiceId;
+    cloneAdjustVoiceName = voiceName || "Voice";
+    var subtitle = document.getElementById("voice-adjust-subtitle");
+    if (subtitle) subtitle.textContent = 'Fine-tune "' + cloneAdjustVoiceName + '" to match your inner voice.';
+    setVoiceAdjustMessage("Loading current settings...", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        cloneAdjustToken = token || "";
+        return fetch(backendBaseURL() + "/elevenlabs/voices/" + encodeURIComponent(cloneAdjustElevenLabsVoiceId) + "/settings", {
+          method: "GET",
+          headers: { Authorization: "Bearer " + token },
+        });
+      })
+      .then(function (resp) {
+        return resp.json().then(function (json) {
+          if (!resp.ok) throw new Error((json && json.error) || "Could not load voice settings.");
+          return json || {};
+        });
+      })
+      .then(function (settings) {
+        var s = document.getElementById("voice-adjust-stability");
+        var m = document.getElementById("voice-adjust-similarity");
+        var y = document.getElementById("voice-adjust-style");
+        var b = document.getElementById("voice-adjust-speaker-boost");
+        if (s) s.value = String(typeof settings.stability === "number" ? settings.stability : 0.5);
+        if (m) m.value = String(typeof settings.similarity_boost === "number" ? settings.similarity_boost : 0.75);
+        if (y) y.value = String(typeof settings.style === "number" ? settings.style : 0.0);
+        if (b) b.checked = settings.use_speaker_boost !== false;
+        updateVoiceAdjustReadout("stability");
+        updateVoiceAdjustReadout("similarity");
+        updateVoiceAdjustReadout("style");
+        var backdrop = document.getElementById("voice-adjust-backdrop");
+        if (backdrop) backdrop.hidden = false;
+        setVoiceAdjustMessage("", "");
+      })
+      .catch(function (e) {
+        setVoicesMessage(e.message || "Could not open adjustment step.", "error");
+        openVoiceCompleteModal(cloneAdjustVoiceName);
+      });
+  }
+
+  function closeVoiceAdjustModal() {
+    var backdrop = document.getElementById("voice-adjust-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    setVoiceAdjustMessage("", "");
+  }
+
+  function previewVoiceAdjust() {
+    if (!cloneAdjustElevenLabsVoiceId || !currentUser) return;
+    setVoiceAdjustMessage("Generating preview...", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/text-to-speech", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({
+            text: "Hello, this is a preview of how I sound.",
+            voiceID: cloneAdjustElevenLabsVoiceId,
+            voice_settings: currentVoiceAdjustPayload(),
+          }),
+        });
+      })
+      .then(function (resp) {
+        if (!resp.ok) throw new Error("Could not generate preview.");
+        return resp.blob();
+      })
+      .then(function (blob) {
+        if (activePreviewBlobURL) {
+          try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
+          activePreviewBlobURL = null;
+        }
+        var blobURL = URL.createObjectURL(blob);
+        activePreviewBlobURL = blobURL;
+        stopActiveAudio(false);
+        activeAudio = new Audio(blobURL);
+        activeAudioScriptId = null;
+        activeAudioTitle = "Adjustment preview — " + (cloneAdjustVoiceName || "Voice");
+        bindAudioLifecycle(function () {
+          if (activePreviewBlobURL) {
+            try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e2) {}
+            activePreviewBlobURL = null;
+          }
+          activeAudioScriptId = null;
+          activeAudioTitle = "";
+          activeAudio = null;
+          updateMiniPlayer();
+        });
+        return activeAudio.play();
+      })
+      .then(function () {
+        setVoiceAdjustMessage("Playing preview.", "success");
+        updateMiniPlayer();
+      })
+      .catch(function (e) {
+        setVoiceAdjustMessage(e.message || "Preview failed.", "error");
+      });
+  }
+
+  function skipVoiceAdjust() {
+    closeVoiceAdjustModal();
+    openVoiceCompleteModal(cloneAdjustVoiceName || "Voice");
+  }
+
+  function saveVoiceAdjust() {
+    if (!cloneAdjustElevenLabsVoiceId || !cloneAdjustToken) {
+      setVoiceAdjustMessage("Missing voice settings session. Please try again.", "error");
+      return;
+    }
+    setVoiceAdjustMessage("Saving settings...", "");
+    fetch(backendBaseURL() + "/elevenlabs/voices/" + encodeURIComponent(cloneAdjustElevenLabsVoiceId) + "/settings/edit", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + cloneAdjustToken,
+      },
+      body: JSON.stringify(currentVoiceAdjustPayload()),
+    })
+      .then(function (resp) {
+        return resp.json().then(function (json) {
+          if (!resp.ok) throw new Error((json && json.error) || "Could not save settings.");
+          return true;
+        }).catch(function () {
+          if (!resp.ok) throw new Error("Could not save settings.");
+          return true;
+        });
+      })
+      .then(function () {
+        closeVoiceAdjustModal();
+        openVoiceCompleteModal(cloneAdjustVoiceName || "Voice");
+      })
+      .catch(function (e) {
+        setVoiceAdjustMessage(e.message || "Could not save settings.", "error");
+      });
   }
 
   function closeVoiceConsentModal() {
@@ -1534,6 +1958,7 @@
       activeVoiceScriptParagraphIndex = -1;
       renderVoiceRecordingScript(-1);
       setVoiceRecordButtonState(false);
+      clearRecordedSample();
     }
   }
 
@@ -1553,10 +1978,16 @@
     if (timeEl) timeEl.textContent = recordingDurationText();
     updateVoiceRecordingScriptProgress(0);
     activeVoiceRecordingTimer = setInterval(function () {
-      setVoiceRecordingStatus("Recording... " + recordingDurationText(), "error");
+      var elapsed = Math.max(0, Math.floor((Date.now() - activeVoiceRecordingStartedAt) / 1000));
+      if (elapsed < 30) {
+        setVoiceRecordingStatus("Recording... " + recordingDurationText() + " (Aim for at least 30s)", "error");
+      } else if (elapsed < 60) {
+        setVoiceRecordingStatus("Great. Keep going to 1-2 minutes for best results.", "");
+      } else {
+        setVoiceRecordingStatus("Perfect. You can stop anytime.", "success");
+      }
       var t = document.getElementById("voice-recording-guide-time");
       if (t) t.textContent = recordingDurationText();
-      var elapsed = Math.max(0, Math.floor((Date.now() - activeVoiceRecordingStartedAt) / 1000));
       updateVoiceRecordingScriptProgress(elapsed);
     }, 500);
   }
@@ -1580,6 +2011,7 @@
   function startVoiceRecording() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
       setVoicesMessage("Microphone recording is not supported in this browser.", "error");
+      openVoiceMicHelpModal("This browser does not support in-app microphone recording. Use Upload Voice Audio or try Safari/Chrome.");
       return;
     }
     if (activeVoiceRecorder) return;
@@ -1598,6 +2030,7 @@
         recorder.onstop = function () {
           var mimeType = recorder.mimeType || "audio/webm";
           var blob = new Blob(activeVoiceRecorderChunks, { type: mimeType });
+          var elapsedCapturedSec = Math.max(1, Math.floor((Date.now() - activeVoiceRecordingStartedAt) / 1000));
           activeVoiceRecorder = null;
           activeVoiceRecorderChunks = [];
           stopVoiceRecorderStream();
@@ -1608,8 +2041,15 @@
             setVoiceRecordingStatus("", "");
             return;
           }
-          setVoiceRecordingStatus("Recording captured. Uploading sample...", "");
-          handleVoiceRecordedBlob(blob, mimeType);
+          var extension = (mimeType || "").indexOf("ogg") >= 0 ? "ogg" : "webm";
+          clearRecordedSample();
+          recordedSampleBlobURL = URL.createObjectURL(blob);
+          recordedSampleFile = new File([blob], "recorded-voice-sample." + extension, {
+            type: mimeType || "audio/webm",
+          });
+          recordedSampleDurationSec = elapsedCapturedSec;
+          showRecordedSampleReview();
+          setVoiceRecordingStatus("Recording captured. Review it, then tap Use Recording.", "success");
         };
         recorder.onerror = function () {
           activeVoiceRecorder = null;
@@ -1623,12 +2063,14 @@
         recorder.start();
         setVoiceRecordButtonState(true);
         setVoiceRecordingGuideVisible(true);
+        clearRecordedSample();
         beginVoiceRecordingTicker();
         setVoicesMessage("Read the script while recording, then tap Stop Recording.", "");
       })
       .catch(function (e) {
         setVoicesMessage((e && e.message) || "Microphone access was denied.", "error");
         setVoiceRecordingStatus("", "");
+        openVoiceMicHelpModal("Microphone permission was denied. Please allow microphone access and try again.");
       });
   }
 
@@ -1727,7 +2169,7 @@
             setVoiceRecordingGuideVisible(false);
             renderVoices();
             closeVoiceProcessingModal();
-            openVoiceCompleteModal(name.trim());
+            openVoiceAdjustModal(docRef.id, elevenLabsVoiceID, name.trim());
           });
       })
       .catch(function (e) {
