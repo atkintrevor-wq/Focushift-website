@@ -42,6 +42,14 @@
   var activeVoiceRecorderChunks = [];
   var activeVoiceRecordingTimer = null;
   var activeVoiceRecordingStartedAt = 0;
+  var activeVoiceScriptParagraphIndex = -1;
+  var voiceCloneReadScript =
+    "Hello, this is my voice sample for cloning. I'm speaking naturally and clearly, just like I would in a normal conversation with a friend.\n\n" +
+    "I want this recording to capture the full range of my voice - from high to low pitches, from soft to loud volumes, and from different emotional tones. I'm speaking at a comfortable pace, not too fast and not too slow.\n\n" +
+    "The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet, which helps capture all the different sounds I can make when speaking.\n\n" +
+    "I'm trying to sound natural and authentic, just like myself. This is important because I want my cloned voice to sound like the real me - with my unique tone, my way of speaking, and my personality.\n\n" +
+    "I believe that affirmations work best when they sound like they're coming from within, from my own inner voice. That's why I'm taking the time to create this recording, so the voice that speaks my affirmations will truly feel like my own.\n\n" +
+    "Thank you for listening. I hope this captures everything needed to create an accurate and authentic clone of my voice.";
   var activeVoicesTab = "my-voices";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
@@ -271,6 +279,7 @@
   function renderSignedOut() {
     stopVoiceRecording();
     stopVoiceRecorderStream();
+    setVoiceRecordingGuideVisible(false);
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -281,6 +290,7 @@
   function renderNonAdmin(email, displayName) {
     stopVoiceRecording();
     stopVoiceRecorderStream();
+    setVoiceRecordingGuideVisible(false);
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -356,11 +366,19 @@
       '    <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
       "  </div>" +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
-      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Clone Voice</button>' +
-      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Record Voice Sample</button>' +
+      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Upload Voice Audio</button>' +
+      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Clone Voice</button>' +
       "  </div>" +
-      '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.35rem;">Use <strong>Clone Voice</strong> to upload a sample file, or <strong>Record Voice Sample</strong> to capture audio in-browser.</p>' +
+      '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.35rem;">Use <strong>Upload Voice Audio</strong> for an existing file, or <strong>Clone Voice</strong> to record a guided sample in-browser.</p>' +
       '  <div id="voice-recording-status" class="app-inline-msg" style="margin-top:0;margin-bottom:0.6rem;"></div>' +
+      '  <div id="voice-recording-guide" class="app-empty-hint voice-recording-guide" style="display:none;margin-top:0;margin-bottom:0.7rem;">' +
+      '    <div class="voice-recording-guide-head">' +
+      '      <strong>Read this script while recording</strong>' +
+      '      <span id="voice-recording-guide-time" class="voice-recording-guide-time">0:00</span>' +
+      "    </div>" +
+      '    <div class="voice-recording-guide-sub">Speak clearly in a quiet place. Aim for 30s minimum, 1-2 minutes best.</div>' +
+      '    <div id="voice-recording-script" class="voice-recording-script"></div>' +
+      "  </div>" +
       '  <div id="voices-list"></div>' +
       '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '  <input id="voice-upload-input" type="file" accept="audio/*" style="display:none;" />' +
@@ -601,7 +619,7 @@
       });
     });
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
-      setVoicesMessage("Choose a clear voice sample file to clone from.", "");
+      setVoicesMessage("Choose a clear voice audio file to upload.", "");
       beginVoiceUploadFlow("clone");
     });
     document.getElementById("btn-voice-record").addEventListener("click", function () {
@@ -610,6 +628,7 @@
     document.getElementById("voice-upload-input").addEventListener("change", function (ev) {
       handleVoiceFileSelected(ev);
     });
+    renderVoiceRecordingScript(-1);
     document.getElementById("media-picker-cancel").addEventListener("click", function () {
       closeMediaPicker();
     });
@@ -1224,6 +1243,78 @@
     el.textContent = text || "";
   }
 
+  function voiceScriptParagraphs() {
+    return String(voiceCloneReadScript || "")
+      .split(/\n\s*\n/)
+      .map(function (p) {
+        return (p || "").trim();
+      })
+      .filter(function (p) {
+        return !!p;
+      });
+  }
+
+  function renderVoiceRecordingScript(activeIndex) {
+    var container = document.getElementById("voice-recording-script");
+    if (!container) return;
+    var paragraphs = voiceScriptParagraphs();
+    container.innerHTML = paragraphs
+      .map(function (p, idx) {
+        return (
+          '<p class="voice-script-paragraph' +
+          (idx === activeIndex ? " is-active" : "") +
+          '" data-voice-script-idx="' +
+          idx +
+          '">' +
+          escapeHtml(p) +
+          "</p>"
+        );
+      })
+      .join("");
+  }
+
+  function updateVoiceRecordingScriptProgress(elapsedSec) {
+    var container = document.getElementById("voice-recording-script");
+    if (!container) return;
+    var paragraphs = voiceScriptParagraphs();
+    if (!paragraphs.length) return;
+    var wordsPerMinute = 145;
+    var wordsPerSecond = wordsPerMinute / 60;
+    var cumulative = 0;
+    var nextIndex = paragraphs.length - 1;
+    for (var i = 0; i < paragraphs.length; i++) {
+      var words = paragraphs[i].split(/\s+/).filter(function (w) { return !!w; }).length;
+      var segmentSeconds = Math.max(7, Math.round(words / wordsPerSecond));
+      cumulative += segmentSeconds;
+      if (elapsedSec <= cumulative) {
+        nextIndex = i;
+        break;
+      }
+    }
+    if (nextIndex === activeVoiceScriptParagraphIndex) return;
+    activeVoiceScriptParagraphIndex = nextIndex;
+    renderVoiceRecordingScript(nextIndex);
+    var activeEl = container.querySelector('[data-voice-script-idx="' + nextIndex + '"]');
+    if (activeEl && typeof activeEl.scrollIntoView === "function") {
+      try {
+        activeEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } catch (_e) {}
+    }
+  }
+
+  function setVoiceRecordingGuideVisible(visible) {
+    var box = document.getElementById("voice-recording-guide");
+    if (!box) return;
+    box.style.display = visible ? "block" : "none";
+    box.classList.toggle("is-recording", !!visible);
+    if (!visible) {
+      var timeEl = document.getElementById("voice-recording-guide-time");
+      if (timeEl) timeEl.textContent = "0:00";
+      activeVoiceScriptParagraphIndex = -1;
+      renderVoiceRecordingScript(-1);
+    }
+  }
+
   function recordingDurationText() {
     if (!activeVoiceRecordingStartedAt) return "0:00";
     var elapsedSec = Math.max(0, Math.floor((Date.now() - activeVoiceRecordingStartedAt) / 1000));
@@ -1236,8 +1327,15 @@
     endVoiceRecordingTicker();
     activeVoiceRecordingStartedAt = Date.now();
     setVoiceRecordingStatus("Recording... " + recordingDurationText(), "error");
+    var timeEl = document.getElementById("voice-recording-guide-time");
+    if (timeEl) timeEl.textContent = recordingDurationText();
+    updateVoiceRecordingScriptProgress(0);
     activeVoiceRecordingTimer = setInterval(function () {
       setVoiceRecordingStatus("Recording... " + recordingDurationText(), "error");
+      var t = document.getElementById("voice-recording-guide-time");
+      if (t) t.textContent = recordingDurationText();
+      var elapsed = Math.max(0, Math.floor((Date.now() - activeVoiceRecordingStartedAt) / 1000));
+      updateVoiceRecordingScriptProgress(elapsed);
     }, 500);
   }
 
@@ -1252,7 +1350,7 @@
   function setVoiceRecordButtonState(isRecording) {
     var btn = document.getElementById("btn-voice-record");
     if (!btn) return;
-    btn.textContent = isRecording ? "Stop Recording" : "Record Voice Sample";
+    btn.textContent = isRecording ? "Stop Recording" : "Clone Voice";
     btn.classList.toggle("app-btn-danger", !!isRecording);
     btn.classList.toggle("app-btn-secondary", !isRecording);
   }
@@ -1286,6 +1384,7 @@
           if (!blob || !blob.size) {
             setVoicesMessage("No audio captured. Please try again.", "error");
             setVoiceRecordingStatus("", "");
+            setVoiceRecordingGuideVisible(false);
             return;
           }
           setVoiceRecordingStatus("Recording captured. Uploading sample...", "");
@@ -1299,15 +1398,18 @@
           setVoiceRecordButtonState(false);
           setVoicesMessage("Recording failed. Please try again.", "error");
           setVoiceRecordingStatus("", "");
+          setVoiceRecordingGuideVisible(false);
         };
         recorder.start();
         setVoiceRecordButtonState(true);
+        setVoiceRecordingGuideVisible(true);
         beginVoiceRecordingTicker();
-        setVoicesMessage("Tap Stop Recording when done, then name your cloned voice.", "");
+        setVoicesMessage("Read the script while recording, then tap Stop Recording.", "");
       })
       .catch(function (e) {
         setVoicesMessage((e && e.message) || "Microphone access was denied.", "error");
         setVoiceRecordingStatus("", "");
+        setVoiceRecordingGuideVisible(false);
       });
   }
 
@@ -1322,6 +1424,7 @@
       endVoiceRecordingTicker();
       setVoiceRecordButtonState(false);
       setVoiceRecordingStatus("", "");
+      setVoiceRecordingGuideVisible(false);
     }
   }
 
@@ -1402,11 +1505,13 @@
           .then(function () {
             setVoicesMessage("Voice created and added to My Voices.", "success");
             setVoiceRecordingStatus("", "");
+            setVoiceRecordingGuideVisible(false);
             renderVoices();
           });
       })
       .catch(function (e) {
         setVoicesMessage(e.message || "Could not create voice.", "error");
+        setVoiceRecordingGuideVisible(false);
       });
   }
 
