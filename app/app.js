@@ -43,6 +43,7 @@
   var activeVoiceRecordingTimer = null;
   var activeVoiceRecordingStartedAt = 0;
   var hasVoiceCloneConsent = false;
+  var voiceProcessingStatusTimer = null;
   var activeVoiceScriptParagraphIndex = -1;
   var voiceCloneReadScript =
     "Hello, this is my voice sample for cloning. I'm speaking naturally and clearly, just like I would in a normal conversation with a friend.\n\n" +
@@ -282,6 +283,8 @@
     stopVoiceRecording();
     stopVoiceRecorderStream();
     setVoiceRecordingGuideVisible(false);
+    closeVoiceProcessingModal();
+    closeVoiceCompleteModal();
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -294,6 +297,8 @@
     stopVoiceRecording();
     stopVoiceRecorderStream();
     setVoiceRecordingGuideVisible(false);
+    closeVoiceProcessingModal();
+    closeVoiceCompleteModal();
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -535,21 +540,65 @@
       '<div id="voice-consent-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice cloning consent">' +
       "    <h3>Voice Cloning Consent</h3>" +
-      '    <p class="app-muted" style="margin:0 0 0.5rem;">Your voice sample will be processed by ElevenLabs to create your cloned voice. You can delete it at any time.</p>' +
-      '    <div class="app-empty-hint" style="margin-bottom:0.6rem;padding:0.7rem;">' +
-      "      <div><strong>Important:</strong></div>" +
-      "      <div>- Use only your own voice (or explicit permission).</div>" +
-      "      <div>- Record in a quiet place for best quality.</div>" +
-      "      <div>- 30 seconds minimum, 1-2 minutes recommended.</div>" +
+      '    <div style="max-height:50vh;overflow:auto;display:flex;flex-direction:column;gap:0.55rem;margin-bottom:0.6rem;padding-right:0.1rem;">' +
+      '      <div class="app-empty-hint" style="border-style:solid;background:rgba(59,130,246,0.08);padding:0.65rem;">' +
+      '        <div style="font-weight:700;margin-bottom:0.22rem;">What is Voice Cloning?</div>' +
+      "        <div>Voice cloning creates a digital copy of your voice using AI technology. This allows the app to generate audio using your unique voice characteristics.</div>" +
+      "      </div>" +
+      '      <div class="app-empty-hint" style="border-style:solid;padding:0.65rem;">' +
+      '        <div style="font-weight:700;margin-bottom:0.22rem;">How Your Data is Used</div>' +
+      "        <div>Your voice sample is sent to ElevenLabs, a third-party AI service, to create the cloned voice. The voice data is stored securely and used only to generate audio content within this app.</div>" +
+      "      </div>" +
+      '      <div class="app-empty-hint" style="border-style:solid;padding:0.65rem;">' +
+      '        <div style="font-weight:700;margin-bottom:0.22rem;">Your Rights</div>' +
+      "        <div>You can delete your cloned voice at any time, which will remove it from both our system and ElevenLabs. You maintain full control over your voice data.</div>" +
+      "      </div>" +
+      '      <div class="app-empty-hint" style="border-style:solid;padding:0.65rem;">' +
+      '        <div style="font-weight:700;margin-bottom:0.22rem;">Important Notes</div>' +
+      "        <div>- Voice cloning requires at least 30 seconds of clear audio</div>" +
+      "        <div>- Best results come from 1-2 minutes of natural speech</div>" +
+      "        <div>- Speak clearly and naturally for optimal quality</div>" +
+      "      </div>" +
+      '      <div class="app-empty-hint" style="border-style:solid;padding:0.65rem;">' +
+      '        <div style="font-weight:700;margin-bottom:0.22rem;">Legal</div>' +
+      "        <div>It is illegal to clone the voice of another person without their express consent. Only clone your own voice or ensure you have proper permission.</div>" +
+      "      </div>" +
       "    </div>" +
       '    <label for="voice-consent-check" style="display:flex;align-items:flex-start;gap:0.55rem;cursor:pointer;">' +
       '      <input id="voice-consent-check" type="checkbox" style="width:auto;margin-top:0.15rem;">' +
-      '      <span>I understand and consent to voice cloning and third-party processing for this feature.</span>' +
+      '      <span>I understand and consent to the use of my voice for cloning. I acknowledge that my voice data will be processed by ElevenLabs and can be deleted at any time.</span>' +
       "    </label>" +
       '    <div id="voice-consent-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="voice-consent-cancel">Cancel</button>' +
       '      <button type="button" class="app-btn" id="voice-consent-continue" disabled>Continue</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="voice-processing-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice cloning processing">' +
+      "    <h3>Creating Your Cloned Voice</h3>" +
+      '    <p id="voice-processing-status" class="app-muted" style="margin:0 0 0.5rem;">Preparing your voice sample...</p>' +
+      '    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem;">' +
+      '      <span class="app-muted">Please wait, this may take 30-60 seconds.</span>' +
+      "    </div>" +
+      '    <div class="app-empty-hint" style="border-style:solid;padding:0.7rem;">' +
+      '      <div style="font-weight:700;margin-bottom:0.2rem;">What\'s happening?</div>' +
+      "      <div>We're uploading your voice sample to ElevenLabs and creating your unique voice clone. This captures key voice characteristics for playback and generation.</div>" +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="voice-complete-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice cloning complete">' +
+      "    <h3>Voice Cloned Successfully!</h3>" +
+      '    <p id="voice-complete-subtitle" class="app-muted" style="margin:0 0 0.5rem;">Your cloned voice is ready.</p>' +
+      '    <div class="app-empty-hint" style="border-style:solid;padding:0.7rem;">' +
+      "      <div>- Your cloned voice is available in My Voices</div>" +
+      "      <div>- You can adjust settings anytime</div>" +
+      "      <div>- Delete it anytime from voice settings</div>" +
+      "    </div>" +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="voice-complete-done">Done</button>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -674,6 +723,9 @@
     });
     document.getElementById("voice-consent-continue").addEventListener("click", function () {
       acceptVoiceCloneConsentAndContinue();
+    });
+    document.getElementById("voice-complete-done").addEventListener("click", function () {
+      closeVoiceCompleteModal();
     });
     document.getElementById("media-picker-cancel").addEventListener("click", function () {
       closeMediaPicker();
@@ -1296,6 +1348,54 @@
     el.textContent = text || "";
   }
 
+  function clearVoiceProcessingStatusTicker() {
+    if (voiceProcessingStatusTimer) {
+      clearInterval(voiceProcessingStatusTimer);
+      voiceProcessingStatusTimer = null;
+    }
+  }
+
+  function openVoiceProcessingModal() {
+    var backdrop = document.getElementById("voice-processing-backdrop");
+    var status = document.getElementById("voice-processing-status");
+    if (!backdrop || !status) return;
+    var statuses = [
+      "Preparing your voice sample...",
+      "Uploading to ElevenLabs...",
+      "Analyzing voice characteristics...",
+      "Creating your voice clone...",
+      "Almost done...",
+    ];
+    var idx = 0;
+    status.textContent = statuses[idx];
+    clearVoiceProcessingStatusTicker();
+    voiceProcessingStatusTimer = setInterval(function () {
+      idx = Math.min(idx + 1, statuses.length - 1);
+      status.textContent = statuses[idx];
+      if (idx >= statuses.length - 1) clearVoiceProcessingStatusTicker();
+    }, 8000);
+    backdrop.hidden = false;
+  }
+
+  function closeVoiceProcessingModal() {
+    var backdrop = document.getElementById("voice-processing-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    clearVoiceProcessingStatusTicker();
+  }
+
+  function openVoiceCompleteModal(voiceName) {
+    var backdrop = document.getElementById("voice-complete-backdrop");
+    var subtitle = document.getElementById("voice-complete-subtitle");
+    if (!backdrop || !subtitle) return;
+    subtitle.textContent = '"' + (voiceName || "My Cloned Voice") + '" is now ready to use.';
+    backdrop.hidden = false;
+  }
+
+  function closeVoiceCompleteModal() {
+    var backdrop = document.getElementById("voice-complete-backdrop");
+    if (backdrop) backdrop.hidden = true;
+  }
+
   function closeVoiceConsentModal() {
     var backdrop = document.getElementById("voice-consent-backdrop");
     if (backdrop) backdrop.hidden = true;
@@ -1575,6 +1675,7 @@
     var description = window.prompt("Short description (optional):", "") || "";
 
     setVoicesMessage("Uploading voice sample...", "");
+    openVoiceProcessingModal();
     currentUser
       .getIdToken(true)
       .then(function (token) {
@@ -1625,9 +1726,12 @@
             setVoiceRecordingStatus("", "");
             setVoiceRecordingGuideVisible(false);
             renderVoices();
+            closeVoiceProcessingModal();
+            openVoiceCompleteModal(name.trim());
           });
       })
       .catch(function (e) {
+        closeVoiceProcessingModal();
         setVoicesMessage(e.message || "Could not create voice.", "error");
       });
   }
