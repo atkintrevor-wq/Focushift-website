@@ -23,6 +23,7 @@
   var activePlaylistIndex = -1;
   var selectedPlaylistId = null;
   var activeAdminTab = "home";
+  var activeLibraryTab = "my-library";
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
@@ -340,11 +341,10 @@
       "). Web workspace is live with Home flow, My Library, Playlists, Voices, Backgrounds, and App Library tools.</p>" +
       '<nav class="app-tabs" aria-label="Admin sections">' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="library">My Library <span class="app-tab-count" id="count-library">0</span></button>' +
+      '  <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" id="count-library">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="account">Account</button>' +
       "</nav>" +
       '<section id="section-home" class="app-section" aria-label="Home">' +
@@ -355,6 +355,11 @@
       "</section>" +
       "</section>" +
       '<section id="section-library" class="app-section">' +
+      '  <div class="app-tabs voice-segmented-tabs" style="margin-top:0.1rem;">' +
+      '    <button type="button" class="app-tab-btn" id="library-tab-my" data-library-tab="my-library">My Library</button>' +
+      '    <button type="button" class="app-tab-btn" id="library-tab-app" data-library-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
+      "  </div>" +
+      '  <div id="library-sub-my">' +
       '<div class="app-toolbar">' +
       '  <button type="button" class="app-btn" id="btn-create-script">+ New Script</button>' +
       "</div>" +
@@ -366,6 +371,13 @@
       '  <div class="app-section-title-row"><h2>My Library Scripts</h2></div>' +
       '  <div id="scripts-list"><p class="app-muted">Loading scripts...</p></div>' +
       "</section>" +
+      "  </div>" +
+      '  <div id="library-sub-app" hidden>' +
+      '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
+      '  <div class="app-section-title-row"><h2>App Library (Premade)</h2><button type="button" class="app-btn" id="btn-open-publish-premade">Publish from My Library</button></div>' +
+      '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
+      "</section>" +
+      "  </div>" +
       "</section>" +
       '<section id="section-playlists" class="app-section">' +
       '<section aria-label="Playlists" style="margin-top:1rem;">' +
@@ -435,12 +447,6 @@
       '  <p class="app-muted" style="margin-top:0;">Set your default background for new scripts and audio generation.</p>' +
       '  <div id="backgrounds-list"></div>' +
       '  <div id="backgrounds-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
-      "</section>" +
-      "</section>" +
-      '<section id="section-app-library" class="app-section">' +
-      '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
-      '  <div class="app-section-title-row"><h2>App Library (Premade)</h2><button type="button" class="app-btn" id="btn-open-publish-premade">Publish from My Library</button></div>' +
-      '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
       "</section>" +
       "</section>" +
       '<section id="section-account" class="app-section">' +
@@ -724,6 +730,12 @@
         setAdminTab(tab);
       });
     });
+    root.querySelectorAll("[data-library-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        activeLibraryTab = btn.getAttribute("data-library-tab") || "my-library";
+        renderLibrarySubtab();
+      });
+    });
     document.getElementById("mini-player-toggle").addEventListener("click", function () {
       if (!activeAudio) return;
       if (activeAudio.paused) {
@@ -788,6 +800,7 @@
     });
     window.onresize = function () {
       syncVoiceSegmentedPill();
+      syncLibrarySegmentedPill();
     };
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
       setVoicesMessage("Choose a clear voice audio file to upload.", "");
@@ -900,6 +913,7 @@
       });
     });
     renderHomeFlow(displayName || "");
+    renderLibrarySubtab();
     renderVoices();
     renderBackgrounds();
     setAdminTab(activeAdminTab);
@@ -1180,6 +1194,10 @@
   function setAdminTab(tabId) {
     var normalized = tabId || "home";
     if (normalized === "create") normalized = "home";
+    if (normalized === "app-library") {
+      normalized = "library";
+      activeLibraryTab = "app-library";
+    }
     activeAdminTab = normalized;
     var sectionMap = {
       home: "section-home",
@@ -1187,7 +1205,6 @@
       playlists: "section-playlists",
       voices: "section-voices",
       backgrounds: "section-backgrounds",
-      "app-library": "section-app-library",
       account: "section-account",
     };
     Object.keys(sectionMap).forEach(function (key) {
@@ -1202,6 +1219,31 @@
     try {
       localStorage.setItem(ADMIN_TAB_STORAGE_KEY, activeAdminTab);
     } catch (_e) {}
+  }
+
+  function renderLibrarySubtab() {
+    var myBtn = document.getElementById("library-tab-my");
+    var appBtn = document.getElementById("library-tab-app");
+    var mySection = document.getElementById("library-sub-my");
+    var appSection = document.getElementById("library-sub-app");
+    if (myBtn) myBtn.classList.toggle("is-active", activeLibraryTab === "my-library");
+    if (appBtn) appBtn.classList.toggle("is-active", activeLibraryTab === "app-library");
+    if (mySection) mySection.hidden = activeLibraryTab !== "my-library";
+    if (appSection) appSection.hidden = activeLibraryTab !== "app-library";
+    syncLibrarySegmentedPill();
+  }
+
+  function syncLibrarySegmentedPill() {
+    var wrap = document.querySelector("#section-library .voice-segmented-tabs");
+    if (!wrap) return;
+    var activeBtn = wrap.querySelector(".app-tab-btn.is-active");
+    if (!activeBtn) return;
+    wrap.style.setProperty("--voice-pill-x", activeBtn.offsetLeft + "px");
+    wrap.style.setProperty("--voice-pill-w", activeBtn.offsetWidth + "px");
+    wrap.classList.add("is-ready");
+    wrap.classList.remove("is-pulsing");
+    void wrap.offsetWidth;
+    wrap.classList.add("is-pulsing");
   }
 
   function generationMessage(text, kind) {
@@ -4322,7 +4364,12 @@
       .then(function (snap) {
         try {
           var savedTab = localStorage.getItem(ADMIN_TAB_STORAGE_KEY);
-          if (savedTab) activeAdminTab = savedTab;
+          if (savedTab === "app-library") {
+            activeAdminTab = "library";
+            activeLibraryTab = "app-library";
+          } else if (savedTab) {
+            activeAdminTab = savedTab;
+          }
         } catch (_e) {}
         currentUserProfile = snap.exists ? snap.data() || {} : {};
         hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
