@@ -40,6 +40,8 @@
   var activeVoiceRecorder = null;
   var activeVoiceRecorderStream = null;
   var activeVoiceRecorderChunks = [];
+  var activeVoiceRecordingTimer = null;
+  var activeVoiceRecordingStartedAt = 0;
   var activeVoicesTab = "my-voices";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
@@ -354,11 +356,11 @@
       '    <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
       "  </div>" +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
-      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Clone Voice (from sample)</button>' +
+      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Clone Voice</button>' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Record Voice Sample</button>' +
-      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-upload">Upload Voice File</button>' +
       "  </div>" +
-      '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.6rem;">Clone from a sample file or record directly in your browser.</p>' +
+      '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.35rem;">Use <strong>Clone Voice</strong> to upload a sample file, or <strong>Record Voice Sample</strong> to capture audio in-browser.</p>' +
+      '  <div id="voice-recording-status" class="app-inline-msg" style="margin-top:0;margin-bottom:0.6rem;"></div>' +
       '  <div id="voices-list"></div>' +
       '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '  <input id="voice-upload-input" type="file" accept="audio/*" style="display:none;" />' +
@@ -604,9 +606,6 @@
     });
     document.getElementById("btn-voice-record").addEventListener("click", function () {
       toggleVoiceRecording();
-    });
-    document.getElementById("btn-voice-upload").addEventListener("click", function () {
-      beginVoiceUploadFlow("upload");
     });
     document.getElementById("voice-upload-input").addEventListener("change", function (ev) {
       handleVoiceFileSelected(ev);
@@ -1218,6 +1217,38 @@
     activeVoiceRecorderStream = null;
   }
 
+  function setVoiceRecordingStatus(text, kind) {
+    var el = document.getElementById("voice-recording-status");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function recordingDurationText() {
+    if (!activeVoiceRecordingStartedAt) return "0:00";
+    var elapsedSec = Math.max(0, Math.floor((Date.now() - activeVoiceRecordingStartedAt) / 1000));
+    var mins = Math.floor(elapsedSec / 60);
+    var secs = elapsedSec % 60;
+    return mins + ":" + (secs < 10 ? "0" : "") + secs;
+  }
+
+  function beginVoiceRecordingTicker() {
+    endVoiceRecordingTicker();
+    activeVoiceRecordingStartedAt = Date.now();
+    setVoiceRecordingStatus("Recording... " + recordingDurationText(), "error");
+    activeVoiceRecordingTimer = setInterval(function () {
+      setVoiceRecordingStatus("Recording... " + recordingDurationText(), "error");
+    }, 500);
+  }
+
+  function endVoiceRecordingTicker() {
+    if (activeVoiceRecordingTimer) {
+      clearInterval(activeVoiceRecordingTimer);
+      activeVoiceRecordingTimer = null;
+    }
+    activeVoiceRecordingStartedAt = 0;
+  }
+
   function setVoiceRecordButtonState(isRecording) {
     var btn = document.getElementById("btn-voice-record");
     if (!btn) return;
@@ -1250,26 +1281,33 @@
           activeVoiceRecorder = null;
           activeVoiceRecorderChunks = [];
           stopVoiceRecorderStream();
+          endVoiceRecordingTicker();
           setVoiceRecordButtonState(false);
           if (!blob || !blob.size) {
             setVoicesMessage("No audio captured. Please try again.", "error");
+            setVoiceRecordingStatus("", "");
             return;
           }
+          setVoiceRecordingStatus("Recording captured. Uploading sample...", "");
           handleVoiceRecordedBlob(blob, mimeType);
         };
         recorder.onerror = function () {
           activeVoiceRecorder = null;
           activeVoiceRecorderChunks = [];
           stopVoiceRecorderStream();
+          endVoiceRecordingTicker();
           setVoiceRecordButtonState(false);
           setVoicesMessage("Recording failed. Please try again.", "error");
+          setVoiceRecordingStatus("", "");
         };
         recorder.start();
         setVoiceRecordButtonState(true);
-        setVoicesMessage("Recording... tap Stop Recording when done.", "");
+        beginVoiceRecordingTicker();
+        setVoicesMessage("Tap Stop Recording when done, then name your cloned voice.", "");
       })
       .catch(function (e) {
         setVoicesMessage((e && e.message) || "Microphone access was denied.", "error");
+        setVoiceRecordingStatus("", "");
       });
   }
 
@@ -1281,7 +1319,9 @@
       activeVoiceRecorder = null;
       activeVoiceRecorderChunks = [];
       stopVoiceRecorderStream();
+      endVoiceRecordingTicker();
       setVoiceRecordButtonState(false);
+      setVoiceRecordingStatus("", "");
     }
   }
 
@@ -1361,6 +1401,7 @@
           })
           .then(function () {
             setVoicesMessage("Voice created and added to My Voices.", "success");
+            setVoiceRecordingStatus("", "");
             renderVoices();
           });
       })
