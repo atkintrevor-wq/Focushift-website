@@ -32,6 +32,10 @@
   var publishTitleDirty = false;
   var editingPremadeId = null;
   var expandedScriptTextById = {};
+  var expandedScriptAudioControlsById = {};
+  var scriptsRenderGeneration = 0;
+  var CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebCardAudioControls_";
+  var GENERATED_HASH_STORAGE_PREFIX = "generatedHash_";
   var expandedPremadeTextById = {};
   var premadeVoiceOverrideById = {};
   var premadeBackgroundOverrideById = {};
@@ -355,14 +359,25 @@
       "</section>" +
       "</section>" +
       '<section id="section-library" class="app-section">' +
-      '  <div class="app-tabs voice-segmented-tabs" style="margin-top:0.1rem;">' +
-      '    <button type="button" class="app-tab-btn" id="library-tab-my" data-library-tab="my-library">My Library</button>' +
-      '    <button type="button" class="app-tab-btn" id="library-tab-app" data-library-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
+      '  <div class="library-toolbar-row">' +
+      '    <div class="app-tabs voice-segmented-tabs" id="library-segmented-tabs" style="margin-top:0.1rem;">' +
+      '      <button type="button" class="app-tab-btn" id="library-tab-my" data-library-tab="my-library">My Library</button>' +
+      '      <button type="button" class="app-tab-btn" id="library-tab-app" data-library-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
+      "    </div>" +
+      '    <div class="library-toolbar-actions" id="library-my-only-toolbar">' +
+      '      <div class="library-dual-btn" role="group" aria-label="Create or import script">' +
+      '        <button type="button" class="library-dual-btn-main" id="btn-create-script" title="New script">+ New</button>' +
+      '        <button type="button" class="library-dual-btn-menu" id="btn-library-create-menu" aria-expanded="false" aria-haspopup="true" title="More options">▾</button>' +
+      "      </div>" +
+      '      <div id="library-create-dropdown" class="library-create-dropdown" hidden>' +
+      '        <button type="button" class="library-dropdown-item" id="library-dropdown-create">Create Script</button>' +
+      '        <button type="button" class="library-dropdown-item" id="library-dropdown-import">Import Audio</button>' +
+      "      </div>" +
+      '      <button type="button" class="library-chevron-btn" id="library-expand-all-toggle" aria-label="Expand or collapse audio controls on all cards">▼</button>' +
+      "    </div>" +
       "  </div>" +
+      '  <input id="script-import-audio-input" type="file" accept="audio/*" style="display:none" />' +
       '  <div id="library-sub-my">' +
-      '<div class="app-toolbar">' +
-      '  <button type="button" class="app-btn" id="btn-create-script">+ New Script</button>' +
-      "</div>" +
       '<div id="scripts-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="premade-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
@@ -704,6 +719,39 @@
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
       openEditor(null);
+    });
+    document.getElementById("btn-library-create-menu").addEventListener("click", function (ev) {
+      ev.stopPropagation();
+      toggleLibraryCreateMenu();
+    });
+    document.getElementById("library-dropdown-create").addEventListener("click", function () {
+      closeLibraryCreateMenu();
+      openEditor(null);
+    });
+    document.getElementById("library-dropdown-import").addEventListener("click", function () {
+      closeLibraryCreateMenu();
+      var inp = document.getElementById("script-import-audio-input");
+      if (inp) inp.click();
+    });
+    document.getElementById("script-import-audio-input").addEventListener("change", function (ev) {
+      var f = ev.target.files && ev.target.files[0];
+      ev.target.value = "";
+      if (f) importScriptAudioFromFile(f);
+    });
+    document.getElementById("library-expand-all-toggle").addEventListener("click", function () {
+      if (activeLibraryTab !== "my-library") return;
+      toggleExpandAllLibraryAudioControls();
+    });
+    document.addEventListener("click", function (ev) {
+      var wrap = document.getElementById("library-my-only-toolbar");
+      if (!wrap || wrap.style.display === "none") return;
+      var dd = document.getElementById("library-create-dropdown");
+      var trig = document.getElementById("btn-library-create-menu");
+      if (!dd || dd.hidden) return;
+      var t = ev.target;
+      if (trig && (trig === t || trig.contains(t))) return;
+      if (dd === t || dd.contains(t)) return;
+      closeLibraryCreateMenu();
     });
     document.getElementById("btn-create-playlist").addEventListener("click", function () {
       createPlaylist();
@@ -1221,20 +1269,40 @@
     } catch (_e) {}
   }
 
+  function closeLibraryCreateMenu() {
+    var dd = document.getElementById("library-create-dropdown");
+    var trig = document.getElementById("btn-library-create-menu");
+    if (dd) dd.hidden = true;
+    if (trig) trig.setAttribute("aria-expanded", "false");
+  }
+
+  function toggleLibraryCreateMenu() {
+    var dd = document.getElementById("library-create-dropdown");
+    var trig = document.getElementById("btn-library-create-menu");
+    if (!dd || !trig) return;
+    var willOpen = !!dd.hidden;
+    dd.hidden = !willOpen;
+    trig.setAttribute("aria-expanded", willOpen ? "true" : "false");
+  }
+
   function renderLibrarySubtab() {
     var myBtn = document.getElementById("library-tab-my");
     var appBtn = document.getElementById("library-tab-app");
     var mySection = document.getElementById("library-sub-my");
     var appSection = document.getElementById("library-sub-app");
+    var myTools = document.getElementById("library-my-only-toolbar");
     if (myBtn) myBtn.classList.toggle("is-active", activeLibraryTab === "my-library");
     if (appBtn) appBtn.classList.toggle("is-active", activeLibraryTab === "app-library");
     if (mySection) mySection.hidden = activeLibraryTab !== "my-library";
     if (appSection) appSection.hidden = activeLibraryTab !== "app-library";
+    if (myTools) myTools.style.display = activeLibraryTab === "my-library" ? "" : "none";
+    if (activeLibraryTab !== "my-library") closeLibraryCreateMenu();
     syncLibrarySegmentedPill();
+    if (activeLibraryTab === "my-library") updateLibraryExpandAllToggleUi();
   }
 
   function syncLibrarySegmentedPill() {
-    var wrap = document.querySelector("#section-library .voice-segmented-tabs");
+    var wrap = document.getElementById("library-segmented-tabs");
     if (!wrap) return;
     var activeBtn = wrap.querySelector(".app-tab-btn.is-active");
     if (!activeBtn) return;
@@ -1459,7 +1527,7 @@
   }
 
   function syncVoiceSegmentedPill() {
-    var wrap = document.querySelector(".voice-segmented-tabs");
+    var wrap = document.querySelector("#section-voices .voice-segmented-tabs");
     if (!wrap) return;
     var activeBtn = wrap.querySelector(".app-tab-btn.is-active");
     if (!activeBtn) return;
@@ -2964,6 +3032,140 @@
     if (cPre) cPre.textContent = String(currentPremade.length);
   }
 
+  function effectiveVoiceIdForScript(script) {
+    var v = script && script.voiceID ? String(script.voiceID).trim() : "";
+    if (!v || v === "default") return (selectedVoiceId || "").trim();
+    return v;
+  }
+
+  function effectiveBackgroundIdForScript(script) {
+    var b = script && script.backgroundID ? String(script.backgroundID).trim() : "";
+    if (!b) return (selectedBackgroundId || "").trim();
+    return b;
+  }
+
+  function scriptDigestSourceFromScript(script) {
+    return {
+      text: (script && script.text) || "",
+      voiceID: effectiveVoiceIdForScript(script),
+      backgroundID: effectiveBackgroundIdForScript(script),
+    };
+  }
+
+  function fallbackHashHex(raw) {
+    var h = 5381;
+    for (var i = 0; i < raw.length; i++) {
+      h = ((h << 5) + h + raw.charCodeAt(i)) | 0;
+    }
+    return ("0000000" + (h >>> 0).toString(16)).slice(-8);
+  }
+
+  function scriptContentSha256Hex(digestSource) {
+    var raw =
+      String(digestSource.text || "") +
+      "|" +
+      String(digestSource.voiceID || "") +
+      "|" +
+      String(digestSource.backgroundID || "");
+    if (!window.crypto || !window.crypto.subtle) {
+      return Promise.resolve(fallbackHashHex(raw));
+    }
+    var enc = new TextEncoder();
+    return crypto.subtle.digest("SHA-256", enc.encode(raw)).then(function (buf) {
+      return Array.from(new Uint8Array(buf))
+        .map(function (b) {
+          return b.toString(16).padStart(2, "0");
+        })
+        .join("");
+    });
+  }
+
+  function getStoredGeneratedHash(scriptId) {
+    try {
+      return localStorage.getItem(GENERATED_HASH_STORAGE_PREFIX + scriptId) || "";
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function setStoredGeneratedHash(scriptId, hex) {
+    try {
+      if (!scriptId || !hex) return;
+      localStorage.setItem(GENERATED_HASH_STORAGE_PREFIX + scriptId, hex);
+    } catch (_e) {}
+  }
+
+  function shouldEnableGenerateFromHash(script, contentHashHex) {
+    var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
+    if (!hasAudio) return true;
+    var stored = getStoredGeneratedHash(script.id);
+    if (!stored) return true;
+    return stored !== contentHashHex;
+  }
+
+  function controlsStorageKey(scriptId) {
+    return CARD_AUDIO_EXPAND_STORAGE_PREFIX + scriptId;
+  }
+
+  function controlsExpandedForScript(scriptId) {
+    if (expandedScriptAudioControlsById[scriptId] === true) return true;
+    if (expandedScriptAudioControlsById[scriptId] === false) return false;
+    try {
+      var v = localStorage.getItem(controlsStorageKey(scriptId));
+      if (v === "0") return false;
+      if (v === "1") return true;
+    } catch (_e) {}
+    return true;
+  }
+
+  function setScriptControlsExpanded(scriptId, expanded) {
+    expandedScriptAudioControlsById[scriptId] = expanded;
+    try {
+      localStorage.setItem(controlsStorageKey(scriptId), expanded ? "1" : "0");
+    } catch (_e) {}
+  }
+
+  function toggleScriptControlsExpanded(scriptId) {
+    setScriptControlsExpanded(scriptId, !controlsExpandedForScript(scriptId));
+    renderScripts(currentScripts);
+  }
+
+  function allScriptsAudioControlsExpanded(ids) {
+    if (!ids.length) return true;
+    return ids.every(function (id) {
+      return controlsExpandedForScript(id);
+    });
+  }
+
+  function toggleExpandAllLibraryAudioControls() {
+    var ids = currentScripts.map(function (s) {
+      return s.id;
+    });
+    var next = !allScriptsAudioControlsExpanded(ids);
+    ids.forEach(function (id) {
+      setScriptControlsExpanded(id, next);
+    });
+    renderScripts(currentScripts);
+  }
+
+  function updateLibraryExpandAllToggleUi() {
+    var btn = document.getElementById("library-expand-all-toggle");
+    if (!btn) return;
+    var ids = currentScripts.map(function (s) {
+      return s.id;
+    });
+    if (!ids.length) {
+      btn.disabled = true;
+      btn.textContent = "▼";
+      btn.setAttribute("aria-expanded", "true");
+      return;
+    }
+    btn.disabled = false;
+    var allExp = allScriptsAudioControlsExpanded(ids);
+    btn.textContent = allExp ? "▲" : "▼";
+    btn.setAttribute("aria-expanded", allExp ? "true" : "false");
+  }
+
   function setScriptBusy(scriptId, busy) {
     generatingAudioByScriptId[scriptId] = busy;
     renderScripts(currentScripts);
@@ -2973,21 +3175,97 @@
     return generatingAudioByScriptId[scriptId] === true;
   }
 
-  function scriptCardHtml(script) {
+  function scriptCardHtml(script, contentHashHex) {
     var plainText = script.text && script.text.trim() ? script.text : "(No text yet)";
     var isExpanded = expandedScriptTextById[script.id] === true;
     var isBusy = isScriptBusy(script.id);
     var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
     var playingThis = activeAudioScriptId === script.id && activeAudio && !activeAudio.paused;
-    var scriptVoiceID = (script.voiceID || "").trim() || selectedVoiceId;
-    var scriptBackgroundID = (script.backgroundID || "").trim() || selectedBackgroundId;
+    var scriptVoiceID = effectiveVoiceIdForScript(script);
+    var scriptBackgroundID = effectiveBackgroundIdForScript(script);
+    var controlsExpanded = controlsExpandedForScript(script.id);
+    var genEnabled = shouldEnableGenerateFromHash(script, contentHashHex);
+    var genLabel = isBusy ? "Generating audio..." : hasAudio ? "Regenerate" : "Generate";
+    var genClasses = "app-btn";
+    if (isBusy) {
+      genClasses += " app-btn-secondary";
+    } else if (!genEnabled) {
+      genClasses += " app-btn-secondary app-btn-generate-muted";
+    } else if (hasAudio) {
+      genClasses += " app-btn-generate-warn";
+    } else {
+      genClasses += " app-btn-generate-fresh";
+    }
+    var genDisabled = isBusy || !genEnabled;
+    var chevChar = controlsExpanded ? "▲" : "▼";
+    var audioSection = controlsExpanded
+      ? '<div class="script-card-audio-section">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
+        '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
+        escapeHtml(script.id) +
+        '" data-script-media-field="voice" style="text-align:left;">Voice: ' +
+        escapeHtml(voiceNameById(scriptVoiceID)) +
+        "</button>" +
+        '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
+        escapeHtml(script.id) +
+        '" data-script-media-field="background" style="text-align:left;">Background: ' +
+        escapeHtml(backgroundNameById(scriptBackgroundID)) +
+        "</button>" +
+        "</div>" +
+        '<div class="app-card-actions">' +
+        '  <button type="button" class="app-btn app-btn-secondary" data-action="toggle-text" data-script-id="' +
+        escapeHtml(script.id) +
+        '">' +
+        (isExpanded ? "Hide Text" : "Show Text") +
+        "</button>" +
+        '  <button type="button" class="' +
+        genClasses +
+        '" data-action="generate-audio" data-script-id="' +
+        escapeHtml(script.id) +
+        '"' +
+        (genDisabled ? " disabled" : "") +
+        ">" +
+        genLabel +
+        "</button>" +
+        '  <button type="button" class="app-btn app-btn-secondary" data-action="play-audio" data-script-id="' +
+        escapeHtml(script.id) +
+        '"' +
+        (!hasAudio || isBusy ? " disabled" : "") +
+        ">" +
+        (playingThis ? "Pause" : "Play") +
+        "</button>" +
+        '  <button type="button" class="app-btn app-btn-secondary" data-action="edit" data-script-id="' +
+        escapeHtml(script.id) +
+        '">Edit</button>' +
+        '  <button type="button" class="app-btn app-btn-ghost" data-action="add-to-playlist" data-script-id="' +
+        escapeHtml(script.id) +
+        '"' +
+        (!currentPlaylists.length ? " disabled" : "") +
+        ">Add to Playlist</button>" +
+        '  <button type="button" class="app-btn app-btn-danger" data-action="delete" data-script-id="' +
+        escapeHtml(script.id) +
+        '">Delete</button>' +
+        "</div>" +
+        "</div>"
+      : "";
     return (
       '<article class="app-card" data-script-id="' +
       escapeHtml(script.id) +
       '">' +
+      '<div class="app-card-header-row">' +
       "<h3>" +
       escapeHtml(script.title || "Untitled Script") +
       "</h3>" +
+      '  <button type="button" class="library-card-chevron" data-action="toggle-controls" data-script-id="' +
+      escapeHtml(script.id) +
+      '" aria-expanded="' +
+      (controlsExpanded ? "true" : "false") +
+      '" title="' +
+      (controlsExpanded ? "Collapse audio controls" : "Expand audio controls") +
+      '">' +
+      chevChar +
+      "</button>" +
+      "</div>" +
       '<div class="app-card-meta-row">' +
       '<div class="app-card-meta">Created: ' +
       escapeHtml(formatDate(script.createdAt)) +
@@ -2997,50 +3275,10 @@
       (isExpanded
         ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>"
         : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
-      '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
-      escapeHtml(script.id) +
-      '" data-script-media-field="voice" style="text-align:left;">Voice: ' +
-      escapeHtml(voiceNameById(scriptVoiceID)) +
-      "</button>" +
-      '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
-      escapeHtml(script.id) +
-      '" data-script-media-field="background" style="text-align:left;">Background: ' +
-      escapeHtml(backgroundNameById(scriptBackgroundID)) +
-      "</button>" +
-      "</div>" +
-      '<div class="app-card-actions">' +
-      '  <button type="button" class="app-btn app-btn-secondary" data-action="toggle-text" data-script-id="' +
-      escapeHtml(script.id) +
-      '">' +
-      (isExpanded ? "Hide Text" : "Show Text") +
-      "</button>" +
-      '  <button type="button" class="app-btn app-btn-primary" data-action="generate-audio" data-script-id="' +
-      escapeHtml(script.id) +
-      '"' +
-      (isBusy ? " disabled" : "") +
-      ">" +
-      (isBusy ? "Generating audio..." : "Generate Audio") +
-      "</button>" +
-      '  <button type="button" class="app-btn app-btn-secondary" data-action="play-audio" data-script-id="' +
-      escapeHtml(script.id) +
-      '"' +
-      (!hasAudio || isBusy ? " disabled" : "") +
-      ">" +
-      (playingThis ? "Pause" : "Play") +
-      "</button>" +
-      '  <button type="button" class="app-btn app-btn-secondary" data-action="edit" data-script-id="' +
-      escapeHtml(script.id) +
-      '">Edit</button>' +
-      '  <button type="button" class="app-btn app-btn-ghost" data-action="add-to-playlist" data-script-id="' +
-      escapeHtml(script.id) +
-      '"' +
-      (!currentPlaylists.length ? " disabled" : "") +
-      ">Add to Playlist</button>" +
-      '  <button type="button" class="app-btn app-btn-danger" data-action="delete" data-script-id="' +
-      escapeHtml(script.id) +
-      '">Delete</button>' +
-      "</div>" +
+      (!controlsExpanded
+        ? '<p class="app-muted" style="font-size:0.82rem;margin:0.35rem 0 0;">Tap the chevron for voice, generate, edit, and more.</p>'
+        : "") +
+      audioSection +
       "</article>"
     );
   }
@@ -3059,6 +3297,8 @@
         if (action === "toggle-text") {
           expandedScriptTextById[script.id] = expandedScriptTextById[script.id] !== true;
           renderScripts(currentScripts);
+        } else if (action === "toggle-controls") {
+          toggleScriptControlsExpanded(script.id);
         } else if (action === "edit") {
           openEditor(script);
         } else if (action === "delete") {
@@ -3301,16 +3541,30 @@
     if (!list) return;
     if (!scripts.length) {
       list.innerHTML =
-        '<div class="app-empty-hint">No scripts yet. Tap <strong>+ New Script</strong> to create one, or use the <strong>Home</strong> tab flow to generate a personalized mental script and auto-save it here.</div>';
+        '<div class="app-empty-hint">No scripts yet. Use <strong>New</strong> or <strong>Import Audio</strong> in the toolbar, or use the <strong>Home</strong> tab flow to generate a personalized mental script and auto-save it here.</div>';
+      updateLibraryExpandAllToggleUi();
       return;
     }
+    var gen = ++scriptsRenderGeneration;
     var nextExpanded = {};
     scripts.forEach(function (s) {
       if (expandedScriptTextById[s.id] === true) nextExpanded[s.id] = true;
     });
     expandedScriptTextById = nextExpanded;
-    list.innerHTML = scripts.map(scriptCardHtml).join("");
-    bindScriptCardActions(scripts);
+    Promise.all(
+      scripts.map(function (s) {
+        return scriptContentSha256Hex(scriptDigestSourceFromScript(s));
+      })
+    ).then(function (hashes) {
+      if (gen !== scriptsRenderGeneration) return;
+      list.innerHTML = scripts
+        .map(function (s, i) {
+          return scriptCardHtml(s, hashes[i]);
+        })
+        .join("");
+      bindScriptCardActions(scripts);
+      updateLibraryExpandAllToggleUi();
+    });
   }
 
   function openEditor(script) {
@@ -3602,56 +3856,123 @@
       setMessage("Script text is empty. Add text before generating audio.", "error");
       return;
     }
-    setScriptBusy(script.id, true);
-    setMessage('Submitting audio job for "' + script.title + '"...', "");
+    scriptContentSha256Hex(scriptDigestSourceFromScript(script)).then(function (hex) {
+      if (!shouldEnableGenerateFromHash(script, hex)) {
+        setMessage("Audio already matches this script, voice, and background.", "");
+        return;
+      }
+      setScriptBusy(script.id, true);
+      setMessage('Submitting audio job for "' + script.title + '"...', "");
 
-    currentUser
-      .getIdToken(true)
-      .then(function (token) {
-        var payload = {
-          scriptId: script.id,
-          text: text,
-          scriptTitle: script.title || "Untitled Script",
-          voiceID:
-            script.voiceID && script.voiceID !== "default"
-              ? script.voiceID
-              : selectedVoiceId,
-          backgroundID: script.backgroundID || selectedBackgroundId || "",
-          createdAt:
-            script.createdAt && typeof script.createdAt.toDate === "function"
-              ? script.createdAt.toDate().getTime() / 1000
-              : Date.now() / 1000,
+      currentUser
+        .getIdToken(true)
+        .then(function (token) {
+          var payload = {
+            scriptId: script.id,
+            text: text,
+            scriptTitle: script.title || "Untitled Script",
+            voiceID: effectiveVoiceIdForScript(script),
+            backgroundID: effectiveBackgroundIdForScript(script),
+            createdAt:
+              script.createdAt && typeof script.createdAt.toDate === "function"
+                ? script.createdAt.toDate().getTime() / 1000
+                : Date.now() / 1000,
+          };
+          return backendRequest("/audio-jobs", token, payload).then(function (json) {
+            if (!json || json.ok !== true || !json.jobId) {
+              throw new Error("Audio job did not return a job id.");
+            }
+            return { token: token, jobId: json.jobId };
+          });
+        })
+        .then(function (ctx) {
+          return waitForAudioJob(script, ctx.jobId);
+        })
+        .then(function (result) {
+          var vId = effectiveVoiceIdForScript(script);
+          var bId = effectiveBackgroundIdForScript(script);
+          var digestSource = {
+            text: (script && script.text) || "",
+            voiceID: vId,
+            backgroundID: bId,
+          };
+          return scriptContentSha256Hex(digestSource).then(function (digest) {
+            return scriptCollection(currentUser.uid)
+              .doc(script.id)
+              .set(
+                {
+                  audioURL: result.audioURL,
+                  audioCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                  voiceID: vId,
+                  backgroundID: bId,
+                },
+                { merge: true }
+              )
+              .then(function () {
+                setStoredGeneratedHash(script.id, digest);
+                setMessage('Audio generated for "' + script.title + '".', "success");
+              });
+          });
+        })
+        .catch(function (e) {
+          setMessage(e.message || "Audio generation failed.", "error");
+        })
+        .finally(function () {
+          setScriptBusy(script.id, false);
+        });
+    }).catch(function (e) {
+      setMessage((e && e.message) || "Could not verify script state.", "error");
+    });
+  }
+
+  function importScriptAudioFromFile(file) {
+    if (!currentUser || !file) return;
+    if (typeof firebase.storage !== "function") {
+      setMessage("Firebase Storage is not loaded. Refresh the page and try again.", "error");
+      return;
+    }
+    var uid = currentUser.uid;
+    var baseTitle = (file.name || "").replace(/\.[^/.]+$/, "").trim() || "Imported audio";
+    var safe = (file.name || "audio").replace(/[^\w.\-]+/g, "_").slice(0, 80);
+    if (!safe) safe = "import";
+    var path = "users/" + uid + "/audios/web-import-" + Date.now() + "-" + safe;
+    setMessage("Uploading imported audio...", "");
+    var ref = firebase.storage().ref(path);
+    ref
+      .put(file, { contentType: file.type || "audio/mpeg" })
+      .then(function (snap) {
+        return snap.ref.getDownloadURL();
+      })
+      .then(function (url) {
+        var vId = (selectedVoiceId || "").trim();
+        var bId = (selectedBackgroundId || "").trim() || "bg-none";
+        var docRef = scriptCollection(uid).doc();
+        var newScript = {
+          title: baseTitle.slice(0, 120),
+          text: "",
+          createdAt: firebase.firestore.Timestamp.now(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          audioURL: url,
+          voiceID: vId,
+          backgroundID: bId,
+          audioCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          categoryID: "",
         };
-        return backendRequest("/audio-jobs", token, payload).then(function (json) {
-          if (!json || json.ok !== true || !json.jobId) {
-            throw new Error("Audio job did not return a job id.");
-          }
-          return { token: token, jobId: json.jobId };
+        return docRef.set(newScript).then(function () {
+          return scriptContentSha256Hex({
+            text: "",
+            voiceID: vId,
+            backgroundID: bId,
+          }).then(function (digest) {
+            setStoredGeneratedHash(docRef.id, digest);
+            setMessage('Imported "' + newScript.title + '" to My Library.', "success");
+            closeLibraryCreateMenu();
+          });
         });
       })
-      .then(function (ctx) {
-        return waitForAudioJob(script, ctx.jobId);
-      })
-      .then(function (result) {
-        return scriptCollection(currentUser.uid)
-          .doc(script.id)
-          .set(
-            {
-              audioURL: result.audioURL,
-              audioCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          )
-          .then(function () {
-            setMessage('Audio generated for "' + script.title + '".', "success");
-          });
-      })
       .catch(function (e) {
-        setMessage(e.message || "Audio generation failed.", "error");
-      })
-      .finally(function () {
-        setScriptBusy(script.id, false);
+        setMessage(e.message || "Could not import audio file.", "error");
       });
   }
 

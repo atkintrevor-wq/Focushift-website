@@ -149,6 +149,136 @@
     }
     .app-card-text { white-space: pre-wrap; margin: 0; line-height: 1.52; }
     .app-card-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .app-card-header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .app-card-header-row h3 { margin: 0; flex: 1; min-width: 0; }
+    .library-card-chevron {
+      flex-shrink: 0;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.05);
+      color: var(--muted, #9bb0d0);
+      cursor: pointer;
+      font-size: 0.85rem;
+      line-height: 1;
+      padding: 0;
+    }
+    .library-card-chevron:hover { border-color: rgba(96,165,250,0.55); color: #93c5fd; }
+    .library-toolbar-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.55rem;
+      margin: 0.2rem 0 0.85rem;
+      flex-wrap: wrap;
+    }
+    #library-segmented-tabs {
+      flex: 1 1 200px;
+      min-width: 0;
+      margin-bottom: 0;
+    }
+    .library-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .library-dual-btn {
+      display: inline-flex;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(37, 99, 235, 0.9);
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+    }
+    .library-dual-btn-main {
+      border: none;
+      background: #2563eb;
+      color: #fff;
+      padding: 0 0.62rem;
+      min-height: 32px;
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+      letter-spacing: 0.01em;
+    }
+    .library-dual-btn-main:hover { filter: brightness(1.06); }
+    .library-dual-btn-menu {
+      border: none;
+      border-left: 1px solid rgba(255, 255, 255, 0.35);
+      background: #2563eb;
+      color: #fff;
+      width: 38px;
+      min-height: 32px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      line-height: 1;
+    }
+    .library-dual-btn-menu:hover { filter: brightness(1.06); }
+    .library-create-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      right: 44px;
+      min-width: 11.5rem;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(18, 26, 42, 0.98);
+      box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+      z-index: 40;
+      padding: 0.25rem;
+    }
+    .library-dropdown-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      border: none;
+      border-radius: 8px;
+      background: transparent;
+      color: inherit;
+      padding: 0.55rem 0.65rem;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .library-dropdown-item:hover { background: rgba(255,255,255,0.08); }
+    .library-chevron-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.07);
+      color: #60a5fa;
+      cursor: pointer;
+      font-size: 0.95rem;
+      line-height: 1;
+      padding: 0;
+      flex-shrink: 0;
+    }
+    .library-chevron-btn:hover { border-color: rgba(96,165,250,0.55); }
+    .library-chevron-btn:disabled {
+      opacity: 0.45;
+      cursor: default;
+    }
+    .app-btn-generate-warn {
+      background: linear-gradient(180deg, #facc15, #ca8a04) !important;
+      border-color: rgba(253, 224, 71, 0.85) !important;
+      color: #111827 !important;
+    }
+    .app-btn-generate-warn:hover { filter: brightness(1.04); }
+    .app-btn-generate-muted {
+      opacity: 0.55 !important;
+      filter: grayscale(0.85);
+      cursor: default !important;
+    }
+    .app-btn-generate-fresh {
+      background: linear-gradient(180deg, rgba(16, 185, 129, 0.55), rgba(5, 150, 105, 0.42)) !important;
+      border-color: rgba(52, 211, 153, 0.75) !important;
+    }
     .app-form { margin: 1rem 0; }
     .app-form label {
       display: block;
@@ -644,6 +774,19 @@
       .app-shell {
         padding: 1rem 0.7rem 4.8rem;
       }
+      .library-toolbar-row {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #library-segmented-tabs {
+        flex: 1 1 auto;
+      }
+      .library-toolbar-actions {
+        justify-content: flex-end;
+      }
+      .library-create-dropdown {
+        right: 0;
+      }
       .app-toolbar {
         gap: 0.45rem;
       }
@@ -766,7 +909,8 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=52"></script>
+  <script src="app.js?v=53"></script>
 </body>
 </html>
