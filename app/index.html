@@ -379,6 +379,16 @@
       gap: 0.6rem;
       margin-bottom: 0.45rem;
     }
+    .voice-recording-guide-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    #voice-recording-toggle {
+      min-height: 30px;
+      padding: 0.38rem 0.62rem;
+      font-size: 0.8rem;
+    }
     .voice-recording-guide-time {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       color: #fecaca;
@@ -520,6 +530,10 @@
       .voice-recording-guide-head {
         align-items: flex-start;
       }
+      .voice-recording-guide-controls {
+        width: 100%;
+        justify-content: space-between;
+      }
       .voice-recording-guide-time {
         font-size: 0.8rem;
         padding: 0.1rem 0.45rem 0.12rem;
@@ -541,6 +555,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=39"></script>
+  <script src="app.js?v=40"></script>
 </body>
 </html>

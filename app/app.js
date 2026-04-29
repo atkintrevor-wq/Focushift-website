@@ -42,6 +42,7 @@
   var activeVoiceRecorderChunks = [];
   var activeVoiceRecordingTimer = null;
   var activeVoiceRecordingStartedAt = 0;
+  var hasVoiceCloneConsent = false;
   var activeVoiceScriptParagraphIndex = -1;
   var voiceCloneReadScript =
     "Hello, this is my voice sample for cloning. I'm speaking naturally and clearly, just like I would in a normal conversation with a friend.\n\n" +
@@ -277,6 +278,7 @@
   }
 
   function renderSignedOut() {
+    hasVoiceCloneConsent = false;
     stopVoiceRecording();
     stopVoiceRecorderStream();
     setVoiceRecordingGuideVisible(false);
@@ -288,6 +290,7 @@
   }
 
   function renderNonAdmin(email, displayName) {
+    hasVoiceCloneConsent = false;
     stopVoiceRecording();
     stopVoiceRecorderStream();
     setVoiceRecordingGuideVisible(false);
@@ -374,7 +377,10 @@
       '  <div id="voice-recording-guide" class="app-empty-hint voice-recording-guide" style="display:none;margin-top:0;margin-bottom:0.7rem;">' +
       '    <div class="voice-recording-guide-head">' +
       '      <strong>Read this script while recording</strong>' +
-      '      <span id="voice-recording-guide-time" class="voice-recording-guide-time">0:00</span>' +
+      '      <div class="voice-recording-guide-controls">' +
+      '        <span id="voice-recording-guide-time" class="voice-recording-guide-time">0:00</span>' +
+      '        <button type="button" class="app-btn app-btn-secondary" id="voice-recording-toggle">Start Recording</button>' +
+      "      </div>" +
       "    </div>" +
       '    <div class="voice-recording-guide-sub">Speak clearly in a quiet place. Aim for 30s minimum, 1-2 minutes best.</div>' +
       '    <div id="voice-recording-script" class="voice-recording-script"></div>' +
@@ -526,6 +532,27 @@
       "    </div>" +
       "  </div>" +
       "</div>" +
+      '<div id="voice-consent-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice cloning consent">' +
+      "    <h3>Voice Cloning Consent</h3>" +
+      '    <p class="app-muted" style="margin:0 0 0.5rem;">Your voice sample will be processed by ElevenLabs to create your cloned voice. You can delete it at any time.</p>' +
+      '    <div class="app-empty-hint" style="margin-bottom:0.6rem;padding:0.7rem;">' +
+      "      <div><strong>Important:</strong></div>" +
+      "      <div>- Use only your own voice (or explicit permission).</div>" +
+      "      <div>- Record in a quiet place for best quality.</div>" +
+      "      <div>- 30 seconds minimum, 1-2 minutes recommended.</div>" +
+      "    </div>" +
+      '    <label for="voice-consent-check" style="display:flex;align-items:flex-start;gap:0.55rem;cursor:pointer;">' +
+      '      <input id="voice-consent-check" type="checkbox" style="width:auto;margin-top:0.15rem;">' +
+      '      <span>I understand and consent to voice cloning and third-party processing for this feature.</span>' +
+      "    </label>" +
+      '    <div id="voice-consent-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="voice-consent-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn" id="voice-consent-continue" disabled>Continue</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
       '<p class="auth-back"><a href="/">← Marketing site</a></p>';
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
@@ -623,12 +650,31 @@
       beginVoiceUploadFlow("clone");
     });
     document.getElementById("btn-voice-record").addEventListener("click", function () {
-      toggleVoiceRecording();
+      openCloneVoiceGuide();
     });
     document.getElementById("voice-upload-input").addEventListener("change", function (ev) {
       handleVoiceFileSelected(ev);
     });
+    document.getElementById("voice-recording-toggle").addEventListener("click", function () {
+      toggleVoiceRecording();
+    });
     renderVoiceRecordingScript(-1);
+    document.getElementById("voice-consent-cancel").addEventListener("click", function () {
+      closeVoiceConsentModal();
+    });
+    document.getElementById("voice-consent-backdrop").addEventListener("click", function (ev) {
+      if (ev.target && ev.target.id === "voice-consent-backdrop") {
+        closeVoiceConsentModal();
+      }
+    });
+    document.getElementById("voice-consent-check").addEventListener("change", function () {
+      var checked = !!document.getElementById("voice-consent-check").checked;
+      var btn = document.getElementById("voice-consent-continue");
+      if (btn) btn.disabled = !checked;
+    });
+    document.getElementById("voice-consent-continue").addEventListener("click", function () {
+      acceptVoiceCloneConsentAndContinue();
+    });
     document.getElementById("media-picker-cancel").addEventListener("click", function () {
       closeMediaPicker();
     });
@@ -1243,6 +1289,81 @@
     el.textContent = text || "";
   }
 
+  function setVoiceConsentMessage(text, kind) {
+    var el = document.getElementById("voice-consent-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function closeVoiceConsentModal() {
+    var backdrop = document.getElementById("voice-consent-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    setVoiceConsentMessage("", "");
+  }
+
+  function openVoiceConsentModal() {
+    var backdrop = document.getElementById("voice-consent-backdrop");
+    var check = document.getElementById("voice-consent-check");
+    var btn = document.getElementById("voice-consent-continue");
+    if (!backdrop || !check || !btn) return;
+    check.checked = false;
+    btn.disabled = true;
+    setVoiceConsentMessage("", "");
+    backdrop.hidden = false;
+  }
+
+  function openCloneVoiceGuideInternal() {
+    setVoiceRecordingGuideVisible(true);
+    setVoiceRecordButtonState(false);
+    setVoicesMessage("Review the script, then tap Start Recording when ready.", "");
+  }
+
+  function ensureVoiceCloneConsentThen(action) {
+    if (hasVoiceCloneConsent) {
+      if (typeof action === "function") action();
+      return;
+    }
+    openVoiceConsentModal();
+  }
+
+  function openCloneVoiceGuide() {
+    ensureVoiceCloneConsentThen(function () {
+      openCloneVoiceGuideInternal();
+    });
+  }
+
+  function acceptVoiceCloneConsentAndContinue() {
+    if (!currentUser) return;
+    var check = document.getElementById("voice-consent-check");
+    if (!check || !check.checked) {
+      setVoiceConsentMessage("Please check consent to continue.", "error");
+      return;
+    }
+    setVoiceConsentMessage("Saving consent...", "");
+    db
+      .collection("users")
+      .doc(currentUser.uid)
+      .set(
+        {
+          voiceCloneConsentAcceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      .then(function () {
+        hasVoiceCloneConsent = true;
+        currentUserProfile = Object.assign({}, currentUserProfile || {}, {
+          voiceCloneConsentAcceptedAt: new Date().toISOString(),
+        });
+        closeVoiceConsentModal();
+        openCloneVoiceGuideInternal();
+      })
+      .catch(function (e) {
+        setVoiceConsentMessage(e.message || "Could not save consent.", "error");
+      });
+  }
+
   function voiceScriptParagraphs() {
     return String(voiceCloneReadScript || "")
       .split(/\n\s*\n/)
@@ -1312,6 +1433,7 @@
       if (timeEl) timeEl.textContent = "0:00";
       activeVoiceScriptParagraphIndex = -1;
       renderVoiceRecordingScript(-1);
+      setVoiceRecordButtonState(false);
     }
   }
 
@@ -1348,9 +1470,9 @@
   }
 
   function setVoiceRecordButtonState(isRecording) {
-    var btn = document.getElementById("btn-voice-record");
+    var btn = document.getElementById("voice-recording-toggle");
     if (!btn) return;
-    btn.textContent = isRecording ? "Stop Recording" : "Clone Voice";
+    btn.textContent = isRecording ? "Stop Recording" : "Start Recording";
     btn.classList.toggle("app-btn-danger", !!isRecording);
     btn.classList.toggle("app-btn-secondary", !isRecording);
   }
@@ -1384,7 +1506,6 @@
           if (!blob || !blob.size) {
             setVoicesMessage("No audio captured. Please try again.", "error");
             setVoiceRecordingStatus("", "");
-            setVoiceRecordingGuideVisible(false);
             return;
           }
           setVoiceRecordingStatus("Recording captured. Uploading sample...", "");
@@ -1398,7 +1519,6 @@
           setVoiceRecordButtonState(false);
           setVoicesMessage("Recording failed. Please try again.", "error");
           setVoiceRecordingStatus("", "");
-          setVoiceRecordingGuideVisible(false);
         };
         recorder.start();
         setVoiceRecordButtonState(true);
@@ -1409,7 +1529,6 @@
       .catch(function (e) {
         setVoicesMessage((e && e.message) || "Microphone access was denied.", "error");
         setVoiceRecordingStatus("", "");
-        setVoiceRecordingGuideVisible(false);
       });
   }
 
@@ -1424,7 +1543,6 @@
       endVoiceRecordingTicker();
       setVoiceRecordButtonState(false);
       setVoiceRecordingStatus("", "");
-      setVoiceRecordingGuideVisible(false);
     }
   }
 
@@ -1511,7 +1629,6 @@
       })
       .catch(function (e) {
         setVoicesMessage(e.message || "Could not create voice.", "error");
-        setVoiceRecordingGuideVisible(false);
       });
   }
 
@@ -3632,6 +3749,7 @@
           if (savedTab) activeAdminTab = savedTab;
         } catch (_e) {}
         currentUserProfile = snap.exists ? snap.data() || {} : {};
+        hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
         var profileVoiceID = (currentUserProfile.defaultVoiceID || "").trim();
         if (
           profileVoiceID &&
