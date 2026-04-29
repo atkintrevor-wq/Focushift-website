@@ -381,7 +381,7 @@
       '<section class="app-card" aria-label="Voice settings">' +
       '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Voices</h2>' +
       '  <p class="app-muted" style="margin-top:0;">Choose from App Voices or manage My Voices (saved + cloned), then set defaults.</p>' +
-      '  <div class="app-tabs" style="margin-top:0.5rem;">' +
+      '  <div class="app-tabs voice-segmented-tabs" style="margin-top:0.5rem;">' +
       '    <button type="button" class="app-tab-btn" id="voices-tab-my" data-voices-tab="my-voices">My Voices</button>' +
       '    <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
       "  </div>" +
@@ -390,15 +390,6 @@
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Clone Voice</button>' +
       "  </div>" +
       '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.35rem;">Use <strong>Upload Voice Audio</strong> for an existing file, or <strong>Clone Voice</strong> to record a guided sample in-browser.</p>' +
-      '  <div class="app-empty-hint" style="border-style:solid;padding:0.65rem;margin-top:0;margin-bottom:0.55rem;">' +
-      '    <div style="display:flex;flex-direction:column;gap:0.2rem;">' +
-      '      <div class="app-muted"><strong>Recording tips</strong></div>' +
-      '      <div class="app-muted">- Record 1-2 minutes of clear speech</div>' +
-      '      <div class="app-muted">- Speak naturally at a consistent volume</div>' +
-      '      <div class="app-muted">- Minimize background noise</div>' +
-      '      <div class="app-muted">- Supported formats: MP3, WAV, M4A (upload)</div>' +
-      "    </div>" +
-      "  </div>" +
       '  <div id="voice-recording-status" class="app-inline-msg" style="margin-top:0;margin-bottom:0.6rem;"></div>' +
       '  <div id="voice-recording-guide" class="app-empty-hint voice-recording-guide" style="display:none;margin-top:0;margin-bottom:0.7rem;">' +
       '    <div class="voice-recording-guide-head">' +
@@ -406,9 +397,19 @@
       '      <div class="voice-recording-guide-controls">' +
       '        <span id="voice-recording-guide-time" class="voice-recording-guide-time">0:00</span>' +
       '        <button type="button" class="app-btn app-btn-secondary" id="voice-recording-toggle">Start Recording</button>' +
+      '        <button type="button" class="app-btn app-btn-ghost" id="voice-recording-cancel">Cancel</button>' +
       "      </div>" +
       "    </div>" +
       '    <div class="voice-recording-guide-sub">Speak clearly in a quiet place. Aim for 30s minimum, 1-2 minutes best.</div>' +
+      '    <div class="app-empty-hint" style="border-style:solid;padding:0.65rem;margin:0 0 0.55rem;">' +
+      '      <div style="display:flex;flex-direction:column;gap:0.2rem;">' +
+      '        <div class="app-muted"><strong>Recording tips</strong></div>' +
+      '        <div class="app-muted">- Record 1-2 minutes of clear speech</div>' +
+      '        <div class="app-muted">- Speak naturally at a consistent volume</div>' +
+      '        <div class="app-muted">- Minimize background noise</div>' +
+      '        <div class="app-muted">- Supported formats: MP3, WAV, M4A (upload)</div>' +
+      "      </div>" +
+      "    </div>" +
       '    <div id="voice-recording-script" class="voice-recording-script"></div>' +
       '    <div id="voice-recording-review" style="display:none;margin-top:0.6rem;">' +
       '      <div class="app-empty-hint" style="border-style:solid;padding:0.62rem;">' +
@@ -785,6 +786,9 @@
         renderVoices();
       });
     });
+    window.onresize = function () {
+      syncVoiceSegmentedPill();
+    };
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
       setVoicesMessage("Choose a clear voice audio file to upload.", "");
       beginVoiceUploadFlow("clone");
@@ -797,6 +801,9 @@
     });
     document.getElementById("voice-recording-toggle").addEventListener("click", function () {
       toggleVoiceRecording();
+    });
+    document.getElementById("voice-recording-cancel").addEventListener("click", function () {
+      cancelCloneVoiceGuide();
     });
     document.getElementById("voice-recording-play").addEventListener("click", function () {
       togglePlayRecordedSample();
@@ -1278,6 +1285,7 @@
     var tabApp = document.getElementById("voices-tab-app");
     if (tabMy) tabMy.classList.toggle("is-active", activeVoicesTab === "my-voices");
     if (tabApp) tabApp.classList.toggle("is-active", activeVoicesTab === "app-voices");
+    syncVoiceSegmentedPill();
 
     var savedAppVoiceIDs = Array.isArray((currentUserProfile || {}).savedAppVoiceIDs)
       ? (currentUserProfile || {}).savedAppVoiceIDs
@@ -1406,6 +1414,19 @@
         deleteClonedVoice(voiceID);
       });
     });
+  }
+
+  function syncVoiceSegmentedPill() {
+    var wrap = document.querySelector(".voice-segmented-tabs");
+    if (!wrap) return;
+    var activeBtn = wrap.querySelector(".app-tab-btn.is-active");
+    if (!activeBtn) return;
+    wrap.style.setProperty("--voice-pill-x", activeBtn.offsetLeft + "px");
+    wrap.style.setProperty("--voice-pill-w", activeBtn.offsetWidth + "px");
+    wrap.classList.add("is-ready");
+    wrap.classList.remove("is-pulsing");
+    void wrap.offsetWidth;
+    wrap.classList.add("is-pulsing");
   }
 
   function allVoiceOptionsForSelection() {
@@ -2086,6 +2107,15 @@
       setVoiceRecordButtonState(false);
       setVoiceRecordingStatus("", "");
     }
+  }
+
+  function cancelCloneVoiceGuide() {
+    if (activeVoiceRecorder) {
+      stopVoiceRecording();
+    }
+    setVoiceRecordingStatus("", "");
+    setVoicesMessage("Clone voice cancelled.", "");
+    setVoiceRecordingGuideVisible(false);
   }
 
   function toggleVoiceRecording() {

@@ -194,6 +194,53 @@
       background: rgba(37, 99, 235, 0.2);
       border-color: #2563eb;
     }
+    .voice-segmented-tabs {
+      display: inline-flex;
+      gap: 0.2rem;
+      padding: 0.22rem;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(255,255,255,0.04);
+      margin-bottom: 0.45rem;
+      position: relative;
+      --voice-pill-x: 0px;
+      --voice-pill-w: 0px;
+    }
+    .voice-segmented-tabs::before {
+      content: "";
+      position: absolute;
+      top: 0.22rem;
+      left: 0;
+      width: var(--voice-pill-w);
+      height: calc(100% - 0.44rem);
+      transform: translateX(var(--voice-pill-x));
+      border-radius: 10px;
+      background: rgba(59,130,246,0.2);
+      border: 1px solid rgba(147,197,253,0.65);
+      box-shadow: inset 0 0 0 1px rgba(147,197,253,0.3);
+      opacity: 0;
+      transition: transform 220ms ease, width 220ms ease, opacity 150ms ease;
+      pointer-events: none;
+    }
+    .voice-segmented-tabs.is-pulsing::before {
+      animation: voice-pill-pulse 220ms ease-out;
+    }
+    .voice-segmented-tabs.is-ready::before { opacity: 1; }
+    .voice-segmented-tabs .app-tab-btn {
+      min-height: 34px;
+      border-radius: 10px;
+      padding: 0.38rem 0.72rem;
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+      position: relative;
+      z-index: 1;
+    }
+    .voice-segmented-tabs .app-tab-btn.is-active {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+    }
     .app-section[hidden] { display: none !important; }
     .app-tab-count {
       font-size: 0.78rem;
@@ -389,6 +436,11 @@
       padding: 0.38rem 0.62rem;
       font-size: 0.8rem;
     }
+    #voice-recording-cancel {
+      min-height: 30px;
+      padding: 0.38rem 0.62rem;
+      font-size: 0.8rem;
+    }
     .voice-recording-guide-time {
       font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
       color: #fecaca;
@@ -569,6 +621,10 @@
       70% { box-shadow: 0 0 0 8px rgba(248, 113, 113, 0); }
       100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
     }
+    @keyframes voice-pill-pulse {
+      0% { transform: translateX(var(--voice-pill-x)) scale(0.98); filter: brightness(1.08); }
+      100% { transform: translateX(var(--voice-pill-x)) scale(1); filter: brightness(1); }
+    }
     @keyframes voice-spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
@@ -653,6 +709,7 @@
       .voice-recording-guide-controls {
         width: 100%;
         justify-content: space-between;
+        gap: 0.35rem;
       }
       .voice-recording-guide-time {
         font-size: 0.8rem;
@@ -666,6 +723,13 @@
       .voice-adjust-presets .app-btn {
         flex: 1 1 calc(50% - 0.4rem);
         min-width: 0;
+      }
+      .voice-segmented-tabs {
+        width: 100%;
+        justify-content: stretch;
+      }
+      .voice-segmented-tabs .app-tab-btn {
+        flex: 1 1 50%;
       }
       .voice-adjust-modal .app-modal-actions {
         gap: 0.4rem;
@@ -703,6 +767,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=48"></script>
+  <script src="app.js?v=51"></script>
 </body>
 </html>
