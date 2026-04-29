@@ -37,6 +37,9 @@
   var mediaPickerTarget = null;
   var editingVoiceSettingsId = null;
   var editingVoiceSettingsToken = "";
+  var activeVoiceRecorder = null;
+  var activeVoiceRecorderStream = null;
+  var activeVoiceRecorderChunks = [];
   var activeVoicesTab = "my-voices";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
@@ -264,6 +267,8 @@
   }
 
   function renderSignedOut() {
+    stopVoiceRecording();
+    stopVoiceRecorderStream();
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -272,6 +277,8 @@
   }
 
   function renderNonAdmin(email, displayName) {
+    stopVoiceRecording();
+    stopVoiceRecorderStream();
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -348,9 +355,10 @@
       "  </div>" +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Clone Voice (from sample)</button>' +
+      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Record Voice Sample</button>' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-upload">Upload Voice File</button>' +
       "  </div>" +
-      '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.6rem;">Web clone currently uses an audio sample file (no in-browser mic capture yet).</p>' +
+      '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.6rem;">Clone from a sample file or record directly in your browser.</p>' +
       '  <div id="voices-list"></div>' +
       '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '  <input id="voice-upload-input" type="file" accept="audio/*" style="display:none;" />' +
@@ -593,6 +601,9 @@
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
       setVoicesMessage("Choose a clear voice sample file to clone from.", "");
       beginVoiceUploadFlow("clone");
+    });
+    document.getElementById("btn-voice-record").addEventListener("click", function () {
+      toggleVoiceRecording();
     });
     document.getElementById("btn-voice-upload").addEventListener("click", function () {
       beginVoiceUploadFlow("upload");
@@ -1197,10 +1208,93 @@
     });
   }
 
-  function handleVoiceFileSelected(ev) {
+  function stopVoiceRecorderStream() {
+    if (!activeVoiceRecorderStream) return;
+    try {
+      activeVoiceRecorderStream.getTracks().forEach(function (t) {
+        try { t.stop(); } catch (_e) {}
+      });
+    } catch (_err) {}
+    activeVoiceRecorderStream = null;
+  }
+
+  function setVoiceRecordButtonState(isRecording) {
+    var btn = document.getElementById("btn-voice-record");
+    if (!btn) return;
+    btn.textContent = isRecording ? "Stop Recording" : "Record Voice Sample";
+    btn.classList.toggle("app-btn-danger", !!isRecording);
+    btn.classList.toggle("app-btn-secondary", !isRecording);
+  }
+
+  function startVoiceRecording() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || typeof MediaRecorder === "undefined") {
+      setVoicesMessage("Microphone recording is not supported in this browser.", "error");
+      return;
+    }
+    if (activeVoiceRecorder) return;
+    navigator.mediaDevices
+      .getUserMedia({ audio: true })
+      .then(function (stream) {
+        activeVoiceRecorderStream = stream;
+        activeVoiceRecorderChunks = [];
+        var recorder = new MediaRecorder(stream);
+        activeVoiceRecorder = recorder;
+        recorder.ondataavailable = function (ev) {
+          if (ev && ev.data && ev.data.size > 0) {
+            activeVoiceRecorderChunks.push(ev.data);
+          }
+        };
+        recorder.onstop = function () {
+          var mimeType = recorder.mimeType || "audio/webm";
+          var blob = new Blob(activeVoiceRecorderChunks, { type: mimeType });
+          activeVoiceRecorder = null;
+          activeVoiceRecorderChunks = [];
+          stopVoiceRecorderStream();
+          setVoiceRecordButtonState(false);
+          if (!blob || !blob.size) {
+            setVoicesMessage("No audio captured. Please try again.", "error");
+            return;
+          }
+          handleVoiceRecordedBlob(blob, mimeType);
+        };
+        recorder.onerror = function () {
+          activeVoiceRecorder = null;
+          activeVoiceRecorderChunks = [];
+          stopVoiceRecorderStream();
+          setVoiceRecordButtonState(false);
+          setVoicesMessage("Recording failed. Please try again.", "error");
+        };
+        recorder.start();
+        setVoiceRecordButtonState(true);
+        setVoicesMessage("Recording... tap Stop Recording when done.", "");
+      })
+      .catch(function (e) {
+        setVoicesMessage((e && e.message) || "Microphone access was denied.", "error");
+      });
+  }
+
+  function stopVoiceRecording() {
+    if (!activeVoiceRecorder) return;
+    try {
+      activeVoiceRecorder.stop();
+    } catch (_e) {
+      activeVoiceRecorder = null;
+      activeVoiceRecorderChunks = [];
+      stopVoiceRecorderStream();
+      setVoiceRecordButtonState(false);
+    }
+  }
+
+  function toggleVoiceRecording() {
+    if (activeVoiceRecorder) {
+      stopVoiceRecording();
+    } else {
+      startVoiceRecording();
+    }
+  }
+
+  function uploadVoiceSample(file, mode) {
     if (!currentUser) return;
-    var input = ev && ev.target;
-    var file = input && input.files && input.files[0] ? input.files[0] : null;
     if (!file) return;
     if (!file.type || file.type.indexOf("audio/") !== 0) {
       setVoicesMessage("Please choose an audio file.", "error");
@@ -1211,7 +1305,6 @@
       return;
     }
 
-    var mode = (input && input.getAttribute("data-voice-upload-mode")) || "upload";
     var suggested = mode === "clone" ? "My Cloned Voice" : "My Uploaded Voice";
     var name = window.prompt("Voice name:", suggested);
     if (!name || !name.trim()) {
@@ -1268,11 +1361,28 @@
           })
           .then(function () {
             setVoicesMessage("Voice created and added to My Voices.", "success");
+            renderVoices();
           });
       })
       .catch(function (e) {
         setVoicesMessage(e.message || "Could not create voice.", "error");
       });
+  }
+
+  function handleVoiceRecordedBlob(blob, mimeType) {
+    var extension = (mimeType || "").indexOf("ogg") >= 0 ? "ogg" : "webm";
+    var file = new File([blob], "recorded-voice-sample." + extension, {
+      type: mimeType || "audio/webm",
+    });
+    uploadVoiceSample(file, "clone");
+  }
+
+  function handleVoiceFileSelected(ev) {
+    var input = ev && ev.target;
+    var file = input && input.files && input.files[0] ? input.files[0] : null;
+    if (!file) return;
+    var mode = (input && input.getAttribute("data-voice-upload-mode")) || "upload";
+    uploadVoiceSample(file, mode);
   }
 
   function previewVoiceSample(voice) {
