@@ -237,6 +237,9 @@
   firebase.initializeApp(window.fsFirebaseConfig);
   var auth = firebase.auth();
   var db = firebase.firestore();
+  /** HTTPS callables (e.g. deleteOwnAccount); null if functions compat script missing */
+  var cloudFunctions =
+    typeof firebase.functions === "function" ? firebase.functions() : null;
 
   function escapeHtml(s) {
     return String(s)
@@ -611,7 +614,7 @@
       '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-export-json">Export my data (JSON)</button>' +
       '          <button type="button" class="app-btn app-btn-danger" id="account-privacy-delete-account">Delete account…</button>' +
       "        </div>" +
-      '        <p class="app-muted" style="margin:0 0 0.45rem;">Full account deletion currently runs through the iOS app so every device and local cache is cleaned up consistently.</p>' +
+      '        <p class="app-muted" style="margin:0 0 0.45rem;">You can delete your account from the web (server-side, same cloud cleanup as iOS). Local data on phones or tablets is cleared the next time that app syncs or you remove the app.</p>' +
       '        <p style="margin:0;display:flex;gap:0.5rem;flex-wrap:wrap;">' +
       '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>' +
       '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>' +
@@ -625,6 +628,20 @@
       '          <a class="app-btn app-btn-secondary" href="mailto:support@focusshift.app">Contact support</a>' +
       "        </div>" +
       "      </section>" +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="account-delete-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="account-delete-title">' +
+      '    <h3 id="account-delete-title">Delete account</h3>' +
+      '    <p class="app-muted" style="margin:0 0 0.5rem;">This removes your sign-in and deletes your cloud library (scripts, playlists, cloned voices, and hosted audio). Export first if you need a copy. Other devices signed into this account will lose access.</p>' +
+      '    <p class="app-muted" style="margin:0 0 0.55rem;">This is not the same as canceling a subscription or switching to Free—use subscription management when web billing is available.</p>' +
+      '    <label class="account-pref-row" for="account-delete-phrase">Type <strong>DELETE</strong> to confirm</label>' +
+      '    <input id="account-delete-phrase" type="text" autocomplete="off" placeholder="DELETE" style="width:100%;box-sizing:border-box;margin-bottom:0.45rem;padding:0.55rem;border-radius:10px;">' +
+      '    <div id="account-delete-error" class="app-inline-msg" style="display:none;margin-bottom:0.35rem;"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="account-delete-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn app-btn-danger" id="account-delete-confirm" disabled>Delete permanently</button>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -966,7 +983,10 @@
       refreshSessionToken();
     });
     document.getElementById("account-subscription-manage").addEventListener("click", function () {
-      setAccountMessage("For now, manage subscription changes in the iOS app (Account & Settings).", "");
+      setAccountMessage(
+        "Subscriptions: iOS uses App Store billing today. Web and Android will use a separate payment provider (e.g. Stripe); until that ships, plan changes for web-only accounts may be manual via support or Firebase Console.",
+        ""
+      );
     });
     document.getElementById("account-manage-devices").addEventListener("click", function () {
       setAccountMessage("Device management is currently available in the iOS app. Web mirrors your account counts.", "");
@@ -994,8 +1014,31 @@
       exportWebAccountDataJson();
     });
     document.getElementById("account-privacy-delete-account").addEventListener("click", function () {
-      promptDeleteAccountIos();
+      openAccountDeleteModal();
     });
+    (function bindAccountDeleteModal() {
+      var phraseEl = document.getElementById("account-delete-phrase");
+      var confirmBtn = document.getElementById("account-delete-confirm");
+      var errEl = document.getElementById("account-delete-error");
+      function syncDeletePhrase() {
+        if (!phraseEl || !confirmBtn) return;
+        var ok = phraseEl.value.trim().toUpperCase() === "DELETE";
+        confirmBtn.disabled = !ok;
+      }
+      if (phraseEl) {
+        phraseEl.addEventListener("input", syncDeletePhrase);
+        phraseEl.addEventListener("keyup", syncDeletePhrase);
+      }
+      document.getElementById("account-delete-cancel").addEventListener("click", function () {
+        closeAccountDeleteModal();
+      });
+      document.getElementById("account-delete-backdrop").addEventListener("click", function (ev) {
+        if (ev.target === ev.currentTarget) closeAccountDeleteModal();
+      });
+      document.getElementById("account-delete-confirm").addEventListener("click", function () {
+        runDeleteAccountWeb();
+      });
+    })();
     document.getElementById("btn-account-menu").addEventListener("click", function () {
       openAccountModal();
     });
@@ -3099,14 +3142,96 @@
       });
   }
 
-  function promptDeleteAccountIos() {
-    setPrivacyMessage(
-      "Account deletion is currently completed in the iOS app (Account & Settings → Privacy & Support) so local caches and devices are cleaned up consistently.",
-      ""
-    );
-    window.alert(
-      "To delete your account, please use the iOS app:\nAccount & Settings → Privacy & Support → Delete Account.\n\nIf you need help, tap Contact support in this tab."
-    );
+  function openAccountDeleteModal() {
+    var bd = document.getElementById("account-delete-backdrop");
+    var phraseEl = document.getElementById("account-delete-phrase");
+    var errEl = document.getElementById("account-delete-error");
+    var confirmBtn = document.getElementById("account-delete-confirm");
+    if (!bd || !phraseEl) return;
+    phraseEl.value = "";
+    if (confirmBtn) confirmBtn.disabled = true;
+    if (errEl) {
+      errEl.style.display = "none";
+      errEl.textContent = "";
+    }
+    if (!cloudFunctions && errEl) {
+      errEl.style.display = "block";
+      errEl.textContent =
+        "Firebase Functions client did not load. Ensure firebase-functions-compat.js is on the page, then reload.";
+    }
+    bd.hidden = false;
+    setTimeout(function () {
+      try {
+        phraseEl.focus();
+      } catch (_e) {}
+    }, 80);
+  }
+
+  function closeAccountDeleteModal() {
+    var bd = document.getElementById("account-delete-backdrop");
+    if (bd) bd.hidden = true;
+    var phraseEl = document.getElementById("account-delete-phrase");
+    if (phraseEl) phraseEl.value = "";
+    var errEl = document.getElementById("account-delete-error");
+    if (errEl) {
+      errEl.style.display = "none";
+      errEl.textContent = "";
+    }
+    var confirmBtn = document.getElementById("account-delete-confirm");
+    if (confirmBtn) confirmBtn.disabled = true;
+  }
+
+  function runDeleteAccountWeb() {
+    if (!currentUser) {
+      setPrivacyMessage("You are not signed in.", "error");
+      return;
+    }
+    if (!cloudFunctions) {
+      setPrivacyMessage(
+        "Firebase Functions client is not available. Reload after deploy, or contact support.",
+        "error"
+      );
+      return;
+    }
+    var phraseEl = document.getElementById("account-delete-phrase");
+    var errEl = document.getElementById("account-delete-error");
+    var confirmBtn = document.getElementById("account-delete-confirm");
+    var phrase = (phraseEl && phraseEl.value.trim()) || "";
+    if (phrase.toUpperCase() !== "DELETE") {
+      if (errEl) {
+        errEl.style.display = "block";
+        errEl.textContent = "Type DELETE to confirm.";
+      }
+      return;
+    }
+    if (errEl) {
+      errEl.style.display = "none";
+      errEl.textContent = "";
+    }
+    if (confirmBtn) confirmBtn.disabled = true;
+    var fn = cloudFunctions.httpsCallable("deleteOwnAccount");
+    fn({ confirmationPhrase: phrase })
+      .then(function () {
+        closeAccountDeleteModal();
+        closeAccountModal();
+        return auth.signOut();
+      })
+      .then(function () {
+        redirectLogin();
+      })
+      .catch(function (e) {
+        if (confirmBtn) confirmBtn.disabled = false;
+        var msg = (e && e.message) || (e && e.code) || "Account deletion failed.";
+        if (e && e.code === "functions/not-found") {
+          msg =
+            "Server step not found. Deploy the deleteOwnAccount Cloud Function (see functions/index.js), then try again.";
+        }
+        if (errEl) {
+          errEl.style.display = "block";
+          errEl.textContent = msg;
+        }
+        setPrivacyMessage(msg, "error");
+      });
   }
 
   function updateAccountLastLoginLabel() {
