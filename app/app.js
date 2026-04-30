@@ -30,6 +30,9 @@
   var activeAdminTab = "home";
   var activeLibraryTab = "my-library";
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
+  var PREF_RESUME_ADMIN_KEY = "focusshiftWebPrefResumeAdmin";
+  var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
+  var accountEscapeBound = false;
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
   var publishCategoryId = "confidence";
@@ -358,19 +361,36 @@
 
   function renderAdminShell(email, displayName) {
     root.innerHTML =
-      "<h1>Focus Shift — admin</h1>" +
-      "<p class=\"app-muted\">Signed in as <strong>" +
+      '<header class="app-admin-header">' +
+      '  <div class="app-admin-header-main">' +
+      '    <h1 class="app-admin-title">Focus Shift</h1>' +
+      '    <p class="app-muted app-admin-tagline">Signed in as <strong>' +
       escapeHtml(email || "") +
-      "</strong> (" +
+      "</strong> · " +
       escapeHtml(displayName || "no display name") +
-      "). Web workspace is live with Home flow, My Library, Playlists, Voices, Backgrounds, and App Library tools.</p>" +
+      "</p>" +
+      "  </div>" +
+      '  <div class="app-admin-header-actions">' +
+      '    <div id="app-playlist-timer-wrap" class="app-playlist-timer-wrap" hidden title="Playlist sleep timer">' +
+      '      <span class="app-playlist-timer-icon" aria-hidden="true">⏱</span>' +
+      '      <span id="app-playlist-timer-label" class="app-playlist-timer-label"></span>' +
+      '      <button type="button" class="app-playlist-timer-clear" id="btn-app-playlist-timer-clear" aria-label="Clear playlist timer">×</button>' +
+      "    </div>" +
+      '    <button type="button" class="app-header-account-btn" id="btn-account-menu" aria-label="Account menu" aria-haspopup="dialog" aria-expanded="false">' +
+      '      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+      '        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>' +
+      '        <circle cx="12" cy="7" r="4"/>' +
+      "      </svg>" +
+      "    </button>" +
+      "  </div>" +
+      "</header>" +
+      '<p class="app-muted app-admin-intro">Home, Library, Playlists, Voices, and Backgrounds — use the account button (top right) for settings and sign out.</p>' +
       '<nav class="app-tabs" aria-label="Admin sections">' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" id="count-library">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="account">Account</button>' +
       "</nav>" +
       '<section id="section-home" class="app-section" aria-label="Home">' +
       '<section class="app-card" aria-label="Focus Shift home">' +
@@ -499,30 +519,54 @@
       '  <div id="backgrounds-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
       "</section>" +
-      '<section id="section-account" class="app-section">' +
-      '<section class="app-card" aria-label="Account settings">' +
-      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Account</h2>' +
-      '  <p class="app-muted" style="margin-top:0;">Signed in as <strong>' +
+      '<div id="account-modal-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal app-modal-account" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">' +
+      '    <div class="account-modal-head">' +
+      '      <h3 id="account-modal-title">Account</h3>' +
+      '      <button type="button" class="app-btn app-btn-ghost account-modal-close-x" id="account-modal-close" aria-label="Close">×</button>' +
+      "    </div>" +
+      '    <nav class="app-tabs account-modal-tabs" aria-label="Account sections">' +
+      '      <button type="button" class="app-tab-btn is-active" data-account-tab="settings">Settings</button>' +
+      '      <button type="button" class="app-tab-btn" data-account-tab="preferences">Preferences</button>' +
+      '      <button type="button" class="app-tab-btn" data-account-tab="privacy">Privacy</button>' +
+      "    </nav>" +
+      '    <div id="account-tab-settings" class="account-tab-panel">' +
+      '      <p class="app-muted" style="margin:0 0 0.65rem;">Signed in as <strong>' +
       escapeHtml(email || "") +
       "</strong></p>" +
-      '  <p class="app-muted" style="margin:0 0 0.7rem;">Last login: <strong id="account-last-login">' +
+      '      <p class="app-muted" style="margin:0 0 0.85rem;">Last login: <strong id="account-last-login">' +
       escapeHtml(formatDateString(currentUser && currentUser.metadata && currentUser.metadata.lastSignInTime)) +
       "</strong></p>" +
-      '  <form id="account-form" class="app-form" style="margin:0;">' +
-      '    <label for="account-display-name">Display name</label>' +
-      '    <input id="account-display-name" type="text" maxlength="80" value="' +
+      '      <form id="account-form" class="app-form" style="margin:0;">' +
+      '        <label for="account-display-name">Display name</label>' +
+      '        <input id="account-display-name" type="text" maxlength="80" value="' +
       escapeHtml(displayName || "") +
       '">' +
-      '    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">' +
-      '      <button type="submit" class="app-btn">Save display name</button>' +
-      '      <button type="button" class="app-btn" id="account-password-reset">Send password reset email</button>' +
-      '      <button type="button" class="app-btn" id="account-refresh-token">Refresh session</button>' +
-      '      <button type="button" class="app-btn app-btn-danger" id="account-signout">Sign out</button>' +
+      '        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">' +
+      '          <button type="submit" class="app-btn">Save display name</button>' +
+      '          <button type="button" class="app-btn" id="account-password-reset">Send password reset email</button>' +
+      '          <button type="button" class="app-btn" id="account-refresh-token">Refresh session</button>' +
+      '          <button type="button" class="app-btn app-btn-danger" id="account-signout">Sign out</button>' +
+      "        </div>" +
+      "      </form>" +
+      '      <div id="account-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "    </div>" +
-      "  </form>" +
-      '  <div id="account-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
-      "</section>" +
-      "</section>" +
+      '    <div id="account-tab-preferences" class="account-tab-panel" hidden>' +
+      '      <p class="app-muted" style="margin:0 0 0.75rem;">These options apply in this browser only.</p>' +
+      '      <label class="account-pref-row"><input type="checkbox" id="pref-resume-last-screen" /> Remember my last workspace screen after sign-in</label>' +
+      '      <fieldset class="account-pref-fieldset">' +
+      '        <legend class="account-pref-legend">When you open Library, show</legend>' +
+      '        <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-my" value="my-library" /> My Library</label>' +
+      '        <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-app" value="app-library" /> App Library</label>' +
+      "      </fieldset>" +
+      "    </div>" +
+      '    <div id="account-tab-privacy" class="account-tab-panel" hidden>' +
+      '      <p class="app-muted" style="margin:0 0 0.65rem;">Focus Shift uses Firebase Authentication for sign-in. Your scripts, playlists, voice presets, and generated audio are stored under your user account in Firebase (Firestore and Cloud Storage).</p>' +
+      '      <p class="app-muted" style="margin:0 0 0.65rem;">This web workspace may save lightweight preferences in your browser (for example which tab you had open) so the layout feels familiar when you return.</p>' +
+      '      <p class="app-muted" style="margin:0 0 0.65rem;">We do not sell your script text or audio. Use a strong password and sign out on shared computers. For the full privacy policy, use the materials published with the public Focus Shift site, or contact support if you need help with data export or account deletion.</p>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
       '<div id="mini-player" class="mini-player" hidden>' +
       '  <div class="mini-player-inner">' +
       '    <div id="mini-player-title" class="mini-player-title">Now playing</div>' +
@@ -861,8 +905,62 @@
       refreshSessionToken();
     });
     document.getElementById("account-signout").addEventListener("click", function () {
+      closeAccountModal();
       auth.signOut().then(redirectLogin);
     });
+    document.getElementById("btn-account-menu").addEventListener("click", function () {
+      openAccountModal();
+    });
+    document.getElementById("account-modal-close").addEventListener("click", function () {
+      closeAccountModal();
+    });
+    document.getElementById("account-modal-backdrop").addEventListener("click", function (ev) {
+      if (ev.target === ev.currentTarget) closeAccountModal();
+    });
+    document.querySelectorAll("[data-account-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        setAccountModalTab(btn.getAttribute("data-account-tab") || "settings");
+      });
+    });
+    document.getElementById("pref-resume-last-screen").addEventListener("change", function () {
+      try {
+        localStorage.setItem(PREF_RESUME_ADMIN_KEY, this.checked ? "1" : "0");
+      } catch (_e) {}
+    });
+    document.getElementById("pref-library-sub-my").addEventListener("change", function () {
+      if (!this.checked) return;
+      try {
+        localStorage.setItem(PREF_LIBRARY_SUB_KEY, "my-library");
+      } catch (_e) {}
+      if (activeAdminTab === "library") {
+        activeLibraryTab = "my-library";
+        renderLibrarySubtab();
+      }
+    });
+    document.getElementById("pref-library-sub-app").addEventListener("change", function () {
+      if (!this.checked) return;
+      try {
+        localStorage.setItem(PREF_LIBRARY_SUB_KEY, "app-library");
+      } catch (_e) {}
+      if (activeAdminTab === "library") {
+        activeLibraryTab = "app-library";
+        renderLibrarySubtab();
+      }
+    });
+    document.getElementById("btn-app-playlist-timer-clear").addEventListener("click", function () {
+      clearPlaylistTimer();
+      setPlaylistsMessage("Playlist timer cleared.", "success");
+      renderSelectedPlaylistDetail();
+      renderPlaylists(currentPlaylists);
+    });
+    if (!accountEscapeBound) {
+      accountEscapeBound = true;
+      document.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Escape") return;
+        var bd = document.getElementById("account-modal-backdrop");
+        if (bd && !bd.hidden) closeAccountModal();
+      });
+    }
     root.querySelectorAll("[data-admin-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var tab = btn.getAttribute("data-admin-tab");
@@ -1066,6 +1164,8 @@
     setAdminTab(activeAdminTab);
     updateMiniPlayer();
     updateTabCounts();
+    updateAccountLastLoginLabel();
+    updatePlaylistTimerBadge();
   }
 
   function openPlaylistPicker(script, onSuccess) {
@@ -1338,9 +1438,65 @@
       });
   }
 
+  function readPrefResumeAdmin() {
+    try {
+      return localStorage.getItem(PREF_RESUME_ADMIN_KEY) !== "0";
+    } catch (_e) {
+      return true;
+    }
+  }
+
+  function syncAccountPreferencesForm() {
+    var resumeCb = document.getElementById("pref-resume-last-screen");
+    if (resumeCb) resumeCb.checked = readPrefResumeAdmin();
+    var libMy = document.getElementById("pref-library-sub-my");
+    var libApp = document.getElementById("pref-library-sub-app");
+    if (libMy && libApp) {
+      try {
+        var sub = localStorage.getItem(PREF_LIBRARY_SUB_KEY) || "my-library";
+        libMy.checked = sub !== "app-library";
+        libApp.checked = sub === "app-library";
+      } catch (_e2) {
+        libMy.checked = true;
+        libApp.checked = false;
+      }
+    }
+  }
+
+  function setAccountModalTab(tab) {
+    var ids = ["settings", "preferences", "privacy"];
+    var chosen = ids.indexOf(tab) >= 0 ? tab : "settings";
+    ids.forEach(function (id) {
+      var panel = document.getElementById("account-tab-" + id);
+      if (panel) panel.hidden = id !== chosen;
+    });
+    document.querySelectorAll("[data-account-tab]").forEach(function (b) {
+      b.classList.toggle("is-active", b.getAttribute("data-account-tab") === chosen);
+    });
+  }
+
+  function openAccountModal() {
+    var bd = document.getElementById("account-modal-backdrop");
+    if (!bd) return;
+    syncAccountPreferencesForm();
+    setAccountModalTab("settings");
+    bd.hidden = false;
+    var btn = document.getElementById("btn-account-menu");
+    if (btn) btn.setAttribute("aria-expanded", "true");
+  }
+
+  function closeAccountModal() {
+    var bd = document.getElementById("account-modal-backdrop");
+    if (!bd) return;
+    bd.hidden = true;
+    var b = document.getElementById("btn-account-menu");
+    if (b) b.setAttribute("aria-expanded", "false");
+  }
+
   function setAdminTab(tabId) {
     var normalized = tabId || "home";
     if (normalized === "create") normalized = "home";
+    if (normalized === "account") normalized = "home";
     if (normalized === "app-library") {
       normalized = "library";
       activeLibraryTab = "app-library";
@@ -1352,7 +1508,6 @@
       playlists: "section-playlists",
       voices: "section-voices",
       backgrounds: "section-backgrounds",
-      account: "section-account",
     };
     Object.keys(sectionMap).forEach(function (key) {
       var section = document.getElementById(sectionMap[key]);
@@ -4541,21 +4696,30 @@
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
+  function playlistNameForTimer() {
+    if (!playlistTimerPlaylistId) return "Playlist";
+    var p = currentPlaylists.find(function (x) {
+      return x.id === playlistTimerPlaylistId;
+    });
+    return (p && p.name) || "Playlist";
+  }
+
   function updatePlaylistTimerBadge() {
-    var el = document.getElementById("playlist-timer-status");
-    if (!el) return;
-    var show =
+    var wrap = document.getElementById("app-playlist-timer-wrap");
+    var lab = document.getElementById("app-playlist-timer-label");
+    var active =
       !!playlistTimerDeadlineMs &&
       Date.now() < playlistTimerDeadlineMs &&
-      !!playlistTimerPlaylistId &&
-      playlistTimerPlaylistId === selectedPlaylistId;
-    if (!show) {
-      el.textContent = "";
-      el.style.display = "none";
-      return;
+      !!playlistTimerPlaylistId;
+    if (wrap && lab) {
+      if (!active) {
+        wrap.hidden = true;
+        lab.textContent = "";
+      } else {
+        wrap.hidden = false;
+        lab.textContent = playlistNameForTimer() + " · " + formatTimerRemainingShort();
+      }
     }
-    el.style.display = "block";
-    el.textContent = "Timer: " + formatTimerRemainingShort();
   }
 
   function beginPlaylistTimer(playlistId, totalSeconds) {
@@ -4845,8 +5009,8 @@
       '  <button type="button" class="app-btn app-btn-secondary" id="btn-playlist-rename">Rename</button>' +
       "</div>" +
       '<div class="playlist-timer-row">' +
-      '  <span id="playlist-timer-status" class="app-muted" style="display:none;margin-right:0.5rem;"></span>' +
       '  <button type="button" class="app-btn app-btn-secondary" id="btn-playlist-timer">Timer…</button>' +
+      '  <span class="app-muted" style="font-size:0.82rem;">Countdown appears in the top bar so you can switch tabs while listening.</span>' +
       "</div>" +
       (scripts.length
         ? '<ul class="playlist-track-list">' +
@@ -5542,12 +5706,21 @@
       .get()
       .then(function (snap) {
         try {
+          var resumeOn = readPrefResumeAdmin();
           var savedTab = localStorage.getItem(ADMIN_TAB_STORAGE_KEY);
-          if (savedTab === "app-library") {
+          if (!resumeOn) {
+            activeAdminTab = "home";
+          } else if (savedTab === "app-library") {
             activeAdminTab = "library";
             activeLibraryTab = "app-library";
+          } else if (savedTab === "account") {
+            activeAdminTab = "home";
           } else if (savedTab) {
             activeAdminTab = savedTab;
+          }
+          var libSub = localStorage.getItem(PREF_LIBRARY_SUB_KEY);
+          if (libSub === "app-library" || libSub === "my-library") {
+            activeLibraryTab = libSub;
           }
         } catch (_e) {}
         currentUserProfile = snap.exists ? snap.data() || {} : {};
