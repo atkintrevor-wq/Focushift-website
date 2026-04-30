@@ -33,6 +33,12 @@
   var PREF_RESUME_ADMIN_KEY = "focusshiftWebPrefResumeAdmin";
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
   var accountEscapeBound = false;
+  var accountMetrics = {
+    loading: false,
+    deviceCount: null,
+    sharingCount: null,
+    usage: null,
+  };
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
   var publishCategoryId = "confidence";
@@ -553,12 +559,22 @@
       '      <div id="account-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "    </div>" +
       '    <div id="account-tab-preferences" class="account-tab-panel" hidden>' +
-      '      <p class="app-muted" style="margin:0 0 0.75rem;">These options apply in this browser only.</p>' +
-      '      <label class="account-pref-row"><input type="checkbox" id="pref-resume-last-screen" /> Remember my last workspace screen after sign-in</label>' +
+      '      <fieldset class="account-pref-fieldset" style="margin-top:0;">' +
+      '        <legend class="account-pref-legend">This device only <span class="sync-badge sync-badge-local">Local</span></legend>' +
+      '        <p class="app-muted" style="margin:0 0 0.35rem;">These choices stay on this browser and do not sync to your other devices.</p>' +
+      '        <label class="account-pref-row"><input type="checkbox" id="pref-resume-last-screen" /> Remember my last workspace screen after sign-in <span class="sync-badge sync-badge-local">Local</span></label>' +
+      '        <div style="margin-top:0.45rem;font-size:0.86rem;color:var(--muted,#9bb0d0);">When you open Library, show</div>' +
+      '        <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-my" value="my-library" /> My Library <span class="sync-badge sync-badge-local">Local</span></label>' +
+      '        <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-app" value="app-library" /> App Library <span class="sync-badge sync-badge-local">Local</span></label>' +
+      "      </fieldset>" +
       '      <fieldset class="account-pref-fieldset">' +
-      '        <legend class="account-pref-legend">When you open Library, show</legend>' +
-      '        <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-my" value="my-library" /> My Library</label>' +
-      '        <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-app" value="app-library" /> App Library</label>' +
+      '        <legend class="account-pref-legend">Synced across devices <span class="sync-badge sync-badge-account">Account</span></legend>' +
+      '        <p class="app-muted" style="margin:0 0 0.45rem;">These settings are saved to your account and follow you across iOS and web where supported.</p>' +
+      '        <div id="account-pref-sync-summary" class="account-pref-sync-summary"></div>' +
+      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-top:0.55rem;">' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-voices">Manage voice default</button>' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-backgrounds">Manage background default</button>' +
+      '        </div>' +
       "      </fieldset>" +
       "    </div>" +
       '    <div id="account-tab-privacy" class="account-tab-panel" hidden>' +
@@ -951,6 +967,18 @@
         activeLibraryTab = "app-library";
         renderLibrarySubtab();
       }
+    });
+    document.getElementById("account-pref-open-voices").addEventListener("click", function () {
+      closeAccountModal();
+      setAdminTab("voices");
+      setVoicesMessage("Set your default voice here. This syncs across devices.", "");
+      renderVoices();
+    });
+    document.getElementById("account-pref-open-backgrounds").addEventListener("click", function () {
+      closeAccountModal();
+      setAdminTab("backgrounds");
+      setBackgroundsMessage("Set your default background here. This syncs across devices.", "");
+      renderBackgrounds();
     });
     document.getElementById("btn-app-playlist-timer-clear").addEventListener("click", function () {
       clearPlaylistTimer();
@@ -1468,6 +1496,24 @@
     }
   }
 
+  function renderAccountPreferenceSummary() {
+    var el = document.getElementById("account-pref-sync-summary");
+    if (!el) return;
+    var voiceName = selectedVoiceId ? getVoiceNameById(selectedVoiceId) : "None";
+    var bgName = selectedBackgroundId ? getBackgroundNameById(selectedBackgroundId) : "None";
+    var plan = resolvePlanLabel();
+    el.innerHTML =
+      '<div class="account-kv"><span class="account-kv-label">Current plan</span><span class="account-kv-value">' +
+      escapeHtml(plan || "Plan not set") +
+      "</span></div>" +
+      '<div class="account-kv"><span class="account-kv-label">Default voice</span><span class="account-kv-value">' +
+      escapeHtml(voiceName) +
+      "</span></div>" +
+      '<div class="account-kv"><span class="account-kv-label">Default background</span><span class="account-kv-value">' +
+      escapeHtml(bgName) +
+      "</span></div>";
+  }
+
   function setAccountModalTab(tab) {
     var ids = ["settings", "preferences", "privacy"];
     var chosen = ids.indexOf(tab) >= 0 ? tab : "settings";
@@ -1485,6 +1531,8 @@
     if (!bd) return;
     syncAccountPreferencesForm();
     renderAccountInsights();
+    loadAccountMetrics().catch(function () {});
+    renderAccountPreferenceSummary();
     setAccountModalTab("settings");
     bd.hidden = false;
     var btn = document.getElementById("btn-account-menu");
@@ -1788,6 +1836,7 @@
         deleteClonedVoice(voiceID);
       });
     });
+    renderAccountPreferenceSummary();
   }
 
   function syncVoiceSegmentedPill() {
@@ -2876,6 +2925,7 @@
           });
       });
     });
+    renderAccountPreferenceSummary();
   }
 
   function setAccountMessage(text, kind) {
@@ -2958,6 +3008,7 @@
           .then(function (snap) {
             currentUserProfile = snap.exists ? snap.data() || {} : currentUserProfile;
             renderAccountInsights();
+            loadAccountMetrics().catch(function () {});
           })
           .catch(function () {});
         setAccountMessage("Session refreshed. Account details are up to date.", "success");
@@ -3065,24 +3116,91 @@
     }).length;
   }
 
+  function deviceLimitForPlan(planRaw) {
+    var p = String(planRaw || "").toLowerCase();
+    if (p === "creator") return 5;
+    if (p === "starter") return 3;
+    if (p === "free") return 2;
+    return null;
+  }
+
+  function scriptsLimitForPlan(planRaw) {
+    var p = String(planRaw || "").toLowerCase();
+    if (p === "creator") return "Unlimited";
+    if (p === "starter") return "50";
+    if (p === "free") return "0";
+    return "-";
+  }
+
+  function wordsLimitForPlan(planRaw) {
+    var p = String(planRaw || "").toLowerCase();
+    if (p === "creator") return "8,000";
+    if (p === "starter") return "3,000";
+    if (p === "free") return "0";
+    return "-";
+  }
+
+  function loadAccountMetrics() {
+    if (!currentUser) return Promise.resolve();
+    var uid = currentUser.uid;
+    accountMetrics.loading = true;
+    renderAccountInsights();
+    return Promise.all([
+      db.collection("users").doc(uid).collection("devices").get().catch(function () {
+        return null;
+      }),
+      db.collection("users").doc(uid).collection("shareAudience").get().catch(function () {
+        return null;
+      }),
+      db.collection("users").doc(uid).collection("meta").doc("usage").get().catch(function () {
+        return null;
+      }),
+    ]).then(function (results) {
+      var devicesSnap = results[0];
+      var sharingSnap = results[1];
+      var usageSnap = results[2];
+      accountMetrics.deviceCount = devicesSnap ? devicesSnap.size : null;
+      accountMetrics.sharingCount = sharingSnap ? sharingSnap.size : null;
+      accountMetrics.usage = usageSnap && usageSnap.exists ? usageSnap.data() || {} : null;
+      accountMetrics.loading = false;
+      renderAccountInsights();
+      renderAccountPreferenceSummary();
+    });
+  }
+
   function renderAccountInsights() {
     var el = document.getElementById("account-insights");
     if (!el) return;
 
+    var usage = accountMetrics.usage || {};
     var plan = resolvePlanLabel();
-    var deviceCount = profileFirstArrayLength(["devices", "registeredDevices", "deviceIDs"]);
-    if (deviceCount === null) {
-      deviceCount = profileFirstNumber(["deviceCount", "connectedDevices", "devicesCount"]);
-    }
-    var deviceLimit = profileFirstNumber(["deviceLimit", "maxDevices", "devicesLimit"]);
-    var sharingCount = profileFirstArrayLength(["sharedRecipients", "sharedListeners", "shareRecipients"]);
-    if (sharingCount === null) {
-      sharingCount = profileFirstNumber(["sharedRecipientsCount", "sharedListenersCount"]);
-    }
-    var scriptsUsed = profileFirstNumber(["scriptsThisMonth", "aiScriptsUsed", "usageScripts"]);
-    var scriptsLimit = profileFirstNumber(["scriptsLimit", "monthlyScriptsLimit", "aiScriptsLimit"]);
-    var wordsUsed = profileFirstNumber(["wordsThisMonth", "aiWordsUsed", "usageWords"]);
-    var wordsLimit = profileFirstNumber(["wordsLimit", "monthlyWordsLimit", "aiWordsLimit"]);
+    var planRaw = String(
+      (currentUserProfile && currentUserProfile.subscriptionTier) || plan || "free"
+    ).toLowerCase();
+    var deviceCount =
+      accountMetrics.deviceCount === null
+        ? profileFirstNumber(["deviceCount", "connectedDevices", "devicesCount"])
+        : accountMetrics.deviceCount;
+    var deviceLimit =
+      deviceLimitForPlan(planRaw) || profileFirstNumber(["deviceLimit", "maxDevices", "devicesLimit"]);
+    var sharingCount =
+      accountMetrics.sharingCount === null
+        ? profileFirstNumber(["sharedRecipientsCount", "sharedListenersCount"])
+        : accountMetrics.sharingCount;
+    var scriptsUsed =
+      usage.scriptsThisMonth !== undefined
+        ? usage.scriptsThisMonth
+        : profileFirstNumber(["scriptsThisMonth", "aiScriptsUsed", "usageScripts"]);
+    var scriptsLimit = scriptsLimitForPlan(planRaw);
+    var wordsUsed =
+      usage.wordsThisMonth !== undefined
+        ? usage.wordsThisMonth
+        : profileFirstNumber(["wordsThisMonth", "aiWordsUsed", "usageWords"]);
+    var wordsLimit = wordsLimitForPlan(planRaw);
+    var ttsChars =
+      usage.ttsCharactersThisMonth !== undefined
+        ? usage.ttsCharactersThisMonth
+        : profileFirstNumber(["ttsCharactersThisMonth", "ttsCharsThisMonth"]);
     var storageBytes = profileFirstNumber(["storageUsageBytes", "storageBytes", "usedStorageBytes"]);
     var storageMB = profileFirstNumber(["storageUsageMB", "storageMB", "usedStorageMB"]);
     var storageDisplay = "-";
@@ -3105,8 +3223,8 @@
       row("Current plan", plan || "Plan not set") +
       row(
         "Plan source",
-        currentUserProfile && currentUserProfile.subscriptionSource
-          ? String(currentUserProfile.subscriptionSource)
+        currentUserProfile && currentUserProfile.subscriptionTierSource
+          ? String(currentUserProfile.subscriptionTierSource)
           : "Firebase profile"
       ) +
       "</section>" +
@@ -3119,9 +3237,10 @@
       '<section class="account-insight-card">' +
       "<h4>AI script usage</h4>" +
       row("Scripts this month", scriptsUsed === null ? "-" : formatCount(scriptsUsed)) +
-      row("Scripts limit", scriptsLimit === null ? "-" : formatCount(scriptsLimit)) +
+      row("Scripts limit", scriptsLimit) +
       row("Words this month", wordsUsed === null ? "-" : formatCount(wordsUsed)) +
-      row("Words limit", wordsLimit === null ? "-" : formatCount(wordsLimit)) +
+      row("Words limit", wordsLimit) +
+      row("TTS chars this month", ttsChars === null ? "-" : formatCount(ttsChars)) +
       "</section>" +
       '<section class="account-insight-card">' +
       "<h4>Library and storage</h4>" +
@@ -5825,6 +5944,12 @@
 
   auth.onAuthStateChanged(function (user) {
     currentUser = user || null;
+    accountMetrics = {
+      loading: false,
+      deviceCount: null,
+      sharingCount: null,
+      usage: null,
+    };
     if (!user) {
       renderSignedOut();
       return;
