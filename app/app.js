@@ -522,13 +522,13 @@
       '<div id="account-modal-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal app-modal-account" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">' +
       '    <div class="account-modal-head">' +
-      '      <h3 id="account-modal-title">Account</h3>' +
+      '      <h3 id="account-modal-title">Account & Settings</h3>' +
       '      <button type="button" class="app-btn app-btn-ghost account-modal-close-x" id="account-modal-close" aria-label="Close">×</button>' +
       "    </div>" +
       '    <nav class="app-tabs account-modal-tabs" aria-label="Account sections">' +
-      '      <button type="button" class="app-tab-btn is-active" data-account-tab="settings">Settings</button>' +
+      '      <button type="button" class="app-tab-btn is-active" data-account-tab="settings">Account</button>' +
       '      <button type="button" class="app-tab-btn" data-account-tab="preferences">Preferences</button>' +
-      '      <button type="button" class="app-tab-btn" data-account-tab="privacy">Privacy</button>' +
+      '      <button type="button" class="app-tab-btn" data-account-tab="privacy">Privacy & Support</button>' +
       "    </nav>" +
       '    <div id="account-tab-settings" class="account-tab-panel">' +
       '      <p class="app-muted" style="margin:0 0 0.65rem;">Signed in as <strong>' +
@@ -537,6 +537,24 @@
       '      <p class="app-muted" style="margin:0 0 0.85rem;">Last login: <strong id="account-last-login">' +
       escapeHtml(formatDateString(currentUser && currentUser.metadata && currentUser.metadata.lastSignInTime)) +
       "</strong></p>" +
+      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
+      '        <strong style="display:block;margin-bottom:0.3rem;">Subscription</strong>' +
+      '        <p class="app-muted" style="margin:0 0 0.5rem;">Plan and billing currently come from your account profile. During beta, plan upgrades are managed in the iOS app.</p>' +
+      '        <button type="button" class="app-btn app-btn-secondary" id="account-subscription-manage">Manage subscription (iOS)</button>' +
+      "      </section>" +
+      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
+      '        <strong style="display:block;margin-bottom:0.3rem;">Devices & Sharing</strong>' +
+      '        <p class="app-muted" style="margin:0 0 0.5rem;">Device and sharing controls are available in iOS today. This web section mirrors your account counts.</p>' +
+      '        <button type="button" class="app-btn app-btn-secondary" id="account-manage-devices">Manage devices (iOS)</button>' +
+      "      </section>" +
+      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
+      '        <strong style="display:block;margin-bottom:0.3rem;">Library & Storage</strong>' +
+      '        <p class="app-muted" style="margin:0 0 0.5rem;">Library counts below are account-linked. Refresh to re-read profile and script stats.</p>' +
+      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-library-stats">Refresh library stats</button>' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-sync-cloud">Sync status</button>' +
+      "        </div>" +
+      "      </section>" +
       '      <div id="account-insights" class="account-insights-grid"></div>' +
       '      <form id="account-form" class="app-form" style="margin-top:0.65rem;">' +
       '        <label for="account-display-name">Display name</label>' +
@@ -908,6 +926,19 @@
     });
     document.getElementById("account-refresh-token").addEventListener("click", function () {
       refreshSessionToken();
+    });
+    document.getElementById("account-subscription-manage").addEventListener("click", function () {
+      setAccountMessage("For now, manage subscription changes in the iOS app (Account & Settings).", "");
+    });
+    document.getElementById("account-manage-devices").addEventListener("click", function () {
+      setAccountMessage("Device management is currently available in the iOS app. Web mirrors your account counts.", "");
+    });
+    document.getElementById("account-refresh-library-stats").addEventListener("click", function () {
+      renderAccountInsights();
+      setAccountMessage("Library and storage stats refreshed.", "success");
+    });
+    document.getElementById("account-sync-cloud").addEventListener("click", function () {
+      setAccountMessage("Cloud sync is account-linked. New scripts and playlists should appear across devices after refresh.", "");
     });
     document.getElementById("account-signout").addEventListener("click", function () {
       closeAccountModal();
