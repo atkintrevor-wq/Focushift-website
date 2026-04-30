@@ -33,7 +33,6 @@
   var PREF_RESUME_ADMIN_KEY = "focusshiftWebPrefResumeAdmin";
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
   var accountEscapeBound = false;
-  var adminStickyUID = null;
   var accountMetrics = {
     loading: false,
     deviceCount: null,
@@ -364,24 +363,6 @@
     document.getElementById("btn-out").addEventListener("click", function () {
       auth.signOut().then(redirectLogin);
     });
-  }
-
-  function hasAdminAccess(profile) {
-    if (!profile) return false;
-    var raw = profile.isAdmin;
-    if (raw === true || raw === 1) return true;
-    if (typeof raw === "string" && raw.toLowerCase() === "true") return true;
-    return false;
-  }
-
-  function activateAdminWorkspace(user) {
-    if (!user) return;
-    adminStickyUID = user.uid;
-    renderAdminShell(user.email, user.displayName);
-    subscribeScripts(user.uid);
-    subscribePlaylists(user.uid);
-    subscribePremade();
-    subscribeClonedVoices(user.uid);
   }
 
   function renderAdminShell(email, displayName) {
@@ -5963,9 +5944,6 @@
 
   auth.onAuthStateChanged(function (user) {
     currentUser = user || null;
-    if (!user || (adminStickyUID && user && adminStickyUID !== user.uid)) {
-      adminStickyUID = null;
-    }
     accountMetrics = {
       loading: false,
       deviceCount: null,
@@ -6020,41 +5998,19 @@
         ) {
           selectedBackgroundId = profileBackgroundID;
         }
-        var isAdmin = hasAdminAccess(currentUserProfile);
+        var isAdmin = snap.exists && snap.data().isAdmin === true;
         if (isAdmin) {
-          activateAdminWorkspace(user);
+          renderAdminShell(user.email, user.displayName);
+          subscribeScripts(user.uid);
+          subscribePlaylists(user.uid);
+          subscribePremade();
+          subscribeClonedVoices(user.uid);
         } else {
-          if (adminStickyUID === user.uid) {
-            activateAdminWorkspace(user);
-          } else {
-            renderNonAdmin(user.email, user.displayName);
-          }
+          renderNonAdmin(user.email, user.displayName);
         }
       })
       .catch(function () {
-        user
-          .getIdTokenResult(true)
-          .then(function (res) {
-            var claims = (res && res.claims) || {};
-            var byClaim = claims.admin === true || claims.isAdmin === true;
-            if (byClaim) {
-              currentUserProfile = Object.assign({}, currentUserProfile || {}, { isAdmin: true });
-              activateAdminWorkspace(user);
-            } else {
-              if (adminStickyUID === user.uid) {
-                activateAdminWorkspace(user);
-              } else {
-                renderNonAdmin(user.email, user.displayName);
-              }
-            }
-          })
-          .catch(function () {
-            if (adminStickyUID === user.uid) {
-              activateAdminWorkspace(user);
-            } else {
-              renderNonAdmin(user.email, user.displayName);
-            }
-          });
+        renderNonAdmin(user.email, user.displayName);
       });
   });
 })();
