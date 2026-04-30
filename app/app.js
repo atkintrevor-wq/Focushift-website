@@ -33,6 +33,7 @@
   var PREF_RESUME_ADMIN_KEY = "focusshiftWebPrefResumeAdmin";
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
   var accountEscapeBound = false;
+  var adminStickyUID = null;
   var accountMetrics = {
     loading: false,
     deviceCount: null,
@@ -371,6 +372,16 @@
     if (raw === true || raw === 1) return true;
     if (typeof raw === "string" && raw.toLowerCase() === "true") return true;
     return false;
+  }
+
+  function activateAdminWorkspace(user) {
+    if (!user) return;
+    adminStickyUID = user.uid;
+    renderAdminShell(user.email, user.displayName);
+    subscribeScripts(user.uid);
+    subscribePlaylists(user.uid);
+    subscribePremade();
+    subscribeClonedVoices(user.uid);
   }
 
   function renderAdminShell(email, displayName) {
@@ -5952,6 +5963,9 @@
 
   auth.onAuthStateChanged(function (user) {
     currentUser = user || null;
+    if (!user || (adminStickyUID && user && adminStickyUID !== user.uid)) {
+      adminStickyUID = null;
+    }
     accountMetrics = {
       loading: false,
       deviceCount: null,
@@ -6008,13 +6022,13 @@
         }
         var isAdmin = hasAdminAccess(currentUserProfile);
         if (isAdmin) {
-          renderAdminShell(user.email, user.displayName);
-          subscribeScripts(user.uid);
-          subscribePlaylists(user.uid);
-          subscribePremade();
-          subscribeClonedVoices(user.uid);
+          activateAdminWorkspace(user);
         } else {
-          renderNonAdmin(user.email, user.displayName);
+          if (adminStickyUID === user.uid) {
+            activateAdminWorkspace(user);
+          } else {
+            renderNonAdmin(user.email, user.displayName);
+          }
         }
       })
       .catch(function () {
@@ -6025,17 +6039,21 @@
             var byClaim = claims.admin === true || claims.isAdmin === true;
             if (byClaim) {
               currentUserProfile = Object.assign({}, currentUserProfile || {}, { isAdmin: true });
-              renderAdminShell(user.email, user.displayName);
-              subscribeScripts(user.uid);
-              subscribePlaylists(user.uid);
-              subscribePremade();
-              subscribeClonedVoices(user.uid);
+              activateAdminWorkspace(user);
             } else {
-              renderNonAdmin(user.email, user.displayName);
+              if (adminStickyUID === user.uid) {
+                activateAdminWorkspace(user);
+              } else {
+                renderNonAdmin(user.email, user.displayName);
+              }
             }
           })
           .catch(function () {
-            renderNonAdmin(user.email, user.displayName);
+            if (adminStickyUID === user.uid) {
+              activateAdminWorkspace(user);
+            } else {
+              renderNonAdmin(user.email, user.displayName);
+            }
           });
       });
   });
