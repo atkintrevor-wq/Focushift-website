@@ -595,13 +595,36 @@
       "      </fieldset>" +
       "    </div>" +
       '    <div id="account-tab-privacy" class="account-tab-panel" hidden>' +
-      '      <p class="app-muted" style="margin:0 0 0.65rem;">Focus Shift uses Firebase Authentication for sign-in. Your scripts, playlists, voice presets, and generated audio are stored under your user account in Firebase (Firestore and Cloud Storage).</p>' +
-      '      <p class="app-muted" style="margin:0 0 0.65rem;">This web workspace may save lightweight preferences in your browser (for example which tab you had open) so the layout feels familiar when you return.</p>' +
-      '      <p class="app-muted" style="margin:0 0 0.65rem;">We do not sell your script text or audio. Use a strong password and sign out on shared computers. For the full privacy policy, use the links below.</p>' +
-      '      <p style="margin:0.15rem 0 0.35rem;display:flex;gap:0.5rem;flex-wrap:wrap;">' +
-      '        <a class="app-btn app-btn-secondary" href="https://focusshift.app/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>' +
-      '        <a class="app-btn app-btn-secondary" href="https://focusshift.app/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>' +
-      '      </p>' +
+      '      <div id="account-privacy-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
+      '        <strong style="display:block;margin-bottom:0.3rem;">Security</strong>' +
+      '        <p class="app-muted" style="margin:0 0 0.5rem;">Web sign-in uses your email/password or Google. Biometric unlock is iOS-only today.</p>' +
+      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-password-reset">Send password reset email</button>' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-refresh-session">Refresh session</button>' +
+      "        </div>" +
+      "      </section>" +
+      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
+      '        <strong style="display:block;margin-bottom:0.3rem;">Privacy & Data</strong>' +
+      '        <p class="app-muted" style="margin:0 0 0.5rem;">Your scripts, playlists, and generated audio live in your Firebase account. This browser may also store lightweight UI preferences locally.</p>' +
+      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-export-json">Export my data (JSON)</button>' +
+      '          <button type="button" class="app-btn app-btn-danger" id="account-privacy-delete-account">Delete account…</button>' +
+      "        </div>" +
+      '        <p class="app-muted" style="margin:0 0 0.45rem;">Full account deletion currently runs through the iOS app so every device and local cache is cleaned up consistently.</p>' +
+      '        <p style="margin:0;display:flex;gap:0.5rem;flex-wrap:wrap;">' +
+      '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>' +
+      '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>' +
+      "        </p>" +
+      "      </section>" +
+      '      <section class="account-pref-sync-summary" style="margin-bottom:0.2rem;">' +
+      '        <strong style="display:block;margin-bottom:0.3rem;">About & Support</strong>' +
+      '        <p class="app-muted" style="margin:0 0 0.45rem;">Web workspace build. For app store reviews and device-specific help, use the iOS app.</p>' +
+      '        <p class="app-muted" style="margin:0 0 0.45rem;"><strong>Firebase JS:</strong> <span id="account-privacy-firebase-sdk">-</span></p>' +
+      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">' +
+      '          <a class="app-btn app-btn-secondary" href="mailto:support@focusshift.app">Contact support</a>' +
+      "        </div>" +
+      "      </section>" +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -959,6 +982,20 @@
       closeAccountModal();
       auth.signOut().then(redirectLogin);
     });
+    document.getElementById("account-privacy-password-reset").addEventListener("click", function () {
+      sendPasswordResetFromAccount();
+      setPrivacyMessage("If you requested a reset, check your email inbox.", "success");
+    });
+    document.getElementById("account-privacy-refresh-session").addEventListener("click", function () {
+      refreshSessionToken();
+      setPrivacyMessage("Session refreshed.", "success");
+    });
+    document.getElementById("account-privacy-export-json").addEventListener("click", function () {
+      exportWebAccountDataJson();
+    });
+    document.getElementById("account-privacy-delete-account").addEventListener("click", function () {
+      promptDeleteAccountIos();
+    });
     document.getElementById("btn-account-menu").addEventListener("click", function () {
       openAccountModal();
     });
@@ -1242,6 +1279,8 @@
     updateTabCounts();
     updateAccountLastLoginLabel();
     updatePlaylistTimerBadge();
+    var sdkEl = document.getElementById("account-privacy-firebase-sdk");
+    if (sdkEl) sdkEl.textContent = (firebase && firebase.SDK_VERSION) || "-";
   }
 
   function openPlaylistPicker(script, onSuccess) {
@@ -2975,6 +3014,99 @@
     if (!el) return;
     el.className = "app-inline-msg" + (kind ? " " + kind : "");
     el.textContent = text || "";
+  }
+
+  function setPrivacyMessage(text, kind) {
+    var el = document.getElementById("account-privacy-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function jsonReplacer(_key, value) {
+    if (value && typeof value.toDate === "function") {
+      try {
+        return value.toDate().toISOString();
+      } catch (_e) {
+        return null;
+      }
+    }
+    if (value && typeof value.path === "string" && typeof value.id === "string" && value.parent) {
+      try {
+        return value.path;
+      } catch (_e2) {
+        return null;
+      }
+    }
+    return value;
+  }
+
+  function exportWebAccountDataJson() {
+    if (!currentUser) {
+      setPrivacyMessage("You must be signed in to export data.", "error");
+      return;
+    }
+    setPrivacyMessage("Preparing export…", "");
+    var uid = currentUser.uid;
+    var profileRef = db.collection("users").doc(uid);
+    Promise.all([
+      profileRef.get(),
+      profileRef.collection("scripts").get(),
+      profileRef.collection("playlists").get(),
+      profileRef.collection("clonedVoices").get().catch(function () {
+        return { docs: [] };
+      }),
+    ])
+      .then(function (results) {
+        var profileSnap = results[0];
+        var scriptsSnap = results[1];
+        var playlistsSnap = results[2];
+        var clonedSnap = results[3];
+        var payload = {
+          exportedAt: new Date().toISOString(),
+          user: {
+            uid: uid,
+            email: currentUser.email || "",
+            displayName: currentUser.displayName || "",
+          },
+          profile: profileSnap.exists ? profileSnap.data() || {} : {},
+          scripts: scriptsSnap.docs.map(function (d) {
+            return { id: d.id, data: d.data() || {} };
+          }),
+          playlists: playlistsSnap.docs.map(function (d) {
+            return { id: d.id, data: d.data() || {} };
+          }),
+          clonedVoices: clonedSnap.docs
+            ? clonedSnap.docs.map(function (d) {
+                return { id: d.id, data: d.data() || {} };
+              })
+            : [],
+        };
+        var json = JSON.stringify(payload, jsonReplacer, 2);
+        var blob = new Blob([json], { type: "application/json;charset=utf-8" });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement("a");
+        a.href = url;
+        a.download = "focushift-web-export-" + uid + "-" + Date.now() + ".json";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        setPrivacyMessage("Export downloaded.", "success");
+      })
+      .catch(function (e) {
+        setPrivacyMessage(e.message || "Could not export data.", "error");
+      });
+  }
+
+  function promptDeleteAccountIos() {
+    setPrivacyMessage(
+      "Account deletion is currently completed in the iOS app (Account & Settings → Privacy & Support) so local caches and devices are cleaned up consistently.",
+      ""
+    );
+    window.alert(
+      "To delete your account, please use the iOS app:\nAccount & Settings → Privacy & Support → Delete Account.\n\nIf you need help, tap Contact support in this tab."
+    );
   }
 
   function updateAccountLastLoginLabel() {
