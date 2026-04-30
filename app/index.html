@@ -768,6 +768,54 @@
       gap: 0.6rem;
       margin: 1rem 0 0.5rem;
     }
+    .premade-app-toolbar {
+      flex-wrap: wrap;
+    }
+    .premade-app-toolbar h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+    .premade-app-toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+    .premade-category-block {
+      margin-bottom: 1.05rem;
+      border: 1px solid var(--stroke, rgba(255,255,255,0.12));
+      border-radius: 14px;
+      padding: 0.65rem 0.75rem 0.75rem;
+      background: rgba(255,255,255,0.03);
+    }
+    .premade-category-header {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      margin-bottom: 0.25rem;
+    }
+    .premade-category-title {
+      margin: 0;
+      flex: 1;
+      min-width: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .premade-category-count {
+      font-size: 0.78rem;
+      flex-shrink: 0;
+    }
+    .premade-category-body .app-card {
+      margin-bottom: 0.65rem;
+    }
+    .premade-category-body .app-card:last-child {
+      margin-bottom: 0;
+    }
+    .premade-category-empty {
+      margin: 0.35rem 0 0;
+      font-size: 0.88rem;
+    }
     .app-section-title-row h2 {
       margin: 0;
       font-size: 1.1rem;
@@ -913,6 +961,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=55"></script>
+  <script src="app.js?v=56"></script>
 </body>
 </html>
