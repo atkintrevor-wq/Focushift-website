@@ -537,7 +537,8 @@
       '      <p class="app-muted" style="margin:0 0 0.85rem;">Last login: <strong id="account-last-login">' +
       escapeHtml(formatDateString(currentUser && currentUser.metadata && currentUser.metadata.lastSignInTime)) +
       "</strong></p>" +
-      '      <form id="account-form" class="app-form" style="margin:0;">' +
+      '      <div id="account-insights" class="account-insights-grid"></div>' +
+      '      <form id="account-form" class="app-form" style="margin-top:0.65rem;">' +
       '        <label for="account-display-name">Display name</label>' +
       '        <input id="account-display-name" type="text" maxlength="80" value="' +
       escapeHtml(displayName || "") +
@@ -563,7 +564,11 @@
       '    <div id="account-tab-privacy" class="account-tab-panel" hidden>' +
       '      <p class="app-muted" style="margin:0 0 0.65rem;">Focus Shift uses Firebase Authentication for sign-in. Your scripts, playlists, voice presets, and generated audio are stored under your user account in Firebase (Firestore and Cloud Storage).</p>' +
       '      <p class="app-muted" style="margin:0 0 0.65rem;">This web workspace may save lightweight preferences in your browser (for example which tab you had open) so the layout feels familiar when you return.</p>' +
-      '      <p class="app-muted" style="margin:0 0 0.65rem;">We do not sell your script text or audio. Use a strong password and sign out on shared computers. For the full privacy policy, use the materials published with the public Focus Shift site, or contact support if you need help with data export or account deletion.</p>' +
+      '      <p class="app-muted" style="margin:0 0 0.65rem;">We do not sell your script text or audio. Use a strong password and sign out on shared computers. For the full privacy policy, use the links below.</p>' +
+      '      <p style="margin:0.15rem 0 0.35rem;display:flex;gap:0.5rem;flex-wrap:wrap;">' +
+      '        <a class="app-btn app-btn-secondary" href="https://focusshift.app/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>' +
+      '        <a class="app-btn app-btn-secondary" href="https://focusshift.app/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>' +
+      '      </p>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -1479,6 +1484,7 @@
     var bd = document.getElementById("account-modal-backdrop");
     if (!bd) return;
     syncAccountPreferencesForm();
+    renderAccountInsights();
     setAccountModalTab("settings");
     bd.hidden = false;
     var btn = document.getElementById("btn-account-menu");
@@ -2946,6 +2952,14 @@
       .then(function () {
         currentUser = auth.currentUser || currentUser;
         updateAccountLastLoginLabel();
+        db.collection("users")
+          .doc(currentUser.uid)
+          .get()
+          .then(function (snap) {
+            currentUserProfile = snap.exists ? snap.data() || {} : currentUserProfile;
+            renderAccountInsights();
+          })
+          .catch(function () {});
         setAccountMessage("Session refreshed. Account details are up to date.", "success");
       })
       .catch(function (e) {
@@ -3001,6 +3015,121 @@
       if (raw) return raw;
     }
     return "Plan not set";
+  }
+
+  function formatCount(v) {
+    var n = Number(v);
+    if (!isFinite(n) || n < 0) return "-";
+    if (Math.floor(n) !== n) return String(n.toFixed(1));
+    return String(n);
+  }
+
+  function formatBytesHuman(v) {
+    var n = Number(v);
+    if (!isFinite(n) || n <= 0) return "-";
+    var units = ["B", "KB", "MB", "GB", "TB"];
+    var i = 0;
+    while (n >= 1024 && i < units.length - 1) {
+      n = n / 1024;
+      i += 1;
+    }
+    var precision = n >= 100 ? 0 : n >= 10 ? 1 : 2;
+    return n.toFixed(precision) + " " + units[i];
+  }
+
+  function profileFirstNumber(keys) {
+    if (!currentUserProfile || !keys || !keys.length) return null;
+    for (var i = 0; i < keys.length; i += 1) {
+      var val = currentUserProfile[keys[i]];
+      if (val === null || typeof val === "undefined") continue;
+      var n = Number(val);
+      if (isFinite(n) && n >= 0) return n;
+    }
+    return null;
+  }
+
+  function profileFirstArrayLength(keys) {
+    if (!currentUserProfile || !keys || !keys.length) return null;
+    for (var i = 0; i < keys.length; i += 1) {
+      var val = currentUserProfile[keys[i]];
+      if (Array.isArray(val)) return val.length;
+    }
+    return null;
+  }
+
+  function importedAudioCount() {
+    return currentScripts.filter(function (s) {
+      var hasAudio = !!(s.audioURL && String(s.audioURL).trim());
+      var noText = !((s.text || "").trim());
+      return hasAudio && noText;
+    }).length;
+  }
+
+  function renderAccountInsights() {
+    var el = document.getElementById("account-insights");
+    if (!el) return;
+
+    var plan = resolvePlanLabel();
+    var deviceCount = profileFirstArrayLength(["devices", "registeredDevices", "deviceIDs"]);
+    if (deviceCount === null) {
+      deviceCount = profileFirstNumber(["deviceCount", "connectedDevices", "devicesCount"]);
+    }
+    var deviceLimit = profileFirstNumber(["deviceLimit", "maxDevices", "devicesLimit"]);
+    var sharingCount = profileFirstArrayLength(["sharedRecipients", "sharedListeners", "shareRecipients"]);
+    if (sharingCount === null) {
+      sharingCount = profileFirstNumber(["sharedRecipientsCount", "sharedListenersCount"]);
+    }
+    var scriptsUsed = profileFirstNumber(["scriptsThisMonth", "aiScriptsUsed", "usageScripts"]);
+    var scriptsLimit = profileFirstNumber(["scriptsLimit", "monthlyScriptsLimit", "aiScriptsLimit"]);
+    var wordsUsed = profileFirstNumber(["wordsThisMonth", "aiWordsUsed", "usageWords"]);
+    var wordsLimit = profileFirstNumber(["wordsLimit", "monthlyWordsLimit", "aiWordsLimit"]);
+    var storageBytes = profileFirstNumber(["storageUsageBytes", "storageBytes", "usedStorageBytes"]);
+    var storageMB = profileFirstNumber(["storageUsageMB", "storageMB", "usedStorageMB"]);
+    var storageDisplay = "-";
+    if (storageBytes !== null) storageDisplay = formatBytesHuman(storageBytes);
+    else if (storageMB !== null) storageDisplay = formatCount(storageMB) + " MB";
+
+    function row(label, value) {
+      return (
+        '<div class="account-kv"><span class="account-kv-label">' +
+        escapeHtml(label) +
+        '</span><span class="account-kv-value">' +
+        escapeHtml(value) +
+        "</span></div>"
+      );
+    }
+
+    el.innerHTML =
+      '<section class="account-insight-card">' +
+      "<h4>Subscription plan</h4>" +
+      row("Current plan", plan || "Plan not set") +
+      row(
+        "Plan source",
+        currentUserProfile && currentUserProfile.subscriptionSource
+          ? String(currentUserProfile.subscriptionSource)
+          : "Firebase profile"
+      ) +
+      "</section>" +
+      '<section class="account-insight-card">' +
+      "<h4>Devices and sharing</h4>" +
+      row("Registered devices", deviceCount === null ? "-" : formatCount(deviceCount)) +
+      row("Device limit", deviceLimit === null ? "-" : formatCount(deviceLimit)) +
+      row("Shared listeners", sharingCount === null ? "-" : formatCount(sharingCount)) +
+      "</section>" +
+      '<section class="account-insight-card">' +
+      "<h4>AI script usage</h4>" +
+      row("Scripts this month", scriptsUsed === null ? "-" : formatCount(scriptsUsed)) +
+      row("Scripts limit", scriptsLimit === null ? "-" : formatCount(scriptsLimit)) +
+      row("Words this month", wordsUsed === null ? "-" : formatCount(wordsUsed)) +
+      row("Words limit", wordsLimit === null ? "-" : formatCount(wordsLimit)) +
+      "</section>" +
+      '<section class="account-insight-card">' +
+      "<h4>Library and storage</h4>" +
+      row("My scripts", formatCount(currentScripts.length)) +
+      row("Scripts with audio", formatCount(scriptsWithAudioCount())) +
+      row("Imported audio", formatCount(importedAudioCount())) +
+      row("Storage used", storageDisplay) +
+      "</section>";
   }
 
   function setHomeFlowStep(step, displayName) {
@@ -3288,6 +3417,7 @@
     if (cLib) cLib.textContent = String(currentScripts.length);
     if (cPlay) cPlay.textContent = String(currentPlaylists.length);
     if (cPre) cPre.textContent = String(currentPremade.length);
+    renderAccountInsights();
   }
 
   function effectiveVoiceIdForScript(script) {

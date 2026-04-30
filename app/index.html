@@ -103,6 +103,39 @@
     .account-modal-close-x { min-width: 40px; padding: 0.35rem 0.5rem; font-size: 1.35rem; line-height: 1; }
     .account-modal-tabs { margin: 0 0 0.85rem; flex-wrap: wrap; }
     .account-tab-panel { margin-top: 0.25rem; }
+    .account-insights-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 0.55rem;
+      margin: 0.15rem 0 0.35rem;
+    }
+    .account-insight-card {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      background: rgba(255,255,255,0.03);
+      padding: 0.58rem 0.62rem;
+    }
+    .account-insight-card h4 {
+      margin: 0 0 0.42rem;
+      font-size: 0.83rem;
+      letter-spacing: 0.01em;
+      color: #dbeafe;
+      text-transform: uppercase;
+    }
+    .account-kv {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.6rem;
+      margin-top: 0.24rem;
+    }
+    .account-kv-label { font-size: 0.79rem; color: var(--muted, #9bb0d0); }
+    .account-kv-value {
+      font-size: 0.82rem;
+      color: #e2e8f0;
+      font-weight: 600;
+      text-align: right;
+    }
     .account-pref-fieldset {
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 12px;
@@ -1131,6 +1164,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=58"></script>
+  <script src="app.js?v=59"></script>
 </body>
 </html>
