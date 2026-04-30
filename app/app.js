@@ -6030,40 +6030,21 @@
         ) {
           selectedBackgroundId = profileBackgroundID;
         }
-        var isAdmin = hasAdminAccess(currentUserProfile);
-        if (isAdmin) {
-          activateAdminWorkspace(user);
-        } else {
-          if (adminStickyUID === user.uid) {
-            activateAdminWorkspace(user);
-          } else {
-            renderNonAdmin(user.email, user.displayName);
-          }
-        }
+        // Web app now serves all signed-in users; don't gate core workspace behind isAdmin.
+        activateAdminWorkspace(user);
       })
       .catch(function () {
         user
           .getIdTokenResult(true)
           .then(function (res) {
             var claims = (res && res.claims) || {};
-            var byClaim = claims.admin === true || claims.isAdmin === true;
-            if (byClaim) {
+            if (claims.admin === true || claims.isAdmin === true) {
               currentUserProfile = Object.assign({}, currentUserProfile || {}, { isAdmin: true });
-              activateAdminWorkspace(user);
-            } else {
-              if (adminStickyUID === user.uid) {
-                activateAdminWorkspace(user);
-              } else {
-                renderNonAdmin(user.email, user.displayName);
-              }
             }
+            activateAdminWorkspace(user);
           })
           .catch(function () {
-            if (adminStickyUID === user.uid) {
-              activateAdminWorkspace(user);
-            } else {
-              renderNonAdmin(user.email, user.displayName);
-            }
+            activateAdminWorkspace(user);
           });
       });
   });
