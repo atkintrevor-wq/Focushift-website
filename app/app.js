@@ -5517,23 +5517,28 @@
 
   function subscribePlaylists(uid) {
     teardownPlaylistsListener();
-    playlistsUnsubscribe = playlistCollection(uid)
-      .orderBy("order", "asc")
-      .onSnapshot(
+    playlistsUnsubscribe = playlistCollection(uid).onSnapshot(
         function (snap) {
-          currentPlaylists = snap.docs.map(function (doc) {
-            var data = doc.data() || {};
-            return {
-              id: doc.id,
-              name: data.name || "Untitled Playlist",
-              colorIndex: data.colorIndex || 0,
-              order: data.order || 0,
-              scriptIDs: parsePlaylistItems(data),
-              loop: !!data.loop,
-              shuffle: !!data.shuffle,
-              mixMode: !!data.mixMode,
-            };
-          });
+          currentPlaylists = snap.docs
+            .map(function (doc) {
+              var data = doc.data() || {};
+              return {
+                id: doc.id,
+                name: data.name || "Untitled Playlist",
+                colorIndex: data.colorIndex || 0,
+                order: typeof data.order === "number" ? data.order : null,
+                scriptIDs: parsePlaylistItems(data),
+                loop: !!data.loop,
+                shuffle: !!data.shuffle,
+                mixMode: !!data.mixMode,
+              };
+            })
+            .sort(function (a, b) {
+              var ao = typeof a.order === "number" ? a.order : Number.MAX_SAFE_INTEGER;
+              var bo = typeof b.order === "number" ? b.order : Number.MAX_SAFE_INTEGER;
+              if (ao !== bo) return ao - bo;
+              return String(a.name || "").localeCompare(String(b.name || ""));
+            });
           if (
             selectedPlaylistId &&
             !currentPlaylists.some(function (p) {
@@ -5930,24 +5935,29 @@
 
   function subscribeScripts(uid) {
     teardownScriptsListener();
-    scriptsUnsubscribe = scriptCollection(uid)
-      .orderBy("createdAt", "desc")
-      .onSnapshot(
+    scriptsUnsubscribe = scriptCollection(uid).onSnapshot(
         function (snap) {
-          var scripts = snap.docs.map(function (doc) {
-            var data = doc.data() || {};
-            return {
-              id: doc.id,
-              title: data.title || "",
-              text: data.text || "",
-              audioURL: data.audioURL || "",
-              voiceID: data.voiceID || "",
-              backgroundID: data.backgroundID || "",
-              categoryID: data.categoryID || "",
-              createdAt: data.createdAt || null,
-              updatedAt: data.updatedAt || null,
-            };
-          });
+          var scripts = snap.docs
+            .map(function (doc) {
+              var data = doc.data() || {};
+              return {
+                id: doc.id,
+                title: data.title || "",
+                text: data.text || "",
+                audioURL: data.audioURL || "",
+                voiceID: data.voiceID || "",
+                backgroundID: data.backgroundID || "",
+                categoryID: data.categoryID || "",
+                createdAt: data.createdAt || null,
+                updatedAt: data.updatedAt || null,
+              };
+            })
+            .sort(function (a, b) {
+              var at = a.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
+              var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
+              if (at !== bt) return bt - at;
+              return String(b.id || "").localeCompare(String(a.id || ""));
+            });
           currentScripts = scripts;
           updateTabCounts();
           renderScripts(scripts);
