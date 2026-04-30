@@ -365,6 +365,14 @@
     });
   }
 
+  function hasAdminAccess(profile) {
+    if (!profile) return false;
+    var raw = profile.isAdmin;
+    if (raw === true || raw === 1) return true;
+    if (typeof raw === "string" && raw.toLowerCase() === "true") return true;
+    return false;
+  }
+
   function renderAdminShell(email, displayName) {
     root.innerHTML =
       '<header class="app-admin-header">' +
@@ -5998,7 +6006,7 @@
         ) {
           selectedBackgroundId = profileBackgroundID;
         }
-        var isAdmin = snap.exists && snap.data().isAdmin === true;
+        var isAdmin = hasAdminAccess(currentUserProfile);
         if (isAdmin) {
           renderAdminShell(user.email, user.displayName);
           subscribeScripts(user.uid);
@@ -6010,7 +6018,25 @@
         }
       })
       .catch(function () {
-        renderNonAdmin(user.email, user.displayName);
+        user
+          .getIdTokenResult(true)
+          .then(function (res) {
+            var claims = (res && res.claims) || {};
+            var byClaim = claims.admin === true || claims.isAdmin === true;
+            if (byClaim) {
+              currentUserProfile = Object.assign({}, currentUserProfile || {}, { isAdmin: true });
+              renderAdminShell(user.email, user.displayName);
+              subscribeScripts(user.uid);
+              subscribePlaylists(user.uid);
+              subscribePremade();
+              subscribeClonedVoices(user.uid);
+            } else {
+              renderNonAdmin(user.email, user.displayName);
+            }
+          })
+          .catch(function () {
+            renderNonAdmin(user.email, user.displayName);
+          });
       });
   });
 })();
