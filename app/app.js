@@ -32,6 +32,8 @@
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
   var PREF_RESUME_ADMIN_KEY = "focusshiftWebPrefResumeAdmin";
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
+  var PREF_AUTO_PLAY_KEY = "focusshiftWebPrefAutoPlay";
+  var PREF_LISTEN_SHORTCUT_KEY = "focusshiftWebPrefListenTodayShortcut";
   var accountEscapeBound = false;
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
@@ -572,6 +574,19 @@
       "    </div>" +
       '    <div id="account-tab-preferences" class="account-tab-panel" hidden>' +
       '      <p class="app-muted" style="margin:0 0 0.75rem;">These options apply in this browser only.</p>' +
+      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
+      '        <strong style="display:block;margin-bottom:0.3rem;">App Preferences</strong>' +
+      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-voices">Default Voice</button>' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-backgrounds">Default Background</button>' +
+      "        </div>" +
+      '        <label class="account-pref-row"><input type="checkbox" id="pref-auto-play-next" /> Auto-Play Next</label>' +
+      '        <label class="account-pref-row" for="pref-listen-shortcut">Listen today shortcut</label>' +
+      '        <select id="pref-listen-shortcut" class="app-btn" style="width:100%;text-align:left;margin-top:0.15rem;">' +
+      '          <option value="playlists">Playlists tab</option>' +
+      '          <option value="library">Library tab</option>' +
+      "        </select>" +
+      "      </section>" +
       '      <label class="account-pref-row"><input type="checkbox" id="pref-resume-last-screen" /> Remember my last workspace screen after sign-in</label>' +
       '      <fieldset class="account-pref-fieldset">' +
       '        <legend class="account-pref-legend">When you open Library, show</legend>' +
@@ -963,6 +978,19 @@
         localStorage.setItem(PREF_RESUME_ADMIN_KEY, this.checked ? "1" : "0");
       } catch (_e) {}
     });
+    document.getElementById("pref-auto-play-next").addEventListener("change", function () {
+      try {
+        localStorage.setItem(PREF_AUTO_PLAY_KEY, this.checked ? "1" : "0");
+      } catch (_e) {}
+      setAccountMessage("Auto-Play preference saved for this browser.", "success");
+    });
+    document.getElementById("pref-listen-shortcut").addEventListener("change", function () {
+      var next = this.value === "library" ? "library" : "playlists";
+      try {
+        localStorage.setItem(PREF_LISTEN_SHORTCUT_KEY, next);
+      } catch (_e) {}
+      setAccountMessage("Listen today shortcut preference saved.", "success");
+    });
     document.getElementById("pref-library-sub-my").addEventListener("change", function () {
       if (!this.checked) return;
       try {
@@ -982,6 +1010,18 @@
         activeLibraryTab = "app-library";
         renderLibrarySubtab();
       }
+    });
+    document.getElementById("account-pref-open-voices").addEventListener("click", function () {
+      closeAccountModal();
+      setAdminTab("voices");
+      setVoicesMessage("Set your default voice here. This syncs across devices.", "");
+      renderVoices();
+    });
+    document.getElementById("account-pref-open-backgrounds").addEventListener("click", function () {
+      closeAccountModal();
+      setAdminTab("backgrounds");
+      setBackgroundsMessage("Set your default background here. This syncs across devices.", "");
+      renderBackgrounds();
     });
     document.getElementById("btn-app-playlist-timer-clear").addEventListener("click", function () {
       clearPlaylistTimer();
@@ -1485,6 +1525,10 @@
   function syncAccountPreferencesForm() {
     var resumeCb = document.getElementById("pref-resume-last-screen");
     if (resumeCb) resumeCb.checked = readPrefResumeAdmin();
+    var autoPlayCb = document.getElementById("pref-auto-play-next");
+    if (autoPlayCb) autoPlayCb.checked = readPrefAutoPlay();
+    var listenSel = document.getElementById("pref-listen-shortcut");
+    if (listenSel) listenSel.value = readPrefListenTodayShortcut();
     var libMy = document.getElementById("pref-library-sub-my");
     var libApp = document.getElementById("pref-library-sub-app");
     if (libMy && libApp) {
@@ -1509,6 +1553,23 @@
     document.querySelectorAll("[data-account-tab]").forEach(function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-account-tab") === chosen);
     });
+  }
+
+  function readPrefAutoPlay() {
+    try {
+      return localStorage.getItem(PREF_AUTO_PLAY_KEY) === "1";
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function readPrefListenTodayShortcut() {
+    try {
+      var raw = localStorage.getItem(PREF_LISTEN_SHORTCUT_KEY);
+      return raw === "library" ? "library" : "playlists";
+    } catch (_e) {
+      return "playlists";
+    }
   }
 
   function openAccountModal() {
