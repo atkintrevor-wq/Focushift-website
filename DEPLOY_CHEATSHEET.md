@@ -31,8 +31,6 @@ git commit -m "Update website"
 git push origin main
 ```
 
-Use this exact flow as the default. Do **not** use `web-staging` merge commands for normal publishes.
-
 3. Wait **1–3 minutes**, then open **https://focusshift.app** and **hard refresh** (or use a private window).
 
 **If the old logo or CSS still shows:** Cloudflare and your browser cache files. Bump the **`?v=`** query string on `styles.css`, `script.js`, and `images/logo.png` in **`index.html`**, **`privacy/index.html`**, **`terms/index.html`**, and **`share-link-fallback.html`** after you change assets or CSS, then push again. If it still sticks, try a **private window** or hard refresh.
@@ -69,14 +67,6 @@ git remote set-url origin https://github.com/atkintrevor-wq/Focushift-website.gi
 ## Don’t use the old “copy to Desktop” flow
 
 Unless you **know** you keep a second clone on the Desktop, treat **`FocuShift/website`** as the only place you commit from. That avoids two copies getting out of sync.
-
----
-
-## Branch policy (to avoid deploy confusion)
-
-- **Production branch:** `main` only.
-- **Normal deploy:** pull → add → commit → push directly to `main`.
-- **`web-staging`:** only use for temporary experiments when you intentionally want a separate review branch. If used, merge it quickly and keep it in sync with `main` so old code does not come back.
 
 ---
 

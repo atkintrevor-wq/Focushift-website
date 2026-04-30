@@ -424,7 +424,7 @@
       '  <div id="generation-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
       "</section>" +
-      '<section id="section-library" class="app-section" hidden>' +
+      '<section id="section-library" class="app-section">' +
       '  <div class="library-toolbar-row">' +
       '    <div class="app-tabs voice-segmented-tabs" id="library-segmented-tabs" style="margin-top:0.1rem;">' +
       '      <button type="button" class="app-tab-btn" id="library-tab-my" data-library-tab="my-library">My Library</button>' +
@@ -465,7 +465,7 @@
       "</section>" +
       "  </div>" +
       "</section>" +
-      '<section id="section-playlists" class="app-section" hidden>' +
+      '<section id="section-playlists" class="app-section">' +
       '  <div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '  <section aria-label="Playlists" style="margin-top:0.5rem;">' +
       '  <div id="playlists-list-view">' +
@@ -484,7 +484,7 @@
       "  </div>" +
       "  </section>" +
       "</section>" +
-      '<section id="section-voices" class="app-section" hidden>' +
+      '<section id="section-voices" class="app-section">' +
       '<section class="app-card" aria-label="Voice settings">' +
       '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Voices</h2>' +
       '  <p class="app-muted" style="margin-top:0;">Choose from App Voices or manage My Voices (saved + cloned), then set defaults.</p>' +
@@ -536,7 +536,7 @@
       '  <input id="voice-upload-input" type="file" accept="audio/*" style="display:none;" />' +
       "</section>" +
       "</section>" +
-      '<section id="section-backgrounds" class="app-section" hidden>' +
+      '<section id="section-backgrounds" class="app-section">' +
       '<section class="app-card" aria-label="Background settings">' +
       '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Backgrounds</h2>' +
       '  <p class="app-muted" style="margin-top:0;">Set your default background for new scripts and audio generation.</p>' +
