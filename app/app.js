@@ -22,6 +22,11 @@
   var activePlaylistQueue = [];
   var activePlaylistIndex = -1;
   var selectedPlaylistId = null;
+  var playlistDetailVisible = false;
+  var activePlaylistLoopForQueue = false;
+  var playlistTimerIntervalId = null;
+  var playlistTimerDeadlineMs = 0;
+  var playlistTimerPlaylistId = null;
   var activeAdminTab = "home";
   var activeLibraryTab = "my-library";
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
@@ -395,7 +400,6 @@
       '  <input id="script-import-audio-input" type="file" accept="audio/*" style="display:none" />' +
       '  <div id="library-sub-my">' +
       '<div id="scripts-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
-      '<div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="premade-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="script-editor"></div>' +
       '<section aria-label="My Library scripts">' +
@@ -417,14 +421,23 @@
       "  </div>" +
       "</section>" +
       '<section id="section-playlists" class="app-section">' +
-      '<section aria-label="Playlists" style="margin-top:1rem;">' +
-      '  <div class="app-section-title-row"><h2>Playlists</h2></div>' +
-      '  <div class="app-toolbar" style="margin-top:0;">' +
-      '    <button type="button" class="app-btn" id="btn-create-playlist">+ New Playlist</button>' +
+      '  <div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '  <section aria-label="Playlists" style="margin-top:0.5rem;">' +
+      '  <div id="playlists-list-view">' +
+      '    <div class="app-section-title-row"><h2>Playlists</h2></div>' +
+      '    <div class="app-toolbar" style="margin-top:0;">' +
+      '      <button type="button" class="app-btn" id="btn-create-playlist">+ New Playlist</button>' +
+      "    </div>" +
+      '    <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
       "  </div>" +
-      '  <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
-      '  <div id="playlist-detail" style="margin-top:0.8rem;"></div>' +
-      "</section>" +
+      '  <div id="playlists-detail-view" hidden>' +
+      '    <div class="playlist-detail-nav">' +
+      '      <button type="button" class="app-btn app-btn-ghost" id="btn-playlist-back">← Playlists</button>' +
+      '      <h2 id="playlist-detail-heading" class="playlist-detail-heading">Playlist</h2>' +
+      "    </div>" +
+      '    <div id="playlist-detail" class="playlist-detail-body"></div>' +
+      "  </div>" +
+      "  </section>" +
       "</section>" +
       '<section id="section-voices" class="app-section">' +
       '<section class="app-card" aria-label="Voice settings">' +
@@ -531,6 +544,32 @@
       '    <div id="playlist-picker-list" class="app-modal-list"></div>' +
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="playlist-picker-close">Close</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="playlist-add-audio-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Add audio to playlist">' +
+      "    <h3>Add audio from My Library</h3>" +
+      '    <p class="app-muted" style="margin:0 0 0.45rem;">Pick scripts that already have generated audio. New tracks are added to the end of the playlist.</p>' +
+      '    <div id="playlist-add-audio-list" class="app-modal-list"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="playlist-add-audio-close">Close</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="playlist-timer-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Playlist timer">' +
+      "    <h3>Playlist timer</h3>" +
+      '    <p class="app-muted" style="margin:0 0 0.45rem;">When time is up, playback stops (same idea as the iOS playlist timer).</p>' +
+      '    <label for="playlist-timer-hours">Hours</label>' +
+      '    <select id="playlist-timer-hours" style="width:100%;box-sizing:border-box;margin-bottom:0.6rem;padding:0.55rem;border-radius:10px;"></select>' +
+      '    <label for="playlist-timer-minutes">Minutes</label>' +
+      '    <select id="playlist-timer-minutes" style="width:100%;box-sizing:border-box;margin-bottom:0.6rem;padding:0.55rem;border-radius:10px;"></select>' +
+      '    <div id="playlist-timer-modal-msg" class="app-inline-msg" style="margin-top:0.25rem;"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="playlist-timer-clear">Clear timer</button>' +
+      '      <button type="button" class="app-btn" id="playlist-timer-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="playlist-timer-save">Set timer</button>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -778,6 +817,39 @@
     document.getElementById("btn-create-playlist").addEventListener("click", function () {
       createPlaylist();
     });
+    document.getElementById("btn-playlist-back").addEventListener("click", function () {
+      closePlaylistDetailView();
+      renderPlaylists(currentPlaylists);
+    });
+    document.getElementById("playlist-add-audio-close").addEventListener("click", function () {
+      closePlaylistAddAudioModal();
+    });
+    document.getElementById("playlist-timer-cancel").addEventListener("click", function () {
+      closePlaylistTimerModal();
+    });
+    document.getElementById("playlist-timer-clear").addEventListener("click", function () {
+      clearPlaylistTimer();
+      closePlaylistTimerModal();
+      setPlaylistsMessage("Playlist timer cleared.", "success");
+      renderSelectedPlaylistDetail();
+    });
+    document.getElementById("playlist-timer-save").addEventListener("click", function () {
+      var hEl = document.getElementById("playlist-timer-hours");
+      var mEl = document.getElementById("playlist-timer-minutes");
+      if (!hEl || !mEl || !selectedPlaylistId) return;
+      var h = parseInt(hEl.value, 10) || 0;
+      var m = parseInt(mEl.value, 10) || 0;
+      var total = h * 3600 + m * 60;
+      if (total <= 0) {
+        setPlaylistTimerModalMessage("Choose a duration greater than zero.", "error");
+        return;
+      }
+      beginPlaylistTimer(selectedPlaylistId, total);
+      closePlaylistTimerModal();
+      setPlaylistsMessage("Playlist timer set.", "success");
+      renderSelectedPlaylistDetail();
+    });
+    populatePlaylistTimerSelectsInit();
     document.getElementById("account-form").addEventListener("submit", function (ev) {
       ev.preventDefault();
       saveAccountDisplayName();
@@ -1294,6 +1366,9 @@
     try {
       localStorage.setItem(ADMIN_TAB_STORAGE_KEY, activeAdminTab);
     } catch (_e) {}
+    if (activeAdminTab === "playlists") {
+      updatePlaylistSectionVisibility();
+    }
   }
 
   function closeLibraryCreateMenu() {
@@ -3954,6 +4029,8 @@
     if (resetQueue) {
       activePlaylistQueue = [];
       activePlaylistIndex = -1;
+      activePlaylistLoopForQueue = false;
+      clearPlaylistTimer();
     }
     activeAudioTitle = "";
     updateMiniPlayer();
@@ -3998,6 +4075,10 @@
   function playQueueAt(index) {
     if (!activePlaylistQueue.length) return;
     if (index < 0 || index >= activePlaylistQueue.length) {
+      if (activePlaylistLoopForQueue && activePlaylistQueue.length && index >= activePlaylistQueue.length) {
+        playQueueAt(0);
+        return;
+      }
       stopActiveAudio();
       renderSelectedPlaylistDetail();
       renderScripts(currentScripts);
@@ -4006,7 +4087,11 @@
     var script = activePlaylistQueue[index];
     var audioURL = script.audioURL && String(script.audioURL).trim();
     if (!audioURL) {
-      playQueueAt(index + 1);
+      var nextIx = index + 1;
+      if (nextIx >= activePlaylistQueue.length && activePlaylistLoopForQueue) {
+        nextIx = 0;
+      }
+      playQueueAt(nextIx);
       return;
     }
     stopActiveAudio(false);
@@ -4015,7 +4100,18 @@
     activeAudio = new Audio(audioURL);
     activeAudioTitle = script.title || "Playlist audio";
     bindAudioLifecycle(function () {
-      playQueueAt(activePlaylistIndex + 1);
+      var next = activePlaylistIndex + 1;
+      if (next >= activePlaylistQueue.length) {
+        if (activePlaylistLoopForQueue && activePlaylistQueue.length) {
+          playQueueAt(0);
+        } else {
+          stopActiveAudio();
+          renderSelectedPlaylistDetail();
+          renderScripts(currentScripts);
+        }
+      } else {
+        playQueueAt(next);
+      }
     });
     activeAudio
       .play()
@@ -4031,7 +4127,7 @@
       });
   }
 
-  function startPlaylistPlayback(playlist) {
+  function startPlaylistPlayback(playlist, startScriptId) {
     var scripts = resolvePlaylistScripts(playlist).filter(function (s) {
       return !!(s.audioURL && String(s.audioURL).trim());
     });
@@ -4039,8 +4135,20 @@
       setPlaylistsMessage("No playable audio in this playlist yet.", "error");
       return;
     }
-    activePlaylistQueue = scripts;
-    playQueueAt(0);
+    var ordered = scripts.slice();
+    if (!!playlist.shuffle) {
+      shuffleInPlace(ordered);
+    }
+    var start = 0;
+    if (startScriptId) {
+      var ix = ordered.findIndex(function (s) {
+        return s.id === startScriptId;
+      });
+      if (ix >= 0) start = ix;
+    }
+    activePlaylistLoopForQueue = !!playlist.loop;
+    activePlaylistQueue = ordered;
+    playQueueAt(start);
   }
 
   function bindAudioLifecycle(onEnded) {
@@ -4399,23 +4507,243 @@
       });
   }
 
+  function shuffleInPlace(arr) {
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = arr[i];
+      arr[i] = arr[j];
+      arr[j] = t;
+    }
+    return arr;
+  }
+
+  function clearPlaylistTimer() {
+    if (playlistTimerIntervalId) {
+      clearInterval(playlistTimerIntervalId);
+      playlistTimerIntervalId = null;
+    }
+    playlistTimerDeadlineMs = 0;
+    playlistTimerPlaylistId = null;
+    updatePlaylistTimerBadge();
+  }
+
+  function formatTimerRemainingShort() {
+    if (!playlistTimerDeadlineMs) return "";
+    var ms = playlistTimerDeadlineMs - Date.now();
+    if (ms <= 0) return "0:00";
+    var sec = Math.floor(ms / 1000);
+    var h = Math.floor(sec / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    var s = sec % 60;
+    if (h > 0) {
+      return h + ":" + (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+    }
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function updatePlaylistTimerBadge() {
+    var el = document.getElementById("playlist-timer-status");
+    if (!el) return;
+    var show =
+      !!playlistTimerDeadlineMs &&
+      Date.now() < playlistTimerDeadlineMs &&
+      !!playlistTimerPlaylistId &&
+      playlistTimerPlaylistId === selectedPlaylistId;
+    if (!show) {
+      el.textContent = "";
+      el.style.display = "none";
+      return;
+    }
+    el.style.display = "block";
+    el.textContent = "Timer: " + formatTimerRemainingShort();
+  }
+
+  function beginPlaylistTimer(playlistId, totalSeconds) {
+    clearPlaylistTimer();
+    if (!totalSeconds || totalSeconds <= 0) return;
+    playlistTimerDeadlineMs = Date.now() + totalSeconds * 1000;
+    playlistTimerPlaylistId = playlistId;
+    playlistTimerIntervalId = setInterval(function () {
+      updatePlaylistTimerBadge();
+      if (Date.now() >= playlistTimerDeadlineMs) {
+        clearPlaylistTimer();
+        stopActiveAudio();
+        setPlaylistsMessage("Playlist timer ended — playback stopped.", "success");
+        renderSelectedPlaylistDetail();
+        renderPlaylists(currentPlaylists);
+      }
+    }, 500);
+    updatePlaylistTimerBadge();
+  }
+
+  function updatePlaylistSectionVisibility() {
+    var listView = document.getElementById("playlists-list-view");
+    var detailView = document.getElementById("playlists-detail-view");
+    if (!listView || !detailView) return;
+    var showDetail = !!playlistDetailVisible && !!selectedPlaylistId;
+    listView.hidden = showDetail;
+    detailView.hidden = !showDetail;
+  }
+
+  function openPlaylistDetailView(playlistId) {
+    selectedPlaylistId = playlistId;
+    playlistDetailVisible = true;
+    updatePlaylistSectionVisibility();
+    renderPlaylists(currentPlaylists);
+    renderSelectedPlaylistDetail();
+  }
+
+  function closePlaylistDetailView() {
+    playlistDetailVisible = false;
+    updatePlaylistSectionVisibility();
+    var h = document.getElementById("playlist-detail-heading");
+    if (h) h.textContent = "Playlist";
+    var el = document.getElementById("playlist-detail");
+    if (el) el.innerHTML = "";
+  }
+
+  function persistPlaylistPlaybackField(playlistId, patch) {
+    if (!currentUser || !playlistId || !patch) return Promise.resolve();
+    return playlistCollection(currentUser.uid)
+      .doc(playlistId)
+      .set(patch, { merge: true })
+      .catch(function (e) {
+        setPlaylistsMessage(e.message || "Could not save playlist.", "error");
+      });
+  }
+
+  function removeScriptFromPlaylist(playlist, scriptId) {
+    if (!currentUser || !playlist || !scriptId) return Promise.resolve();
+    var ids = (playlist.scriptIDs || []).filter(function (x) {
+      return x !== scriptId;
+    });
+    var items = ids.map(function (id) {
+      return { type: "script", id: id };
+    });
+    return playlistCollection(currentUser.uid)
+      .doc(playlist.id)
+      .set(
+        {
+          scriptIDs: ids,
+          items: items,
+        },
+        { merge: true }
+      )
+      .catch(function (e) {
+        setPlaylistsMessage(e.message || "Could not remove track.", "error");
+      });
+  }
+
+  function closePlaylistAddAudioModal() {
+    var backdrop = document.getElementById("playlist-add-audio-backdrop");
+    if (backdrop) backdrop.hidden = true;
+  }
+
+  function openPlaylistAddAudioModal() {
+    var p = currentPlaylists.find(function (x) {
+      return x.id === selectedPlaylistId;
+    });
+    if (!p) return;
+    var list = document.getElementById("playlist-add-audio-list");
+    var backdrop = document.getElementById("playlist-add-audio-backdrop");
+    if (!list || !backdrop) return;
+    var inPlaylist = {};
+    (p.scriptIDs || []).forEach(function (id) {
+      inPlaylist[id] = true;
+    });
+    var candidates = currentScripts.filter(function (s) {
+      return !!(s.audioURL && String(s.audioURL).trim()) && !inPlaylist[s.id];
+    });
+    if (!candidates.length) {
+      list.innerHTML =
+        '<p class="app-muted">No more scripts with audio to add. Generate audio in My Library first.</p>';
+    } else {
+      list.innerHTML = candidates
+        .map(function (s) {
+          return (
+            '<div class="app-modal-row">' +
+            '  <div class="app-modal-row-name">' +
+            escapeHtml(s.title || "Untitled") +
+            "</div>" +
+            '  <button type="button" class="app-btn" data-playlist-add-script="' +
+            escapeHtml(s.id) +
+            '">Add</button>' +
+            "</div>"
+          );
+        })
+        .join("");
+      list.querySelectorAll("[data-playlist-add-script]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var sid = btn.getAttribute("data-playlist-add-script");
+          var script = currentScripts.find(function (x) {
+            return x.id === sid;
+          });
+          var pl = currentPlaylists.find(function (x) {
+            return x.id === selectedPlaylistId;
+          });
+          if (!script || !pl) return;
+          addScriptToPlaylist(script, pl).then(function () {
+            closePlaylistAddAudioModal();
+            setPlaylistsMessage('Added "' + (script.title || "Track") + '" to the playlist.', "success");
+          });
+        });
+      });
+    }
+    backdrop.hidden = false;
+  }
+
+  function populatePlaylistTimerSelectsInit() {
+    var h = document.getElementById("playlist-timer-hours");
+    var m = document.getElementById("playlist-timer-minutes");
+    if (!h || !m || h.options.length) return;
+    var i;
+    for (i = 0; i <= 8; i++) {
+      h.appendChild(new Option(i === 0 ? "0 hours" : i + " hr", String(i)));
+    }
+    for (i = 0; i < 60; i++) {
+      m.appendChild(new Option(i + " min", String(i)));
+    }
+  }
+
+  function setPlaylistTimerModalMessage(text, kind) {
+    var el = document.getElementById("playlist-timer-modal-msg");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function openPlaylistTimerModal() {
+    var backdrop = document.getElementById("playlist-timer-backdrop");
+    if (!backdrop) return;
+    populatePlaylistTimerSelectsInit();
+    setPlaylistTimerModalMessage("", "");
+    backdrop.hidden = false;
+  }
+
+  function closePlaylistTimerModal() {
+    var backdrop = document.getElementById("playlist-timer-backdrop");
+    if (backdrop) backdrop.hidden = true;
+  }
+
   function renderPlaylists(playlists) {
     var list = document.getElementById("playlists-list");
     if (!list) return;
     if (!playlists.length) {
       list.innerHTML =
-        '<div class="app-empty-hint">No playlists yet. Tap <strong>+ New Playlist</strong>, then add scripts from <strong>My Library</strong> using <em>Add to Playlist</em>.</div>';
+        '<div class="app-empty-hint">No playlists yet. Tap <strong>+ New Playlist</strong>, then open a playlist to add audio, or add from <strong>My Library</strong> with <em>Add to Playlist</em>.</div>';
+      updatePlaylistSectionVisibility();
       renderSelectedPlaylistDetail();
       return;
     }
     list.innerHTML = playlists
       .map(function (p) {
-        var selected = p.id === selectedPlaylistId;
+        var selected = p.id === selectedPlaylistId && playlistDetailVisible;
         return (
-          '<article class="app-card" data-playlist-id="' +
+          '<article class="app-card playlist-card-tappable" tabindex="0" role="button" aria-label="Open playlist" data-playlist-card="' +
           escapeHtml(p.id) +
           '" style="' +
           (selected ? "border-color:#2563eb;" : "") +
+          (selected ? "" : "cursor:pointer;") +
           '">' +
           "<h3>" +
           escapeHtml(p.name || "Untitled Playlist") +
@@ -4424,10 +4752,7 @@
           (p.scriptIDs ? p.scriptIDs.length : 0) +
           " item(s)</div>" +
           '<div class="app-card-actions">' +
-          '  <button type="button" class="app-btn" data-playlist-action="open" data-playlist-id="' +
-          escapeHtml(p.id) +
-          '">Open</button>' +
-          '  <button type="button" class="app-btn" data-playlist-action="rename" data-playlist-id="' +
+          '  <button type="button" class="app-btn app-btn-secondary" data-playlist-action="rename" data-playlist-id="' +
           escapeHtml(p.id) +
           '">Rename</button>' +
           '  <button type="button" class="app-btn app-btn-danger" data-playlist-action="delete" data-playlist-id="' +
@@ -4439,6 +4764,22 @@
       })
       .join("");
 
+    list.querySelectorAll(".app-card-actions").forEach(function (row) {
+      row.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+      });
+    });
+    list.querySelectorAll("[data-playlist-card]").forEach(function (card) {
+      card.addEventListener("click", function () {
+        openPlaylistDetailView(card.getAttribute("data-playlist-card"));
+      });
+      card.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          openPlaylistDetailView(card.getAttribute("data-playlist-card"));
+        }
+      });
+    });
     list.querySelectorAll("[data-playlist-action]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var action = btn.getAttribute("data-playlist-action");
@@ -4447,11 +4788,7 @@
           return p.id === pid;
         });
         if (!playlist) return;
-        if (action === "open") {
-          selectedPlaylistId = playlist.id;
-          renderPlaylists(currentPlaylists);
-          renderSelectedPlaylistDetail();
-        } else if (action === "rename") {
+        if (action === "rename") {
           renamePlaylist(playlist);
         } else if (action === "delete") {
           deletePlaylist(playlist);
@@ -4463,49 +4800,100 @@
   function renderSelectedPlaylistDetail() {
     var el = document.getElementById("playlist-detail");
     if (!el) return;
+    var heading = document.getElementById("playlist-detail-heading");
     var p = currentPlaylists.find(function (x) {
       return x.id === selectedPlaylistId;
     });
-    if (!p) {
+    if (!p || !playlistDetailVisible) {
       el.innerHTML = "";
+      if (heading) heading.textContent = "Playlist";
       return;
     }
+    if (heading) heading.textContent = p.name || "Playlist";
     var scripts = resolvePlaylistScripts(p);
-    var isPlayingPlaylist = activePlaylistQueue.length > 0;
+    var idSet = {};
+    (p.scriptIDs || []).forEach(function (id) {
+      idSet[id] = true;
+    });
+    var isPlayingThisQueue =
+      activePlaylistQueue.length > 0 &&
+      activePlaylistQueue.every(function (s) {
+        return !!idSet[s.id];
+      });
+    var loopOn = !!p.loop;
+    var shuffleOn = !!p.shuffle;
+    var mixOn = !!p.mixMode;
     el.innerHTML =
-      '<article class="app-card">' +
-      "<h3>" +
-      escapeHtml(p.name) +
-      "</h3>" +
-      '<div class="app-card-actions">' +
+      '<article class="app-card playlist-detail-card">' +
+      '<div class="playlist-detail-toggles">' +
+      '<label class="playlist-toggle-row"><input type="checkbox" id="toggle-playlist-loop"' +
+      (loopOn ? " checked" : "") +
+      '> Loop all</label>' +
+      '<label class="playlist-toggle-row"><input type="checkbox" id="toggle-playlist-shuffle"' +
+      (shuffleOn ? " checked" : "") +
+      '> Shuffle</label>' +
+      '<label class="playlist-toggle-row"><input type="checkbox" id="toggle-playlist-mix"' +
+      (mixOn ? " checked" : "") +
+      '> Mix mode <span class="app-muted">(saved; simple queue on web)</span></label>' +
+      "</div>" +
+      '<div class="app-card-actions" style="margin-top:0.65rem;flex-wrap:wrap;">' +
       '  <button type="button" class="app-btn" id="btn-play-playlist">' +
-      (isPlayingPlaylist ? "Restart playlist" : "Play playlist") +
+      (isPlayingThisQueue ? "Restart playlist" : "Play playlist") +
       "</button>" +
       '  <button type="button" class="app-btn" id="btn-stop-playlist">Stop</button>' +
+      '  <button type="button" class="app-btn app-btn-secondary" id="btn-playlist-add-audio">Add audio…</button>' +
+      '  <button type="button" class="app-btn app-btn-secondary" id="btn-playlist-rename">Rename</button>' +
+      "</div>" +
+      '<div class="playlist-timer-row">' +
+      '  <span id="playlist-timer-status" class="app-muted" style="display:none;margin-right:0.5rem;"></span>' +
+      '  <button type="button" class="app-btn app-btn-secondary" id="btn-playlist-timer">Timer…</button>' +
       "</div>" +
       (scripts.length
-        ? '<ul style="margin:0.8rem 0 0;padding-left:1.1rem;">' +
+        ? '<ul class="playlist-track-list">' +
           scripts
-            .map(function (s, idx) {
+            .map(function (s) {
+              var hasAudio = !!(s.audioURL && String(s.audioURL).trim());
               var marker =
-                activePlaylistQueue.length &&
+                isPlayingThisQueue &&
                 activePlaylistQueue[activePlaylistIndex] &&
                 activePlaylistQueue[activePlaylistIndex].id === s.id
-                  ? " ▶"
+                  ? ' <span class="playlist-now-playing">▶</span>'
                   : "";
+              var playBtn = hasAudio
+                ? '<button type="button" class="app-btn app-btn-secondary" data-playlist-play-script="' +
+                  escapeHtml(s.id) +
+                  '">Play</button>'
+                : "";
               return (
-                "<li>" +
+                "<li class=\"playlist-track-row\">" +
+                '<span class="playlist-track-title">' +
                 escapeHtml(s.title || "Untitled") +
-                (s.audioURL ? "" : " (no audio)") +
+                (hasAudio ? "" : ' <span class="app-muted">(no audio)</span>') +
                 marker +
+                "</span>" +
+                '<span class="playlist-track-actions">' +
+                playBtn +
+                '<button type="button" class="app-btn app-btn-ghost" data-playlist-remove-script="' +
+                escapeHtml(s.id) +
+                '">Remove</button>' +
+                "</span>" +
                 "</li>"
               );
             })
             .join("") +
           "</ul>"
-        : '<p class="app-muted">No scripts in this playlist yet.</p>') +
+        : '<p class="app-muted">No scripts in this playlist yet. Use <strong>Add audio…</strong> or add from My Library.</p>') +
       "</article>";
 
+    document.getElementById("toggle-playlist-loop").addEventListener("change", function () {
+      persistPlaylistPlaybackField(p.id, { loop: !!this.checked });
+    });
+    document.getElementById("toggle-playlist-shuffle").addEventListener("change", function () {
+      persistPlaylistPlaybackField(p.id, { shuffle: !!this.checked });
+    });
+    document.getElementById("toggle-playlist-mix").addEventListener("change", function () {
+      persistPlaylistPlaybackField(p.id, { mixMode: !!this.checked });
+    });
     document.getElementById("btn-play-playlist").addEventListener("click", function () {
       startPlaylistPlayback(p);
     });
@@ -4514,6 +4902,30 @@
       renderSelectedPlaylistDetail();
       renderScripts(currentScripts);
     });
+    document.getElementById("btn-playlist-add-audio").addEventListener("click", function () {
+      openPlaylistAddAudioModal();
+    });
+    document.getElementById("btn-playlist-rename").addEventListener("click", function () {
+      renamePlaylist(p);
+    });
+    document.getElementById("btn-playlist-timer").addEventListener("click", function () {
+      openPlaylistTimerModal();
+    });
+    el.querySelectorAll("[data-playlist-play-script]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var sid = btn.getAttribute("data-playlist-play-script");
+        startPlaylistPlayback(p, sid);
+      });
+    });
+    el.querySelectorAll("[data-playlist-remove-script]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var sid = btn.getAttribute("data-playlist-remove-script");
+        removeScriptFromPlaylist(p, sid).then(function () {
+          setPlaylistsMessage("Removed from playlist.", "success");
+        });
+      });
+    });
+    updatePlaylistTimerBadge();
   }
 
   function createPlaylist() {
@@ -4539,6 +4951,7 @@
         scriptIDs: [],
         items: [],
         loop: false,
+        shuffle: false,
         mixMode: false,
         order: order + 1,
       })
@@ -4551,6 +4964,7 @@
           order: order + 1,
           colorIndex: 0,
           loop: false,
+          shuffle: false,
           mixMode: false,
         };
       })
@@ -4584,7 +4998,11 @@
       .doc(playlist.id)
       .delete()
       .then(function () {
-        if (selectedPlaylistId === playlist.id) selectedPlaylistId = null;
+        if (selectedPlaylistId === playlist.id) {
+          selectedPlaylistId = null;
+          playlistDetailVisible = false;
+          updatePlaylistSectionVisibility();
+        }
         setPlaylistsMessage("Playlist deleted.", "success");
       })
       .catch(function (e) {
@@ -4680,20 +5098,20 @@
               order: data.order || 0,
               scriptIDs: parsePlaylistItems(data),
               loop: !!data.loop,
+              shuffle: !!data.shuffle,
               mixMode: !!data.mixMode,
             };
           });
-          if (!selectedPlaylistId && currentPlaylists.length) {
-            selectedPlaylistId = currentPlaylists[0].id;
-          }
           if (
             selectedPlaylistId &&
             !currentPlaylists.some(function (p) {
               return p.id === selectedPlaylistId;
             })
           ) {
-            selectedPlaylistId = currentPlaylists.length ? currentPlaylists[0].id : null;
+            selectedPlaylistId = null;
+            playlistDetailVisible = false;
           }
+          updatePlaylistSectionVisibility();
           renderPlaylists(currentPlaylists);
           renderSelectedPlaylistDetail();
           renderScripts(currentScripts);
@@ -4704,6 +5122,9 @@
         function (e) {
           setPlaylistsMessage(e.message || "Could not load playlists.", "error");
           currentPlaylists = [];
+          selectedPlaylistId = null;
+          playlistDetailVisible = false;
+          updatePlaylistSectionVisibility();
           renderPlaylists([]);
         }
       );
