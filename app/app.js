@@ -125,18 +125,67 @@
     { id: "iZURAYccQtQd12U8kEcq", name: "Roland", description: "Middle-aged male voice" },
     { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark", description: "Very Deep, Confident, Professional" },
   ];
-  /** `file` must match the filename in `website/audio/backgrounds/` (same as iOS `BackGroundAudio`). */
+  /** `file` must match the filename in `website/audio/backgrounds/` (same catalog as iOS `BackGroundAudio`). */
   var availableBackgrounds = [
     { id: "bg-none", name: "No Background", categoryID: "general", file: "" },
+    // General (original calm/focus tracks)
     { id: "bg-rain", name: "Rain", categoryID: "general", file: "background-music-soft-calm-333111.mp3" },
     { id: "bg-calm-night", name: "Calm Night", categoryID: "general", file: "calm-night-312296.mp3" },
+    { id: "bg-calm-soft", name: "Calm Soft", categoryID: "general", file: "calm-soft-background-music-398280.mp3" },
+    { id: "bg-just-relax", name: "Just Relax", categoryID: "general", file: "just-relax-11157.mp3" },
     { id: "bg-meditation", name: "Meditation Background", categoryID: "general", file: "meditation-relaxing-music-background-320405.mp3" },
+    {
+      id: "bg-oasis",
+      name: "Oasis (Chill)",
+      categoryID: "general",
+      file: "oasis-background-relax-hip-hop-vlog-music-for-video-stories-short-379505.mp3",
+    },
+    { id: "bg-penguin", name: "Modern Chillout", categoryID: "general", file: "penguinmusic-modern-chillout-future-calm-12641.mp3" },
     { id: "bg-piano", name: "Piano Background", categoryID: "general", file: "piano-background-music-337774.mp3" },
+    { id: "bg-please-calm", name: "Please Calm My Mind", categoryID: "general", file: "please-calm-my-mind-125566.mp3" },
     { id: "bg-soft-calm-piano", name: "Soft Calm Piano", categoryID: "general", file: "soft-calm-piano-music-405074.mp3" },
-    { id: "bg-inner-calm", name: "Inner Calm", categoryID: "mental-wellbeing", file: "Inner Calm.mp3" },
+    // Confidence & Self-Worth
+    { id: "bg-assertive-whisper", name: "Assertive Whisper", categoryID: "confidence", file: "Assertive Whisper.mp3" },
     { id: "bg-calm-groove", name: "Calm Groove", categoryID: "confidence", file: "Calm Groove.mp3" },
+    { id: "bg-kindness-melody", name: "Kindness Melody", categoryID: "confidence", file: "Kindness Melody.mp3" },
+    { id: "bg-purpose-pulse", name: "Purpose Pulse", categoryID: "confidence", file: "Purpose Pulse.mp3" },
+    { id: "bg-resilience-ascend", name: "Resilience Ascend", categoryID: "confidence", file: "Resilience Ascend.mp3" },
+    // Health & Fitness
+    { id: "bg-groove-bloom", name: "Groove Bloom", categoryID: "health-fitness", file: "Groove Bloom.mp3" },
+    { id: "bg-joyful-fusion", name: "Joyful Fusion", categoryID: "health-fitness", file: "Joyful Fusion.mp3" },
+    { id: "bg-mindful-drift", name: "Mindful Drift", categoryID: "health-fitness", file: "Mindful Drift.mp3" },
+    { id: "bg-recovery-glow", name: "Recovery Glow", categoryID: "health-fitness", file: "Recovery Glow .mp3" },
+    { id: "bg-vitality-wave-rise", name: "Vitality Wave Rise", categoryID: "health-fitness", file: "Vitality Wave Rise.mp3" },
+    // Mental Well-Being
+    { id: "bg-clarity-sting-echo", name: "Clarity Sting Echo", categoryID: "mental-wellbeing", file: "Clarity Sting Echo.mp3" },
+    { id: "bg-compassion-rise", name: "Compassion Rise", categoryID: "mental-wellbeing", file: "Compassion Rise.mp3" },
+    { id: "bg-inner-calm", name: "Inner Calm", categoryID: "mental-wellbeing", file: "Inner Calm.mp3" },
+    { id: "bg-nature-presence-glow", name: "Nature Presence Glow", categoryID: "mental-wellbeing", file: "Nature Presence Glow.mp3" },
+    { id: "bg-serene-mind-whisper", name: "Serene Mind Whisper", categoryID: "mental-wellbeing", file: "Serene Mind Whisper.mp3" },
+    // Relationships & Love
+    { id: "bg-breeze-glow", name: "Breeze Glow", categoryID: "relationships", file: "Breeze Glow.mp3" },
+    { id: "bg-connection-drift", name: "Connection Drift", categoryID: "relationships", file: "Cennection Drift.mp3" },
+    { id: "bg-harmony-rise", name: "Harmony Rise", categoryID: "relationships", file: "Harmony Rise.mp3" },
     { id: "bg-warm-melody", name: "Warm Melody", categoryID: "relationships", file: "Warm Melody.mp3" },
+    { id: "bg-whisper-flow", name: "Whisper Flow", categoryID: "relationships", file: "Whisper Flow.mp3" },
+    // Sleep & Rest
     { id: "bg-calm-piano-whisper", name: "Calm Piano Whisper", categoryID: "sleep-rest", file: "Calm Piano Whisper.mp3" },
+    { id: "bg-deep-serenity-pulse", name: "Deep Serenity Pulse", categoryID: "sleep-rest", file: "Deep Serenity Pulse.mp3" },
+    { id: "bg-orchestral-calm-embrace", name: "Orchestral Calm Embrace", categoryID: "sleep-rest", file: "Orchestral Calm Embrace.mp3" },
+    { id: "bg-serene-wave-drift", name: "Serene Wave Drift", categoryID: "sleep-rest", file: "Serene Wave Drift.mp3" },
+    { id: "bg-theta-peace-drift", name: "Theta Peace Drift", categoryID: "sleep-rest", file: "Theta Peace Drift.mp3" },
+    // Sports Performance
+    { id: "bg-ambient-mastery-pulse", name: "Ambient Mastery Pulse", categoryID: "sports-performance", file: "Ambient Mastery Pulse.mp3" },
+    { id: "bg-orchestral-resilience-rush", name: "Orchestral Resilience Rush", categoryID: "sports-performance", file: "orchestral Resilience Rush.mp3" },
+    { id: "bg-relentless-edge-surge", name: "Relentless Edge Surge", categoryID: "sports-performance", file: "Relentless Edge Surge.mp3" },
+    { id: "bg-riff-resilience-rush", name: "Riff Resilience Rush", categoryID: "sports-performance", file: "Riff Resilience Rush.mp3" },
+    { id: "bg-synth-flow-fury", name: "Synth Flow Fury", categoryID: "sports-performance", file: "Synth Flow Fury.mp3" },
+    // Success & Prosperity
+    { id: "bg-breakthrough-surge", name: "Breakthrough Surge", categoryID: "success-prosperity", file: "Breakthrough Surge.mp3" },
+    { id: "bg-freedom-whisper", name: "Freedom Whisper", categoryID: "success-prosperity", file: "Freedom Whisper.mp3" },
+    { id: "bg-growth-glow", name: "Growth Glow", categoryID: "success-prosperity", file: "Growth Glow.mp3" },
+    { id: "bg-momentum-desire", name: "Momentum Desire", categoryID: "success-prosperity", file: "Momentum Desire.mp3" },
+    { id: "bg-symphony-ascend", name: "Symphony Ascend", categoryID: "success-prosperity", file: "Symphony Ascend.mp3" },
   ];
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
