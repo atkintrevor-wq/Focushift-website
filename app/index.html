@@ -668,6 +668,37 @@
       white-space: nowrap;
       max-width: 280px;
     }
+    .app-bg-none-row {
+      margin-bottom: 0.55rem;
+    }
+    .app-bg-category {
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      background: rgba(255,255,255,0.02);
+      margin-bottom: 0.5rem;
+      overflow: hidden;
+    }
+    .app-bg-category-summary {
+      cursor: pointer;
+      padding: 0.55rem 0.7rem;
+      font-weight: 600;
+      list-style: none;
+      user-select: none;
+    }
+    .app-bg-category-summary::-webkit-details-marker {
+      display: none;
+    }
+    .app-bg-category-summary::after {
+      content: "▾";
+      float: right;
+      color: var(--muted, #a7b7cf);
+    }
+    .app-bg-category:not([open]) .app-bg-category-summary::after {
+      content: "▸";
+    }
+    .app-bg-category-list {
+      padding: 0 0.5rem 0.3rem;
+    }
     .app-picker-group {
       display: flex;
       flex-direction: column;
@@ -1324,6 +1355,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=69"></script>
+  <script src="app.js?v=70"></script>
 </body>
 </html>

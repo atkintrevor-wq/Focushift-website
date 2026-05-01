@@ -187,6 +187,38 @@
     { id: "bg-momentum-desire", name: "Momentum Desire", categoryID: "success-prosperity", file: "Momentum Desire.mp3" },
     { id: "bg-symphony-ascend", name: "Symphony Ascend", categoryID: "success-prosperity", file: "Symphony Ascend.mp3" },
   ];
+  var backgroundCategoryOrder = [
+    "general",
+    "confidence",
+    "relationships",
+    "success-prosperity",
+    "mental-wellbeing",
+    "health-fitness",
+    "sports-performance",
+    "sleep-rest",
+  ];
+  function backgroundCategoryDisplayName(id) {
+    switch (id) {
+      case "general":
+        return "General";
+      case "confidence":
+        return "Confidence & Self-Worth";
+      case "relationships":
+        return "Relationships & Love";
+      case "success-prosperity":
+        return "Success & Prosperity";
+      case "mental-wellbeing":
+        return "Mental Well-Being";
+      case "health-fitness":
+        return "Health & Fitness";
+      case "sports-performance":
+        return "Sports Performance";
+      case "sleep-rest":
+        return "Sleep & Rest";
+      default:
+        return id || "Other";
+    }
+  }
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
   /** Set while asking Stripe-style follow-ups before final script (see iOS SurveyViewModel). */
@@ -1889,6 +1921,7 @@
   }
 
   var backgroundPreviewAudio = null;
+  var backgroundPreviewId = "";
   function stopBackgroundPreview() {
     if (backgroundPreviewAudio) {
       try {
@@ -1900,21 +1933,42 @@
       } catch (_e2) {}
       backgroundPreviewAudio = null;
     }
+    backgroundPreviewId = "";
+  }
+
+  function isBackgroundPreviewing(backgroundId) {
+    return !!(
+      backgroundPreviewAudio &&
+      backgroundPreviewId === ((backgroundId && String(backgroundId).trim()) || "") &&
+      !backgroundPreviewAudio.paused
+    );
   }
 
   function previewBackgroundById(backgroundId, onError) {
     var entry = backgroundEntryById(backgroundId);
-    if (!entry || !entry.file) return;
-    stopBackgroundPreview();
+    if (!entry || !entry.file) return Promise.resolve(false);
+    if (isBackgroundPreviewing(entry.id)) {
+      stopBackgroundPreview();
+      return Promise.resolve(false);
+    }
+    stopBackgroundPreview(); // switch to a different background preview
     var url = backgroundTrackAssetUrl(entry.file);
     var a = new Audio(url);
     a.loop = true;
+    backgroundPreviewId = entry.id;
     backgroundPreviewAudio = a;
-    a.play().catch(function () {
-      var msg =
-        "Could not play background preview. Add the MP3s to the site under audio/backgrounds/ (see that folder’s README), deploy, and hard-refresh.";
-      if (typeof onError === "function") onError(msg);
-    });
+    return a
+      .play()
+      .then(function () {
+        return true;
+      })
+      .catch(function () {
+        stopBackgroundPreview();
+        var msg =
+          "Could not play background preview. Add the MP3s to the site under audio/backgrounds/ (see that folder’s README), deploy, and hard-refresh.";
+        if (typeof onError === "function") onError(msg);
+        return false;
+      });
   }
 
   function resampleFloat32Linear(src, srcRate, dstRate, dstLen) {
@@ -3319,39 +3373,83 @@
   function renderBackgrounds() {
     var list = document.getElementById("backgrounds-list");
     if (!list) return;
-    list.innerHTML = availableBackgrounds
-      .map(function (b) {
-        var isSelected = b.id === selectedBackgroundId;
+    var grouped = {};
+    backgroundCategoryOrder.forEach(function (cid) {
+      grouped[cid] = [];
+    });
+    availableBackgrounds.forEach(function (b) {
+      if (b.id === "bg-none") return;
+      var cid = (b.categoryID && String(b.categoryID).trim()) || "general";
+      if (!grouped[cid]) grouped[cid] = [];
+      grouped[cid].push(b);
+    });
+    var none = availableBackgrounds.find(function (b) {
+      return b.id === "bg-none";
+    });
+    function rowHtml(b) {
+      var isSelected = b.id === selectedBackgroundId;
+      var isPreview = isBackgroundPreviewing(b.id);
+      return (
+        '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
+        '  <div style="flex:1;min-width:140px;">' +
+        '    <div class="app-modal-row-name">' +
+        escapeHtml(b.name) +
+        "</div>" +
+        "  </div>" +
+        (b.file
+          ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
+            escapeHtml(b.id) +
+            '">' +
+            (isPreview ? "Stop" : "Preview") +
+            "</button>"
+          : "") +
+        '  <button type="button" class="app-btn ' +
+        (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+        '" data-background-id="' +
+        escapeHtml(b.id) +
+        '">' +
+        (isSelected ? "Default" : "Set Default") +
+        "</button>" +
+        "</div>"
+      );
+    }
+    var sections = backgroundCategoryOrder
+      .map(function (cid) {
+        var items = grouped[cid] || [];
+        if (!items.length) return "";
+        var open = selectedBackgroundId !== "bg-none" && items.some(function (b) { return b.id === selectedBackgroundId; });
+        if (cid === "general") open = true;
         return (
-          '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
-          '  <div style="flex:1;min-width:140px;">' +
-          '    <div class="app-modal-row-name">' +
-          escapeHtml(b.name) +
-          ' <span class="app-muted" style="font-size:0.78rem;">(' +
-          escapeHtml(b.categoryID || "general") +
-          ")</span></div>" +
-          "  </div>" +
-          (b.file
-            ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
-              escapeHtml(b.id) +
-              '">Preview</button>'
-            : "") +
-          '  <button type="button" class="app-btn ' +
-          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-          '" data-background-id="' +
-          escapeHtml(b.id) +
-          '">' +
-          (isSelected ? "Default" : "Set Default") +
-          "</button>" +
-          "</div>"
+          '<details class="app-bg-category" ' +
+          (open ? "open" : "") +
+          ">" +
+          '<summary class="app-bg-category-summary">' +
+          escapeHtml(backgroundCategoryDisplayName(cid)) +
+          ' <span class="app-muted">(' +
+          String(items.length) +
+          ")</span></summary>" +
+          '<div class="app-bg-category-list">' +
+          items
+            .map(function (b) {
+              return rowHtml(b);
+            })
+            .join("") +
+          "</div>" +
+          "</details>"
         );
       })
       .join("");
+    list.innerHTML =
+      (none
+        ? '<div class="app-bg-none-row">' + rowHtml(none) + "</div>"
+        : "") + sections;
     list.querySelectorAll("[data-background-preview]").forEach(function (pbtn) {
       pbtn.addEventListener("click", function () {
         var pid = pbtn.getAttribute("data-background-preview");
         previewBackgroundById(pid, function (msg) {
           setBackgroundsMessage(msg, "error");
+        }).then(function () {
+          renderBackgrounds();
         });
       });
     });
@@ -5071,6 +5169,7 @@
     }
 
     function optionRowHtml(opt, selected, includeBgPreview) {
+      var isBgPreview = includeBgPreview && isBackgroundPreviewing(opt.id);
       var mainBtn =
         '<button type="button" class="app-picker-option' +
         (selected ? " is-selected" : "") +
@@ -5090,7 +5189,9 @@
           mainBtn +
           '<button type="button" class="app-btn app-btn-ghost app-picker-preview-btn" data-preview-background="' +
           escapeHtml(opt.id) +
-          '" aria-label="Preview background">▶</button>' +
+          '" aria-label="Preview background">' +
+          (isBgPreview ? "Stop" : "Preview") +
+          "</button>" +
           "</div>"
         );
       }
@@ -5163,6 +5264,8 @@
           var bid = pv.getAttribute("data-preview-background");
           previewBackgroundById(bid, function (msg) {
             setMediaPickerMessage(msg, "error");
+          }).then(function () {
+            renderPickerOptions(searchInput.value || "");
           });
         });
       });
