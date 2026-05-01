@@ -2023,6 +2023,42 @@
     return uniqueStrings(candidates)[0] || "";
   }
 
+  var STATIC_PREMADE_FALLBACK = [
+    ["confidence", ["Embracing Inner Strength", "Radiating Self-Assurance", "Nurturing Self-Compassion", "Igniting Bold Confidence", "Cultivating Unwavering Worth"]],
+    ["relationships", ["Cultivating Deep Connections", "Embracing Self-Love First", "Fostering Harmony and Trust", "Attracting Passionate Bonds", "Nurturing Emotional Intimacy"]],
+    ["success-prosperity", ["Visionary Achievement", "Resilient Prosperity", "Empowered Wealth Building", "Harmonious Success Flow", "Bold Abundance Pursuit"]],
+    ["mental-wellbeing", ["Finding Inner Peace", "Releasing Anxiety Gently", "Cultivating Emotional Resilience", "Embracing Daily Mindfulness", "Nurturing Mental Harmony"]],
+    ["health-fitness", ["Building Vital Strength", "Nurturing Body Confidence", "Igniting Daily Energy", "Embracing Holistic Wellness", "Achieving Peak Performance"]],
+    ["sports-performance", ["Unleashing Peak Performance", "Building Unstoppable Resilience", "Igniting Competitive Fire", "Mastering Athletic Flow", "Claiming Champion Mindset"]],
+    ["sleep-rest", ["Embracing Gentle Slumber", "Cultivating Deep Recovery", "Nurturing Serene downtime", "Igniting Restful Renewal", "Claiming Tranquil Resoration"]],
+  ];
+
+  function buildStaticPremadeFallbackList() {
+    var rows = [];
+    STATIC_PREMADE_FALLBACK.forEach(function (entry) {
+      var cid = entry[0];
+      var titles = entry[1] || [];
+      titles.forEach(function (title, idx) {
+        var data = { title: title, categoryID: cid };
+        var staticUrl = resolvePremadeStaticAudioURLFromData(data);
+        rows.push({
+          id: "static-premade-" + cid + "-" + String(idx + 1),
+          title: title,
+          categoryID: cid,
+          description: "Built-in premade audio",
+          scriptText: title,
+          audioURL: staticUrl,
+          sourceScriptID: "",
+          createdByUID: "",
+          createdByEmail: "",
+          createdByName: "Built-in",
+          createdAt: null,
+        });
+      });
+    });
+    return rows;
+  }
+
   var backgroundPreviewAudio = null;
   var backgroundPreviewId = "";
   function stopBackgroundPreview() {
@@ -7044,7 +7080,7 @@
     teardownPremadeListener();
     premadeUnsubscribe = premadeCollection().onSnapshot(
       function (snap) {
-        currentPremade = snap.docs
+        var cloudPremade = snap.docs
           .map(function (doc) {
             var data = doc.data() || {};
             return {
@@ -7066,6 +7102,7 @@
             var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
             return bt - at;
           });
+        currentPremade = cloudPremade.length ? cloudPremade : buildStaticPremadeFallbackList();
         var nextExpanded = {};
         currentPremade.forEach(function (p) {
           if (expandedPremadeTextById[p.id] === true) nextExpanded[p.id] = true;
