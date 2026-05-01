@@ -1226,6 +1226,35 @@
     .gen-survey-textarea {
       color: #f1f5f9;
     }
+    .gen-clarify-field {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.35rem;
+      margin-top: 0.15rem;
+    }
+    .gen-clarify-field > label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(226, 232, 240, 0.55);
+      margin: 0;
+    }
+    .gen-clarify-textarea {
+      width: 100%;
+      box-sizing: border-box;
+      margin: 0;
+      border-radius: 12px;
+      border: 1px solid var(--stroke, rgba(255, 255, 255, 0.15));
+      background: rgba(0, 0, 0, 0.28);
+      font-family: inherit;
+      font-size: 0.95rem;
+      line-height: 1.45;
+      padding: 0.72rem 0.85rem;
+      min-height: 132px;
+      resize: vertical;
+    }
     .gen-iam-help {
       margin: 0.15rem 0 0.45rem;
       border-radius: 10px;
@@ -1286,6 +1315,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=65"></script>
+  <script src="app.js?v=66"></script>
 </body>
 </html>

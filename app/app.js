@@ -3673,6 +3673,7 @@
       if (display) display.textContent = String(v);
       if (minus) minus.disabled = v <= 0;
       if (plus) plus.disabled = maxC <= 0 ? true : v >= maxC;
+      syncGenerateSubmitLabel();
     }
     if (minus) {
       minus.addEventListener("click", function () {
@@ -3704,6 +3705,16 @@
     var plus = document.getElementById("gen-clarify-plus");
     if (minus) minus.disabled = v <= 0;
     if (plus) plus.disabled = maxC <= 0 ? true : v >= maxC;
+    syncGenerateSubmitLabel();
+  }
+
+  function syncGenerateSubmitLabel() {
+    var btn = document.getElementById("gen-submit-primary");
+    if (!btn) return;
+    var hidden = document.getElementById("gen-clarify-count");
+    var n = hidden ? parseInt(hidden.value, 10) : 0;
+    if (!isFinite(n) || n < 0) n = 0;
+    btn.textContent = n > 0 ? "Next" : "Generate";
   }
 
   function finalizeScriptGeneration(ctx) {
@@ -3944,6 +3955,7 @@
       return;
     }
     if (homeFlowStep === "clarify" && homeClarifyFlow) {
+      generationMessage("", "");
       var cf = homeClarifyFlow;
       var pq = cf.pendingQuestion || "";
       el.innerHTML =
@@ -3956,12 +3968,14 @@
         '  <p style="margin:0 0 0.65rem;font-weight:600;">' +
         escapeHtml(pq) +
         "</p>" +
-        '  <label for="clarify-answer">Your answer</label>' +
-        '  <textarea id="clarify-answer" required rows="4" placeholder="Share what feels true for you…"></textarea>' +
+        '  <div class="gen-clarify-field">' +
+        '    <label for="clarify-answer">Your answer</label>' +
+        '    <textarea id="clarify-answer" class="gen-survey-textarea gen-clarify-textarea" required rows="5" placeholder="Share what feels true for you…"></textarea>' +
+        "  </div>" +
         '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">' +
         '    <button type="button" class="app-btn app-btn-secondary" id="clarify-cancel">Back</button>' +
         '    <button type="button" class="app-btn app-btn-primary" id="clarify-continue">' +
-        (cf.currentIndex + 1 < cf.requested ? "Next question" : "Generate script") +
+        (cf.currentIndex + 1 < cf.requested ? "Next" : "Generate") +
         "</button>" +
         "  </div>" +
         "</div>";
@@ -4087,7 +4101,7 @@
       "</p>" +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.9rem;">' +
       '    <button type="button" class="app-btn app-btn-secondary" id="home-back-category">Back to Categories</button>' +
-      '    <button type="submit" class="app-btn app-btn-primary">Generate & Save</button>' +
+      '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate</button>' +
       "  </div>" +
       "</form>";
     wirePerspectiveUseNameRow();
