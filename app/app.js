@@ -984,7 +984,7 @@
     });
     document.getElementById("account-subscription-manage").addEventListener("click", function () {
       setAccountMessage(
-        "Subscriptions: iOS uses App Store billing today. Web and Android will use a separate payment provider (e.g. Stripe); until that ships, plan changes for web-only accounts may be manual via support or Firebase Console.",
+        "Subscriptions: iOS uses App Store today. Web/Android billing uses Stripe: point Stripe webhooks to POST …/api/stripe/webhook on your Cloud Functions URL, set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET (+ optional STRIPE_PRICE_STARTER / STRIPE_PRICE_CREATOR), and pass firebaseUid in Checkout metadata. Until checkout UI exists, tiers can still be set manually in Firestore.",
         ""
       );
     });
