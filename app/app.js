@@ -7114,7 +7114,8 @@
       },
       function (e) {
         setPremadeMessage(e.message || "Could not load premade library.", "error");
-        currentPremade = [];
+        // If Firestore premade feed is unavailable, still show built-in static premades.
+        currentPremade = buildStaticPremadeFallbackList();
         renderPremade();
       }
     );
