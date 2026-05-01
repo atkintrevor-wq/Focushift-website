@@ -1163,6 +1163,116 @@
         font-size: 1.8rem;
       }
     }
+
+    /* Home — create script: segmented pills, clarify stepper, I am… tips */
+    .gen-field-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(226, 232, 240, 0.55);
+      margin: 0 0 0.35rem;
+    }
+    .gen-pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: stretch;
+    }
+    .gen-pill-item {
+      position: relative;
+      flex: 1 1 0;
+      min-width: 88px;
+    }
+    .gen-pill-input {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+      margin: 0;
+      pointer-events: none;
+    }
+    .gen-pill-label {
+      display: block;
+      text-align: center;
+      padding: 0.52rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.55);
+      color: #e2e8f0;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .gen-pill-input:focus-visible + .gen-pill-label {
+      outline: 2px solid rgba(96, 165, 250, 0.85);
+      outline-offset: 2px;
+    }
+    .gen-pill-input:checked + .gen-pill-label {
+      background: rgba(37, 99, 235, 0.35);
+      border-color: rgba(96, 165, 250, 0.75);
+      color: #f8fafc;
+    }
+    .gen-pill-hint {
+      font-size: 0.8rem;
+      line-height: 1.45;
+      margin: 0.35rem 0 0;
+    }
+    .gen-survey-textarea::placeholder {
+      color: rgba(148, 163, 184, 0.85);
+      line-height: 1.4;
+    }
+    .gen-survey-textarea {
+      color: #f1f5f9;
+    }
+    .gen-iam-help {
+      margin: 0.15rem 0 0.45rem;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      background: rgba(15, 23, 42, 0.45);
+      padding: 0.35rem 0.55rem;
+    }
+    .gen-iam-help summary {
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: rgba(147, 197, 253, 0.95);
+      font-weight: 600;
+      list-style: none;
+    }
+    .gen-iam-help summary::-webkit-details-marker {
+      display: none;
+    }
+    .gen-iam-help-body {
+      margin-top: 0.4rem;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      color: rgba(226, 232, 240, 0.88);
+    }
+    .gen-stepper-row {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .gen-stepper-btn {
+      min-width: 44px;
+      padding: 0.45rem 0.55rem;
+      font-size: 1.15rem;
+      line-height: 1;
+      font-weight: 700;
+    }
+    .gen-stepper-value {
+      min-width: 2rem;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #f1f5f9;
+    }
+    .gen-stepper-locked {
+      opacity: 0.85;
+    }
   </style>
 </head>
 <body>
@@ -1176,6 +1286,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=64"></script>
+  <script src="app.js?v=65"></script>
 </body>
 </html>

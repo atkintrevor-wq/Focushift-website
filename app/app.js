@@ -141,12 +141,25 @@
   var homeFlowStep = "landing";
   /** Set while asking Stripe-style follow-ups before final script (see iOS SurveyViewModel). */
   var homeClarifyFlow = null;
+  /** Long tips for I am… questions (matches iOS `IAMSurveyHelp`). */
+  var IAM_SURVEY_HELP_Q1 =
+    "Add everything you want in your script—who you're becoming.\n\n" +
+    "• Easiest: one idea per line\n" +
+    "• If an idea is longer and has commas inside it, end that idea with a period so it stays one thought (commas won't be mistaken for a new idea)\n" +
+    "• Short lists can stay simple: a few words or phrases per line are fine (e.g. honor, courage, patient with myself)\n" +
+    "• You don't need to type \"I am\" before every line\n\n" +
+    "Your script will weave these into smooth, spoken lines and include each idea.";
+  var IAM_SURVEY_HELP_Q2 =
+    "This is what makes the script feel alive when you listen.\n\n" +
+    "Imagine your goals and what you deeply want are already done—you've arrived. What rises in you? Pride, relief, warmth, strength, quiet joy, something in your chest or gut?\n\n" +
+    "Name a few feelings or sensations. You don't need perfect words—honest fragments are enough. The script will lean on this so the listening experience matches that inner win.";
+  /** Mirrors iOS `SurveyCategories.swift` + default placeholder from `SurveyQuestionCard`. */
   var surveyCategories = [
     {
       id: "confidence",
       name: "Confidence & Self-Worth",
       questions: [
-        "What's one area where you'd like to feel more confident or worthy right now?",
+        "What's one area where you'd like to feel more confident or worthy right now? (e.g., speaking up, accepting yourself, handling criticism)",
         "How do you want to feel about yourself on a great day?",
       ],
     },
@@ -154,23 +167,23 @@
       id: "relationships",
       name: "Relationships & Love",
       questions: [
-        "What aspect of your relationships would you most like to improve or attract?",
-        "What does an ideal relationship feel like to you?",
+        "What aspect of your relationships would you most like to improve or attract? (e.g., deeper connections, self-love, healthier boundaries, or more passion)",
+        "What does an ideal relationship feel like to you? Describe a moment or quality in a relationship that feels ideal to you",
       ],
     },
     {
       id: "success-prosperity",
       name: "Success & Prosperity",
       questions: [
-        "What's your main goal right now in career, money, or abundance?",
-        "What would success or prosperity look and feel like day-to-day?",
+        "What's your main goal right now in career, money, or abundance? (e.g., promotion, financial freedom, feeling deserving)",
+        "What would success or prosperity look and feel like for you day-to-day?",
       ],
     },
     {
       id: "mental-wellbeing",
       name: "Mental Well-Being",
       questions: [
-        "What's the biggest mental or emotional challenge you're facing lately?",
+        "What's the biggest mental or emotional challenge you're facing lately? (e.g., anxiety, overwhelm, overthinking, low mood)",
         "How do you want to feel most of the time?",
       ],
     },
@@ -178,7 +191,7 @@
       id: "health-fitness",
       name: "Health & Fitness",
       questions: [
-        "What's your primary health or fitness focus right now?",
+        "What's your primary health or fitness focus right now? (e.g., habits, energy, body confidence, finding joy in movement)",
         "When your body and energy are at their best, what does that feel like?",
       ],
     },
@@ -186,35 +199,51 @@
       id: "sports-performance",
       name: "Sports Performance",
       questions: [
-        "What aspect of your mental game do you want to strengthen for peak performance?",
-        "When you're at your best in your sport, what do you feel or tell yourself?",
+        "What aspect of your mental game do you want to strengthen for peak performance? (e.g., building relentless focus and toughness under pressure, staying present one play at a time, or developing daily routines for consistency and resilience)",
+        "When you're at your best in your sport, what do you feel, tell yourself or visualize? Describe the mindset, emotions, or self-talk that helps you perform at your peak.",
       ],
     },
     {
       id: "sleep-rest",
       name: "Sleep & Rest",
       questions: [
-        "What gets in the way of good sleep or rest for you right now?",
-        "How do you want to feel when falling asleep or waking up rested?",
+        "What gets in the way of good sleep or rest for you right now? (e.g., racing thoughts, irregular schedule, trouble winding down)",
+        "How do you want to feel when falling asleep, waking up fully rested, or both? Describe the ideal sleep experience or morning feeling for you.",
       ],
     },
     {
       id: "i-am",
       name: "I am…",
       questions: [
-        "What do you most want to believe or embody about yourself right now?",
-        "How would life feel different if you fully lived this daily?",
+        "What do you most want to believe or embody about yourself right now? (e.g., I am confident, I am worthy of love, I am strong and resilient, I am successful)",
+        "How would your life feel different if you fully believed and lived this 'I Am' statement every day? Describe the emotions, actions, or changes you would experience.",
       ],
     },
     {
       id: "other",
       name: "Custom Topic",
       questions: [
-        "Describe the specific area or theme you'd like this script for.",
+        "Describe the specific area or theme you'd like affirmations for (e.g. creativity, parenting, spirituality, recovery).",
         "What's one key challenge or desired feeling in this area?",
       ],
     },
   ];
+
+  function surveyAnswerPlaceholder() {
+    return "Share as much as you like—the more specific, the better your script.";
+  }
+
+  function surveyIamHelpDetailsHtml(catId, questionIndex) {
+    if (catId !== "i-am") return "";
+    var body = questionIndex === 0 ? IAM_SURVEY_HELP_Q1 : IAM_SURVEY_HELP_Q2;
+    return (
+      '<details class="gen-iam-help">' +
+      '<summary>Tips for this question</summary>' +
+      '<div class="gen-iam-help-body">' +
+      escapeHtml(body) +
+      "</div></details>"
+    );
+  }
 
   function redirectLogin() {
     window.location.href = "/login/";
@@ -3519,7 +3548,9 @@
         return l.trim();
       })
       .filter(Boolean);
-    return lines[0] || "";
+    var line = lines[0] || "";
+    line = line.replace(/^\d+\.\s*/, "").replace(/\*\*/g, "").trim();
+    return line;
   }
 
   function buildScriptGeneratePayload(ctx, clarifyCount) {
@@ -3559,6 +3590,9 @@
         body: JSON.stringify(payload),
       }).then(function (resp) {
         return resp.json().then(function (json) {
+          if (json && json.ok === true && json.content != null && json.content !== "") {
+            return json;
+          }
           if (!resp.ok || !json || json.ok !== true) {
             var msg = (json && json.error) || "Generation failed.";
             throw new Error(msg);
@@ -3574,30 +3608,102 @@
     var q1 = (document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "";
     var q2 = (document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "";
     var toneEl = document.getElementById("gen-tone");
-    var lenEl = document.getElementById("gen-length");
-    var persEl = document.getElementById("gen-perspective");
+    var lenRadio = document.querySelector('input[name="gen-length"]:checked');
+    var persRadio = document.querySelector('input[name="gen-perspective"]:checked');
     var useNameEl = document.getElementById("gen-use-name");
     return {
       cat: cat,
       q1: q1.trim(),
       q2: q2.trim(),
       tone: (toneEl && toneEl.value) || "Calming",
-      length: (lenEl && lenEl.value) || "Medium",
-      perspective: (persEl && persEl.value) || "First person",
+      length: (lenRadio && lenRadio.value) || "Medium",
+      perspective: (persRadio && persRadio.value) || "First person",
       useNameInScript: useNameEl ? !!useNameEl.checked : true,
     };
   }
 
   function wirePerspectiveUseNameRow() {
-    var pers = document.getElementById("gen-perspective");
     var row = document.getElementById("gen-use-name-row");
-    if (!pers || !row) return;
+    var radios = document.querySelectorAll('input[name="gen-perspective"]');
+    if (!radios.length) return;
     function sync() {
-      var third = (pers.value || "").toLowerCase().indexOf("third") !== -1;
-      row.style.display = third ? "" : "none";
+      var checked = document.querySelector('input[name="gen-perspective"]:checked');
+      var third = checked && String(checked.value || "").toLowerCase().indexOf("third") !== -1;
+      if (row) row.style.display = third ? "" : "none";
     }
-    pers.addEventListener("change", sync);
+    radios.forEach(function (r) {
+      r.addEventListener("change", sync);
+    });
     sync();
+  }
+
+  function wireGenLengthHint() {
+    var hint = document.getElementById("gen-length-hint");
+    var labels = {
+      Short: "Short — about 1 min of spoken audio (~150 words).",
+      Medium: "Medium — about 2.5 min (~400 words).",
+      Long: "Long — about 4 min (~800 words).",
+    };
+    function sync() {
+      var checked = document.querySelector('input[name="gen-length"]:checked');
+      var v = (checked && checked.value) || "Medium";
+      if (hint) hint.textContent = labels[v] || labels.Medium;
+    }
+    document.querySelectorAll('input[name="gen-length"]').forEach(function (r) {
+      r.addEventListener("change", sync);
+    });
+    sync();
+  }
+
+  function wireClarifyStepper() {
+    var hidden = document.getElementById("gen-clarify-count");
+    var display = document.getElementById("gen-clarify-display");
+    var minus = document.getElementById("gen-clarify-minus");
+    var plus = document.getElementById("gen-clarify-plus");
+    var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
+    function readVal() {
+      var v = parseInt((hidden && hidden.value) || "0", 10);
+      if (!isFinite(v) || v < 0) v = 0;
+      if (v > maxC) v = maxC;
+      return v;
+    }
+    function sync() {
+      var v = readVal();
+      if (hidden) hidden.value = String(v);
+      if (display) display.textContent = String(v);
+      if (minus) minus.disabled = v <= 0;
+      if (plus) plus.disabled = maxC <= 0 ? true : v >= maxC;
+    }
+    if (minus) {
+      minus.addEventListener("click", function () {
+        var v = readVal();
+        if (v > 0 && hidden) hidden.value = String(v - 1);
+        sync();
+      });
+    }
+    if (plus) {
+      plus.addEventListener("click", function () {
+        var v = readVal();
+        if (v < maxC && hidden) hidden.value = String(v + 1);
+        sync();
+      });
+    }
+    sync();
+  }
+
+  function setClarifyStepperValue(n) {
+    var hidden = document.getElementById("gen-clarify-count");
+    var display = document.getElementById("gen-clarify-display");
+    var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
+    var v = parseInt(n, 10);
+    if (!isFinite(v) || v < 0) v = 0;
+    if (v > maxC) v = maxC;
+    if (hidden) hidden.value = String(v);
+    if (display) display.textContent = String(v);
+    var minus = document.getElementById("gen-clarify-minus");
+    var plus = document.getElementById("gen-clarify-plus");
+    if (minus) minus.disabled = v <= 0;
+    if (plus) plus.disabled = maxC <= 0 ? true : v >= maxC;
   }
 
   function finalizeScriptGeneration(ctx) {
@@ -3659,7 +3765,7 @@
     var payload = buildScriptGeneratePayload(ctx, 1);
     postGenerateScriptRequest(payload)
       .then(function (json) {
-        if (json.type !== "clarify" || !json.content) {
+        if (!json || json.content == null || String(json.content).trim() === "") {
           throw new Error("Unexpected server response for clarifying question.");
         }
         var q = firstClarifyingQuestionLine(json.content);
@@ -3879,15 +3985,19 @@
               if (e1) e1.value = snap.q1 || "";
               if (e2) e2.value = snap.q2 || "";
               var toneE = document.getElementById("gen-tone");
-              var lenE = document.getElementById("gen-length");
-              var persE = document.getElementById("gen-perspective");
-              var useE = document.getElementById("gen-use-name");
-              var clarE = document.getElementById("gen-clarify-count");
               if (toneE && snap.tone) toneE.value = snap.tone;
-              if (lenE && snap.length) lenE.value = snap.length;
-              if (persE && snap.perspective) persE.value = snap.perspective;
+              var lenWant = snap.length || "Medium";
+              document.querySelectorAll('input[name="gen-length"]').forEach(function (r) {
+                r.checked = r.value === lenWant;
+              });
+              var persWant = snap.perspective || "First person";
+              document.querySelectorAll('input[name="gen-perspective"]').forEach(function (r) {
+                r.checked = r.value === persWant;
+              });
+              var useE = document.getElementById("gen-use-name");
               if (useE) useE.checked = !!snap.useNameInScript;
-              if (clarE) clarE.value = String(snap.requested != null ? snap.requested : 0);
+              setClarifyStepperValue(snap.requested != null ? snap.requested : 0);
+              wireGenLengthHint();
               wirePerspectiveUseNameRow();
             }, 0);
           }
@@ -3898,23 +4008,14 @@
     homeClarifyFlow = null;
     var tierNow = resolvedSubscriptionTier();
     var maxClar = maxClarifyForWebTier(tierNow);
-    var clarifyOpts = "";
-    for (var ci = 0; ci <= maxClar; ci += 1) {
-      clarifyOpts +=
-        '<option value="' +
-        ci +
-        '"' +
-        (ci === 0 ? " selected" : "") +
-        ">" +
-        (ci === 0 ? "None" : String(ci)) +
-        "</option>";
-    }
     var clarifyHint =
       maxClar > 0
         ? "Starter and Creator: up to " +
           maxClar +
-          " follow-up questions (like the iOS app) before the final script."
-        : "Clarifying questions require Starter or Creator. You can still generate a script from your answers below.";
+          " follow-up questions (same idea as the iOS app), then your script is generated."
+        : "Clarifying questions are available on Starter and Creator. You can still generate from your answers below.";
+    var ph0 = surveyAnswerPlaceholder();
+    var ph1 = surveyAnswerPlaceholder();
     el.innerHTML =
       '<form id="generate-form" class="app-form" style="margin:0;">' +
       '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
@@ -3923,37 +4024,65 @@
       '  <label id="gen-q1-label" for="gen-q1" style="margin-top:0.2rem;">' +
       escapeHtml(cat.questions[0] || "Question 1") +
       "</label>" +
-      '  <textarea id="gen-q1" required></textarea>' +
-      '  <label id="gen-q2-label" for="gen-q2">' +
+      surveyIamHelpDetailsHtml(cat.id, 0) +
+      '  <textarea id="gen-q1" class="gen-survey-textarea" required rows="6" placeholder="' +
+      escapeHtml(ph0) +
+      '"></textarea>' +
+      '  <label id="gen-q2-label" for="gen-q2" style="margin-top:0.75rem;">' +
       escapeHtml(cat.questions[1] || "Question 2") +
       "</label>" +
-      '  <textarea id="gen-q2" required></textarea>' +
-      '  <label for="gen-tone">Tone</label>' +
+      surveyIamHelpDetailsHtml(cat.id, 1) +
+      '  <textarea id="gen-q2" class="gen-survey-textarea" required rows="6" placeholder="' +
+      escapeHtml(ph1) +
+      '"></textarea>' +
+      '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
       '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
       '    <option value="Calming">Calming</option>' +
       '    <option value="Motivational">Motivational</option>' +
       '    <option value="Compassionate">Compassionate</option>' +
       '    <option value="Assertive">Assertive</option>' +
       "  </select>" +
-      '  <label for="gen-length" style="margin-top:0.8rem;">Length</label>' +
-      '  <select id="gen-length" class="app-btn" style="width:100%;text-align:left;">' +
-      '    <option value="Short">Short</option>' +
-      '    <option value="Medium" selected>Medium</option>' +
-      '    <option value="Long">Long</option>' +
-      "  </select>" +
-      '  <label for="gen-perspective" style="margin-top:0.8rem;">Perspective</label>' +
-      '  <select id="gen-perspective" class="app-btn" style="width:100%;text-align:left;">' +
-      '    <option value="First person">First person (I am…)</option>' +
-      '    <option value="Third person">Third person (You are…)</option>' +
-      "  </select>" +
+      '  <p class="gen-field-label" style="margin-top:0.85rem;">Length</p>' +
+      '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" />' +
+      '      <label for="gen-length-short" class="gen-pill-label">Short</label>' +
+      "    </span>" +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-length" id="gen-length-medium" value="Medium" class="gen-pill-input" checked />' +
+      '      <label for="gen-length-medium" class="gen-pill-label">Medium</label>' +
+      "    </span>" +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-length" id="gen-length-long" value="Long" class="gen-pill-input" />' +
+      '      <label for="gen-length-long" class="gen-pill-label">Long</label>' +
+      "    </span>" +
+      "  </div>" +
+      '  <p id="gen-length-hint" class="gen-pill-hint app-muted"></p>' +
+      '  <p class="gen-field-label" style="margin-top:0.75rem;">Perspective</p>' +
+      '  <div class="gen-pill-row" role="radiogroup" aria-label="Narration perspective">' +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-perspective" id="gen-perspective-first" value="First person" class="gen-pill-input" checked />' +
+      '      <label for="gen-perspective-first" class="gen-pill-label">First person</label>' +
+      "    </span>" +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-perspective" id="gen-perspective-third" value="Third person" class="gen-pill-input" />' +
+      '      <label for="gen-perspective-third" class="gen-pill-label">Third person</label>' +
+      "    </span>" +
+      "  </div>" +
       '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
       '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
       "  </div>" +
-      '  <label for="gen-clarify-count" style="margin-top:0.8rem;">Clarifying questions before generation</label>' +
-      '  <select id="gen-clarify-count" class="app-btn" style="width:100%;text-align:left;">' +
-      clarifyOpts +
-      "</select>" +
-      '  <p class="app-muted" style="margin:0.35rem 0 0;font-size:0.82rem;">' +
+      '  <p class="gen-field-label" style="margin-top:0.85rem;">Clarifying questions</p>' +
+      (maxClar > 0
+        ? '  <div class="gen-stepper-row">' +
+          '    <button type="button" class="app-btn gen-stepper-btn" id="gen-clarify-minus" aria-label="Fewer questions">−</button>' +
+          '    <span id="gen-clarify-display" class="gen-stepper-value" aria-live="polite">0</span>' +
+          '    <button type="button" class="app-btn gen-stepper-btn" id="gen-clarify-plus" aria-label="More questions">+</button>' +
+          '    <input type="hidden" id="gen-clarify-count" value="0" />' +
+          "  </div>"
+        : '  <div class="gen-stepper-row gen-stepper-locked"><span id="gen-clarify-display" class="app-muted">0</span></div>' +
+          '  <input type="hidden" id="gen-clarify-count" value="0" />') +
+      '  <p class="gen-pill-hint app-muted" style="margin-top:0.35rem;">' +
       escapeHtml(clarifyHint) +
       "</p>" +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.9rem;">' +
@@ -3962,6 +4091,8 @@
       "  </div>" +
       "</form>";
     wirePerspectiveUseNameRow();
+    wireGenLengthHint();
+    wireClarifyStepper();
     if (cat.id === "sports-performance") {
       var tonePick = document.getElementById("gen-tone");
       if (tonePick) tonePick.value = "Motivational";
