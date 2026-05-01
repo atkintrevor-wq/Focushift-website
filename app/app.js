@@ -4639,12 +4639,7 @@
       "</div>" +
       '<span class="app-chip">My Library</span>' +
       "</div>" +
-      (isExpanded
-        ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>"
-        : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
-      (!controlsExpanded
-        ? '<p class="app-muted" style="font-size:0.82rem;margin:0.35rem 0 0;">Tap the chevron for voice, generate, edit, and more.</p>'
-        : "") +
+      (isExpanded ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>" : "") +
       audioSection +
       "</article>"
     );
@@ -6386,9 +6381,6 @@
         ? '<p class="app-card-text">' +
           escapeHtml((p.scriptText || "").trim() || "(No script text)") +
           "</p>"
-        : '<p class="app-card-collapsed-note"><span aria-hidden="true">▸</span> Script preview hidden</p>') +
-      (!audioControlsExpanded
-        ? '<p class="app-muted" style="font-size:0.82rem;margin:0.35rem 0 0;">Tap the chevron for voice, generate, save, and more.</p>'
         : "") +
       audioSection +
       "</article>"
