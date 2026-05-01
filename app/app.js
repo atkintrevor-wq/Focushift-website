@@ -2059,6 +2059,26 @@
     return rows;
   }
 
+  function normalizePremadeTitleKey(title) {
+    return ((title && String(title).trim()) || "").toLowerCase();
+  }
+
+  function mergeCloudAndStaticPremades(cloudPremade) {
+    var cloud = Array.isArray(cloudPremade) ? cloudPremade.slice() : [];
+    var staticRows = buildStaticPremadeFallbackList();
+    var seen = {};
+    cloud.forEach(function (p) {
+      var key = ((p.categoryID || "").trim() || "") + "::" + normalizePremadeTitleKey(p.title);
+      seen[key] = true;
+    });
+    staticRows.forEach(function (p) {
+      var key = ((p.categoryID || "").trim() || "") + "::" + normalizePremadeTitleKey(p.title);
+      if (seen[key]) return;
+      cloud.push(p);
+    });
+    return cloud;
+  }
+
   var backgroundPreviewAudio = null;
   var backgroundPreviewId = "";
   function stopBackgroundPreview() {
@@ -7102,7 +7122,7 @@
             var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
             return bt - at;
           });
-        currentPremade = cloudPremade.length ? cloudPremade : buildStaticPremadeFallbackList();
+        currentPremade = mergeCloudAndStaticPremades(cloudPremade);
         var nextExpanded = {};
         currentPremade.forEach(function (p) {
           if (expandedPremadeTextById[p.id] === true) nextExpanded[p.id] = true;
