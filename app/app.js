@@ -1921,6 +1921,108 @@
     return new URL("../audio/backgrounds/" + encodeURIComponent(fn), window.location.href).href;
   }
 
+  function premadeTrackAssetUrl(folderName, filename) {
+    var folder = (folderName && String(folderName).trim()) || "";
+    var file = (filename && String(filename).trim()) || "";
+    if (!folder || !file) return "";
+    return new URL(
+      "../audio/premade/" + encodeURIComponent(folder) + "/" + encodeURIComponent(file),
+      window.location.href
+    ).href;
+  }
+
+  function premadeStaticFolderCandidates(categoryID) {
+    var cid = (categoryID && String(categoryID).trim()) || "";
+    switch (cid) {
+      case "confidence":
+        return ["Confidence & Self-Worth"];
+      case "relationships":
+        // Keep typo first to match copied folder in this repo.
+        return ["Realtionships & Love", "Relationships & Love"];
+      case "success-prosperity":
+        // Keep trailing-dot variant first to match copied folder in this repo.
+        return ["Success & Prosperity.", "Success & Prosperity"];
+      case "mental-wellbeing":
+        return ["Mental Well-Being"];
+      case "health-fitness":
+        return ["Health & Fitness"];
+      case "sports-performance":
+        return ["Sports Performance"];
+      case "sleep-rest":
+        return ["Sleep & Rest"];
+      default:
+        return [];
+    }
+  }
+
+  function premadeCategorySuffix(categoryID) {
+    var cid = (categoryID && String(categoryID).trim()) || "";
+    switch (cid) {
+      case "confidence":
+        return "csw";
+      case "relationships":
+        return "rls";
+      case "success-prosperity":
+        return "s&p";
+      case "mental-wellbeing":
+        return "mwb";
+      case "health-fitness":
+        return "hf";
+      case "sports-performance":
+        return "sp";
+      case "sleep-rest":
+        return "s&r";
+      default:
+        return "";
+    }
+  }
+
+  function uniqueStrings(values) {
+    var seen = {};
+    var out = [];
+    (values || []).forEach(function (v) {
+      if (!v) return;
+      if (seen[v]) return;
+      seen[v] = true;
+      out.push(v);
+    });
+    return out;
+  }
+
+  function resolvePremadeStaticAudioURLFromData(data) {
+    var d = data || {};
+    var title = (d.title && String(d.title).trim()) || "";
+    var categoryID = (d.categoryID && String(d.categoryID).trim()) || "";
+    var explicitFile =
+      (d.audioFilename && String(d.audioFilename).trim()) ||
+      (d.audioFileName && String(d.audioFileName).trim()) ||
+      (d.filename && String(d.filename).trim()) ||
+      (d.fileName && String(d.fileName).trim()) ||
+      "";
+
+    var folders = premadeStaticFolderCandidates(categoryID);
+    if (!folders.length) return "";
+
+    if (explicitFile) {
+      return premadeTrackAssetUrl(folders[0], explicitFile);
+    }
+    var suffix = premadeCategorySuffix(categoryID);
+    if (!title || !suffix) return "";
+
+    var candidates = [];
+    folders.forEach(function (folder) {
+      candidates.push(premadeTrackAssetUrl(folder, title + "." + suffix + ".mp3"));
+      candidates.push(premadeTrackAssetUrl(folder, title + "." + suffix + ".m4a"));
+    });
+    // Handle known typo filename in Sleep & Rest set.
+    if (categoryID === "sleep-rest" && title.toLowerCase() === "claiming tranquil restoration") {
+      folders.forEach(function (folder) {
+        candidates.push(premadeTrackAssetUrl(folder, "Claiming Tranquil Resoration.s&r.mp3"));
+      });
+    }
+    return uniqueStrings(candidates)[0] || "";
+  }
+
   var backgroundPreviewAudio = null;
   var backgroundPreviewId = "";
   function stopBackgroundPreview() {
@@ -6951,7 +7053,7 @@
               categoryID: data.categoryID || "",
               description: data.description || "",
               scriptText: data.scriptText || "",
-              audioURL: data.audioURL || "",
+              audioURL: (data.audioURL && String(data.audioURL).trim()) || resolvePremadeStaticAudioURLFromData(data),
               sourceScriptID: data.sourceScriptID || "",
               createdByUID: data.createdByUID || "",
               createdByEmail: data.createdByEmail || "",
