@@ -139,6 +139,8 @@
   ];
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
+  /** Set while asking Stripe-style follow-ups before final script (see iOS SurveyViewModel). */
+  var homeClarifyFlow = null;
   var surveyCategories = [
     {
       id: "confidence",
@@ -3486,6 +3488,258 @@
     renderHomeFlow(displayName || "");
   }
 
+  function resolvedSubscriptionTier() {
+    if (!currentUserProfile) return "free";
+    var raw = (currentUserProfile.subscriptionTier || "").toString().trim().toLowerCase();
+    if (raw === "basic") return "starter";
+    if (raw === "premium") return "creator";
+    if (raw === "starter" || raw === "creator" || raw === "free") return raw;
+    return "free";
+  }
+
+  function maxClarifyForWebTier(tier) {
+    if (tier === "starter" || tier === "creator") return 3;
+    return 0;
+  }
+
+  function resolveDisplayNameForScript(displayName) {
+    var d = (displayName || "").trim();
+    if (d) return d;
+    if (currentUserProfile && currentUserProfile.displayName) {
+      return String(currentUserProfile.displayName).trim();
+    }
+    if (currentUser && currentUser.displayName) return String(currentUser.displayName).trim();
+    return "";
+  }
+
+  function firstClarifyingQuestionLine(content) {
+    var lines = String(content || "")
+      .split(/\r?\n/)
+      .map(function (l) {
+        return l.trim();
+      })
+      .filter(Boolean);
+    return lines[0] || "";
+  }
+
+  function buildScriptGeneratePayload(ctx, clarifyCount) {
+    var cat = ctx.cat;
+    var third = (ctx.perspective || "").toLowerCase().indexOf("third") !== -1;
+    var answersMap = {};
+    answersMap[cat.id] = [ctx.q1, ctx.q2];
+    return {
+      categories: [
+        {
+          id: cat.id,
+          name: cat.name,
+          questions: cat.questions,
+        },
+      ],
+      answers: answersMap,
+      clarifyingAnswers: ctx.clarifyingAnswers || {},
+      tone: ctx.tone || "Calming",
+      length: ctx.length || "Medium",
+      clarifyCount: clarifyCount,
+      tier: resolvedSubscriptionTier(),
+      perspective: third ? "Third person" : "First person",
+      useNameInScript: third ? !!ctx.useNameInScript : false,
+      userName: resolveDisplayNameForScript(ctx.displayName || ""),
+    };
+  }
+
+  function postGenerateScriptRequest(payload) {
+    if (!currentUser) return Promise.reject(new Error("Not signed in."));
+    return currentUser.getIdToken(true).then(function (token) {
+      return fetch(backendBaseURL() + "/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(payload),
+      }).then(function (resp) {
+        return resp.json().then(function (json) {
+          if (!resp.ok || !json || json.ok !== true) {
+            var msg = (json && json.error) || "Generation failed.";
+            throw new Error(msg);
+          }
+          return json;
+        });
+      });
+    });
+  }
+
+  function readGenerateFormFromDom() {
+    var cat = selectedCategory();
+    var q1 = (document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "";
+    var q2 = (document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "";
+    var toneEl = document.getElementById("gen-tone");
+    var lenEl = document.getElementById("gen-length");
+    var persEl = document.getElementById("gen-perspective");
+    var useNameEl = document.getElementById("gen-use-name");
+    return {
+      cat: cat,
+      q1: q1.trim(),
+      q2: q2.trim(),
+      tone: (toneEl && toneEl.value) || "Calming",
+      length: (lenEl && lenEl.value) || "Medium",
+      perspective: (persEl && persEl.value) || "First person",
+      useNameInScript: useNameEl ? !!useNameEl.checked : true,
+    };
+  }
+
+  function wirePerspectiveUseNameRow() {
+    var pers = document.getElementById("gen-perspective");
+    var row = document.getElementById("gen-use-name-row");
+    if (!pers || !row) return;
+    function sync() {
+      var third = (pers.value || "").toLowerCase().indexOf("third") !== -1;
+      row.style.display = third ? "" : "none";
+    }
+    pers.addEventListener("change", sync);
+    sync();
+  }
+
+  function finalizeScriptGeneration(ctx) {
+    if (!currentUser) return;
+    var payload = buildScriptGeneratePayload(ctx, 0);
+    generationMessage("Generating script...", "");
+    postGenerateScriptRequest(payload)
+      .then(function (json) {
+        if (!json.content) throw new Error("Empty script response.");
+        var title = uniqueScriptTitle(ctx.cat.name + " Script");
+        var docRef = scriptCollection(currentUser.uid).doc();
+        return scriptCollection(currentUser.uid)
+          .doc(docRef.id)
+          .set({
+            title: title,
+            text: String(json.content).trim(),
+            createdAt: firebase.firestore.Timestamp.now(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            audioURL: "",
+            backgroundID: selectedBackgroundId,
+            voiceID: selectedVoiceId,
+            audioCreatedAt: null,
+            categoryID: ctx.cat.id,
+          })
+          .then(function () {
+            generationMessage("Generated and saved as \"" + title + "\".", "success");
+            homeClarifyFlow = null;
+            var q1El = document.getElementById("gen-q1");
+            var q2El = document.getElementById("gen-q2");
+            if (q1El) q1El.value = "";
+            if (q2El) q2El.value = "";
+            setMessage("Generated script saved to My Library.", "success");
+            setHomeFlowStep("landing", ctx.displayName || "");
+          });
+      })
+      .catch(function (e) {
+        generationMessage(e.message || "Could not generate script.", "error");
+      });
+  }
+
+  function requestNextClarifyingQuestion() {
+    if (!homeClarifyFlow || !currentUser) return;
+    var f = homeClarifyFlow;
+    generationMessage(
+      "Generating clarifying question " + (f.currentIndex + 1) + " of " + f.requested + "…",
+      ""
+    );
+    var ctx = {
+      displayName: f.displayName,
+      cat: f.cat,
+      q1: f.q1,
+      q2: f.q2,
+      tone: f.tone,
+      length: f.length,
+      perspective: f.perspective,
+      useNameInScript: f.useNameInScript,
+      clarifyingAnswers: f.answers,
+    };
+    var payload = buildScriptGeneratePayload(ctx, 1);
+    postGenerateScriptRequest(payload)
+      .then(function (json) {
+        if (json.type !== "clarify" || !json.content) {
+          throw new Error("Unexpected server response for clarifying question.");
+        }
+        var q = firstClarifyingQuestionLine(json.content);
+        if (!q) throw new Error("Could not read clarifying question from the server.");
+        f.pendingQuestion = q;
+        setHomeFlowStep("clarify", f.displayName);
+      })
+      .catch(function (e) {
+        generationMessage(e.message || "Could not load clarifying question.", "error");
+        homeClarifyFlow = null;
+        setHomeFlowStep("survey", f.displayName);
+      });
+  }
+
+  function beginScriptGenerationFromForm(displayName) {
+    if (!currentUser) return;
+    var ctx = readGenerateFormFromDom();
+    ctx.displayName = displayName || "";
+    if (!ctx.q1 || !ctx.q2) {
+      generationMessage("Please answer both questions first.", "error");
+      return;
+    }
+    var clarifyEl = document.getElementById("gen-clarify-count");
+    var clarifyReq = clarifyEl ? parseInt(clarifyEl.value, 10) : 0;
+    if (!isFinite(clarifyReq) || clarifyReq < 0) clarifyReq = 0;
+    var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
+    if (clarifyReq > maxC) clarifyReq = maxC;
+
+    if (clarifyReq > 0) {
+      homeClarifyFlow = {
+        displayName: ctx.displayName,
+        cat: ctx.cat,
+        q1: ctx.q1,
+        q2: ctx.q2,
+        tone: ctx.tone,
+        length: ctx.length,
+        perspective: ctx.perspective,
+        useNameInScript: ctx.useNameInScript,
+        requested: clarifyReq,
+        currentIndex: 0,
+        answers: {},
+        pendingQuestion: "",
+      };
+      requestNextClarifyingQuestion();
+      return;
+    }
+    finalizeScriptGeneration(ctx);
+  }
+
+  function submitClarifyAnswerAndContinue() {
+    if (!homeClarifyFlow) return;
+    var f = homeClarifyFlow;
+    var ta = document.getElementById("clarify-answer");
+    var ans = (ta && ta.value.trim()) || "";
+    if (!ans) {
+      generationMessage("Please type an answer before continuing.", "error");
+      return;
+    }
+    var q = f.pendingQuestion;
+    if (!q) return;
+    f.answers[q] = ans;
+    f.currentIndex += 1;
+    delete f.pendingQuestion;
+    if (f.currentIndex < f.requested) {
+      requestNextClarifyingQuestion();
+    } else {
+      finalizeScriptGeneration({
+        displayName: f.displayName,
+        cat: f.cat,
+        q1: f.q1,
+        q2: f.q2,
+        tone: f.tone,
+        length: f.length,
+        perspective: f.perspective,
+        useNameInScript: f.useNameInScript,
+        clarifyingAnswers: f.answers,
+      });
+    }
+  }
+
   function renderHomeFlow(displayName) {
     var el = document.getElementById("home-flow");
     if (!el) return;
@@ -3583,6 +3837,84 @@
       }
       return;
     }
+    if (homeFlowStep === "clarify" && homeClarifyFlow) {
+      var cf = homeClarifyFlow;
+      var pq = cf.pendingQuestion || "";
+      el.innerHTML =
+        '<div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
+        '  <p class="app-muted" style="margin:0 0 0.5rem;">Clarifying question ' +
+        escapeHtml(String(cf.currentIndex + 1)) +
+        " of " +
+        escapeHtml(String(cf.requested)) +
+        "</p>" +
+        '  <p style="margin:0 0 0.65rem;font-weight:600;">' +
+        escapeHtml(pq) +
+        "</p>" +
+        '  <label for="clarify-answer">Your answer</label>' +
+        '  <textarea id="clarify-answer" required rows="4" placeholder="Share what feels true for you…"></textarea>' +
+        '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">' +
+        '    <button type="button" class="app-btn app-btn-secondary" id="clarify-cancel">Back</button>' +
+        '    <button type="button" class="app-btn app-btn-primary" id="clarify-continue">' +
+        (cf.currentIndex + 1 < cf.requested ? "Next question" : "Generate script") +
+        "</button>" +
+        "  </div>" +
+        "</div>";
+      var cont = document.getElementById("clarify-continue");
+      if (cont) {
+        cont.addEventListener("click", function () {
+          submitClarifyAnswerAndContinue();
+        });
+      }
+      var cancelCl = document.getElementById("clarify-cancel");
+      if (cancelCl) {
+        cancelCl.addEventListener("click", function () {
+          var snap = homeClarifyFlow;
+          homeClarifyFlow = null;
+          generationMessage("", "");
+          setHomeFlowStep("survey", displayName);
+          if (snap) {
+            setTimeout(function () {
+              var e1 = document.getElementById("gen-q1");
+              var e2 = document.getElementById("gen-q2");
+              if (e1) e1.value = snap.q1 || "";
+              if (e2) e2.value = snap.q2 || "";
+              var toneE = document.getElementById("gen-tone");
+              var lenE = document.getElementById("gen-length");
+              var persE = document.getElementById("gen-perspective");
+              var useE = document.getElementById("gen-use-name");
+              var clarE = document.getElementById("gen-clarify-count");
+              if (toneE && snap.tone) toneE.value = snap.tone;
+              if (lenE && snap.length) lenE.value = snap.length;
+              if (persE && snap.perspective) persE.value = snap.perspective;
+              if (useE) useE.checked = !!snap.useNameInScript;
+              if (clarE) clarE.value = String(snap.requested != null ? snap.requested : 0);
+              wirePerspectiveUseNameRow();
+            }, 0);
+          }
+        });
+      }
+      return;
+    }
+    homeClarifyFlow = null;
+    var tierNow = resolvedSubscriptionTier();
+    var maxClar = maxClarifyForWebTier(tierNow);
+    var clarifyOpts = "";
+    for (var ci = 0; ci <= maxClar; ci += 1) {
+      clarifyOpts +=
+        '<option value="' +
+        ci +
+        '"' +
+        (ci === 0 ? " selected" : "") +
+        ">" +
+        (ci === 0 ? "None" : String(ci)) +
+        "</option>";
+    }
+    var clarifyHint =
+      maxClar > 0
+        ? "Starter and Creator: up to " +
+          maxClar +
+          " follow-up questions (like the iOS app) before the final script."
+        : "Clarifying questions require Starter or Creator. You can still generate a script from your answers below.";
     el.innerHTML =
       '<form id="generate-form" class="app-form" style="margin:0;">' +
       '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
@@ -3609,16 +3941,36 @@
       '    <option value="Medium" selected>Medium</option>' +
       '    <option value="Long">Long</option>' +
       "  </select>" +
+      '  <label for="gen-perspective" style="margin-top:0.8rem;">Perspective</label>' +
+      '  <select id="gen-perspective" class="app-btn" style="width:100%;text-align:left;">' +
+      '    <option value="First person">First person (I am…)</option>' +
+      '    <option value="Third person">Third person (You are…)</option>' +
+      "  </select>" +
+      '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
+      '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
+      "  </div>" +
+      '  <label for="gen-clarify-count" style="margin-top:0.8rem;">Clarifying questions before generation</label>' +
+      '  <select id="gen-clarify-count" class="app-btn" style="width:100%;text-align:left;">' +
+      clarifyOpts +
+      "</select>" +
+      '  <p class="app-muted" style="margin:0.35rem 0 0;font-size:0.82rem;">' +
+      escapeHtml(clarifyHint) +
+      "</p>" +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.9rem;">' +
       '    <button type="button" class="app-btn app-btn-secondary" id="home-back-category">Back to Categories</button>' +
       '    <button type="submit" class="app-btn app-btn-primary">Generate & Save</button>' +
       "  </div>" +
       "</form>";
+    wirePerspectiveUseNameRow();
+    if (cat.id === "sports-performance") {
+      var tonePick = document.getElementById("gen-tone");
+      if (tonePick) tonePick.value = "Motivational";
+    }
     var form = document.getElementById("generate-form");
     if (form) {
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
-        generateAndSavePersonalizedScript(displayName || "");
+        beginScriptGenerationFromForm(displayName || "");
       });
     }
     var backCategory = document.getElementById("home-back-category");
@@ -3643,99 +3995,6 @@
       n += 1;
     }
     return root + " (" + Date.now() + ")";
-  }
-
-  function userTierFallback() {
-    // TODO: replace with exact subscription field mapping once web account settings are in place.
-    return "starter";
-  }
-
-  function generateAndSavePersonalizedScript(displayName) {
-    if (!currentUser) return;
-    var cat = selectedCategory();
-    var q1 = (document.getElementById("gen-q1").value || "").trim();
-    var q2 = (document.getElementById("gen-q2").value || "").trim();
-    var tone = document.getElementById("gen-tone").value || "Calming";
-    var length = document.getElementById("gen-length").value || "Medium";
-    if (!q1 || !q2) {
-      generationMessage("Please answer both questions first.", "error");
-      return;
-    }
-
-    generationMessage("Generating script...", "");
-    currentUser
-      .getIdToken(true)
-      .then(function (token) {
-        var payload = {
-          categories: [
-            {
-              id: cat.id,
-              name: cat.name,
-              questions: cat.questions,
-            },
-          ],
-          answers: (function () {
-            var map = {};
-            map[cat.id] = [q1, q2];
-            return map;
-          })(),
-          clarifyingAnswers: {},
-          tone: tone,
-          length: length,
-          clarifyCount: 0,
-          tier: userTierFallback(),
-          perspective: "First person",
-          useNameInScript: false,
-          userName: displayName || "",
-        };
-
-        return fetch(backendBaseURL() + "/generate", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token,
-          },
-          body: JSON.stringify(payload),
-        });
-      })
-      .then(function (resp) {
-        return resp.json().then(function (json) {
-          if (!resp.ok || !json || json.ok !== true || !json.content) {
-            var msg = (json && json.error) || "Generation failed.";
-            throw new Error(msg);
-          }
-          return json;
-        });
-      })
-      .then(function (json) {
-        var title = uniqueScriptTitle(cat.name + " Script");
-        var docRef = scriptCollection(currentUser.uid).doc();
-        return scriptCollection(currentUser.uid)
-          .doc(docRef.id)
-          .set({
-            title: title,
-            text: String(json.content).trim(),
-            createdAt: firebase.firestore.Timestamp.now(),
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            audioURL: "",
-            backgroundID: selectedBackgroundId,
-            voiceID: selectedVoiceId,
-            audioCreatedAt: null,
-            categoryID: cat.id,
-          })
-          .then(function () {
-            generationMessage("Generated and saved as \"" + title + "\".", "success");
-            var q1El = document.getElementById("gen-q1");
-            var q2El = document.getElementById("gen-q2");
-            if (q1El) q1El.value = "";
-            if (q2El) q2El.value = "";
-            setMessage("Generated script saved to My Library.", "success");
-            setHomeFlowStep("landing", displayName || "");
-          });
-      })
-      .catch(function (e) {
-        generationMessage(e.message || "Could not generate script.", "error");
-      });
   }
 
   function setMessage(text, kind) {
