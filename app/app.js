@@ -125,17 +125,18 @@
     { id: "iZURAYccQtQd12U8kEcq", name: "Roland", description: "Middle-aged male voice" },
     { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark", description: "Very Deep, Confident, Professional" },
   ];
+  /** `file` must match the filename in `website/audio/backgrounds/` (same as iOS `BackGroundAudio`). */
   var availableBackgrounds = [
-    { id: "bg-none", name: "No Background", categoryID: "general" },
-    { id: "bg-rain", name: "Rain", categoryID: "general" },
-    { id: "bg-calm-night", name: "Calm Night", categoryID: "general" },
-    { id: "bg-meditation", name: "Meditation Background", categoryID: "general" },
-    { id: "bg-piano", name: "Piano Background", categoryID: "general" },
-    { id: "bg-soft-calm-piano", name: "Soft Calm Piano", categoryID: "general" },
-    { id: "bg-inner-calm", name: "Inner Calm", categoryID: "mental-wellbeing" },
-    { id: "bg-calm-groove", name: "Calm Groove", categoryID: "confidence" },
-    { id: "bg-warm-melody", name: "Warm Melody", categoryID: "relationships" },
-    { id: "bg-calm-piano-whisper", name: "Calm Piano Whisper", categoryID: "sleep-rest" },
+    { id: "bg-none", name: "No Background", categoryID: "general", file: "" },
+    { id: "bg-rain", name: "Rain", categoryID: "general", file: "background-music-soft-calm-333111.mp3" },
+    { id: "bg-calm-night", name: "Calm Night", categoryID: "general", file: "calm-night-312296.mp3" },
+    { id: "bg-meditation", name: "Meditation Background", categoryID: "general", file: "meditation-relaxing-music-background-320405.mp3" },
+    { id: "bg-piano", name: "Piano Background", categoryID: "general", file: "piano-background-music-337774.mp3" },
+    { id: "bg-soft-calm-piano", name: "Soft Calm Piano", categoryID: "general", file: "soft-calm-piano-music-405074.mp3" },
+    { id: "bg-inner-calm", name: "Inner Calm", categoryID: "mental-wellbeing", file: "Inner Calm.mp3" },
+    { id: "bg-calm-groove", name: "Calm Groove", categoryID: "confidence", file: "Calm Groove.mp3" },
+    { id: "bg-warm-melody", name: "Warm Melody", categoryID: "relationships", file: "Warm Melody.mp3" },
+    { id: "bg-calm-piano-whisper", name: "Calm Piano Whisper", categoryID: "sleep-rest", file: "Calm Piano Whisper.mp3" },
   ];
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
@@ -1816,6 +1817,231 @@
     return (found && found.name) || "Background";
   }
 
+  /** Same timing as iOS `AudioMixingService` (lead-in / tail / bed level). */
+  var BG_MIX_LEAD_IN_SEC = 2;
+  var BG_MIX_TAIL_SEC = 2.5;
+  var BG_MIX_BACKGROUND_GAIN = 0.3;
+  var BG_MIX_OUTPUT_SAMPLE_RATE = 48000;
+
+  function backgroundEntryById(backgroundId) {
+    var bid = (backgroundId && String(backgroundId).trim()) || "";
+    if (!bid) return null;
+    return (
+      availableBackgrounds.find(function (b) {
+        return b.id === bid;
+      }) || null
+    );
+  }
+
+  function backgroundTrackAssetUrl(filename) {
+    var fn = (filename && String(filename).trim()) || "";
+    if (!fn) return "";
+    return new URL("../audio/backgrounds/" + encodeURIComponent(fn), window.location.href).href;
+  }
+
+  var backgroundPreviewAudio = null;
+  function stopBackgroundPreview() {
+    if (backgroundPreviewAudio) {
+      try {
+        backgroundPreviewAudio.pause();
+      } catch (_e) {}
+      try {
+        backgroundPreviewAudio.removeAttribute("src");
+        backgroundPreviewAudio.load();
+      } catch (_e2) {}
+      backgroundPreviewAudio = null;
+    }
+  }
+
+  function previewBackgroundById(backgroundId, onError) {
+    var entry = backgroundEntryById(backgroundId);
+    if (!entry || !entry.file) return;
+    stopBackgroundPreview();
+    var url = backgroundTrackAssetUrl(entry.file);
+    var a = new Audio(url);
+    a.loop = true;
+    backgroundPreviewAudio = a;
+    a.play().catch(function () {
+      var msg =
+        "Could not play background preview. Add the MP3s to the site under audio/backgrounds/ (see that folder’s README), deploy, and hard-refresh.";
+      if (typeof onError === "function") onError(msg);
+    });
+  }
+
+  function resampleFloat32Linear(src, srcRate, dstRate, dstLen) {
+    var out = new Float32Array(dstLen);
+    if (dstLen === 0) return out;
+    var ratio = srcRate / dstRate;
+    var srcLen = src.length;
+    for (var i = 0; i < dstLen; i++) {
+      var srcPos = i * ratio;
+      var i0 = Math.floor(srcPos);
+      var i1 = Math.min(i0 + 1, srcLen - 1);
+      var f = srcPos - i0;
+      out[i] = src[i0] * (1 - f) + src[i1] * f;
+    }
+    return out;
+  }
+
+  function encodeWaveFileFromAudioBuffer(audioBuffer) {
+    var numCh = audioBuffer.numberOfChannels;
+    var length = audioBuffer.length;
+    var sampleRate = audioBuffer.sampleRate;
+    var blockAlign = numCh * 2;
+    var byteRate = sampleRate * blockAlign;
+    var dataSize = length * blockAlign;
+    var ab = new ArrayBuffer(44 + dataSize);
+    var v = new DataView(ab);
+    function writeStr(o, s) {
+      for (var i = 0; i < s.length; i++) {
+        v.setUint8(o + i, s.charCodeAt(i));
+      }
+    }
+    writeStr(0, "RIFF");
+    v.setUint32(4, 36 + dataSize, true);
+    writeStr(8, "WAVE");
+    writeStr(12, "fmt ");
+    v.setUint32(16, 16, true);
+    v.setUint16(20, 1, true);
+    v.setUint16(22, numCh, true);
+    v.setUint32(24, sampleRate, true);
+    v.setUint32(28, byteRate, true);
+    v.setUint16(32, blockAlign, true);
+    v.setUint16(34, 16, true);
+    writeStr(36, "data");
+    v.setUint32(40, dataSize, true);
+    var offset = 44;
+    var chData = [];
+    for (var c = 0; c < numCh; c++) {
+      chData.push(audioBuffer.getChannelData(c));
+    }
+    for (var i = 0; i < length; i++) {
+      for (var c = 0; c < numCh; c++) {
+        var s = Math.max(-1, Math.min(1, chData[c][i]));
+        var int16 = (s < 0 ? s * 0x8000 : s * 0x7fff) | 0;
+        v.setInt16(offset, int16, true);
+        offset += 2;
+      }
+    }
+    return new Blob([ab], { type: "audio/wav" });
+  }
+
+  function mixTtsWithBackgroundToWavBlob(ttsArrayBuffer, backgroundId) {
+    return new Promise(function (resolve, reject) {
+      var entry = backgroundEntryById(backgroundId);
+      if (!entry || !entry.file) {
+        reject(new Error("Unknown background for mixing."));
+        return;
+      }
+      var bgUrl = backgroundTrackAssetUrl(entry.file);
+      var ACtx = window.AudioContext || window.webkitAudioContext;
+      if (!ACtx) {
+        reject(new Error("Web Audio is not available in this browser."));
+        return;
+      }
+      var ctx = new ACtx();
+      Promise.all([
+        ctx.decodeAudioData(ttsArrayBuffer.slice(0)),
+        fetch(bgUrl).then(function (r) {
+          if (!r.ok) {
+            throw new Error(
+              "Background file not found (" +
+                r.status +
+                "). Deploy the iOS BackGroundAudio MP3s to /audio/backgrounds/ on the live site."
+            );
+          }
+          return r.arrayBuffer();
+        }).then(function (bgAb) {
+          return ctx.decodeAudioData(bgAb.slice(0));
+        }),
+      ])
+        .then(function (buffers) {
+          var voiceBuf = buffers[0];
+          var bgBuf = buffers[1];
+          var srOut = BG_MIX_OUTPUT_SAMPLE_RATE;
+          var leadIn = BG_MIX_LEAD_IN_SEC;
+          var tail = BG_MIX_TAIL_SEC;
+          var bgVol = BG_MIX_BACKGROUND_GAIN;
+          var voiceDur = voiceBuf.duration;
+          var totalDur = leadIn + voiceDur + tail;
+          var outLen = Math.max(1, Math.ceil(totalDur * srOut));
+          var outCh = Math.min(2, Math.max(1, Math.max(voiceBuf.numberOfChannels, bgBuf.numberOfChannels)));
+          var outBuf = ctx.createBuffer(outCh, outLen, srOut);
+          var nVoice = Math.max(1, Math.round(voiceDur * srOut));
+          var nBgLoop = Math.max(1, Math.round(bgBuf.duration * srOut));
+          for (var c = 0; c < outCh; c++) {
+            var vCh = Math.min(c, voiceBuf.numberOfChannels - 1);
+            var bCh = Math.min(c, bgBuf.numberOfChannels - 1);
+            var vSrc = voiceBuf.getChannelData(vCh);
+            var bgSrc = bgBuf.getChannelData(bCh);
+            var voiceRS = resampleFloat32Linear(vSrc, voiceBuf.sampleRate, srOut, nVoice);
+            var bgLoop = resampleFloat32Linear(bgSrc, bgBuf.sampleRate, srOut, nBgLoop);
+            var outData = outBuf.getChannelData(c);
+            for (var i = 0; i < outLen; i++) {
+              var t = i / srOut;
+              var gain = 0;
+              if (t < leadIn) {
+                gain = bgVol * (t / leadIn);
+              } else if (t < leadIn + voiceDur) {
+                gain = bgVol;
+              } else if (t < totalDur) {
+                gain = bgVol * (1 - (t - leadIn - voiceDur) / tail);
+              } else {
+                gain = 0;
+              }
+              var bIdx = i % nBgLoop;
+              var voiceSample = 0;
+              if (t >= leadIn && t < leadIn + voiceDur) {
+                var vi = Math.floor((t - leadIn) * srOut);
+                if (vi >= 0 && vi < nVoice) {
+                  voiceSample = voiceRS[vi];
+                }
+              }
+              var m = voiceSample + bgLoop[bIdx] * gain;
+              outData[i] = Math.max(-1, Math.min(1, m));
+            }
+          }
+          try {
+            ctx.close();
+          } catch (_ce) {}
+          resolve(encodeWaveFileFromAudioBuffer(outBuf));
+        })
+        .catch(function (e) {
+          try {
+            ctx.close();
+          } catch (_ce2) {}
+          reject(e instanceof Error ? e : new Error(String(e)));
+        });
+    });
+  }
+
+  function uploadFinalMixedWav(uid, scriptId, wavBlob) {
+    if (typeof firebase.storage !== "function") {
+      return Promise.reject(new Error("Firebase Storage is not loaded."));
+    }
+    var path = "users/" + uid + "/audios/" + scriptId + "_audio.wav";
+    var ref = firebase.storage().ref(path);
+    return ref.put(wavBlob, { contentType: "audio/wav" }).then(function (snap) {
+      return snap.ref.getDownloadURL();
+    });
+  }
+
+  function finalizeAwaitingClientMix(uid, scriptId, ttsDownloadURL, backgroundId) {
+    return fetch(ttsDownloadURL)
+      .then(function (r) {
+        if (!r.ok) {
+          throw new Error("Could not download speech audio for mixing (" + r.status + ").");
+        }
+        return r.arrayBuffer();
+      })
+      .then(function (ttsAb) {
+        return mixTtsWithBackgroundToWavBlob(ttsAb, backgroundId);
+      })
+      .then(function (wavBlob) {
+        return uploadFinalMixedWav(uid, scriptId, wavBlob);
+      });
+  }
+
   function setVoicesMessage(text, kind) {
     var el = document.getElementById("voices-message");
     if (!el) return;
@@ -3048,12 +3274,19 @@
       .map(function (b) {
         var isSelected = b.id === selectedBackgroundId;
         return (
-          '<div class="app-modal-row" style="margin-bottom:0.45rem;">' +
-          '  <div class="app-modal-row-name">' +
+          '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
+          '  <div style="flex:1;min-width:140px;">' +
+          '    <div class="app-modal-row-name">' +
           escapeHtml(b.name) +
           ' <span class="app-muted" style="font-size:0.78rem;">(' +
           escapeHtml(b.categoryID || "general") +
           ")</span></div>" +
+          "  </div>" +
+          (b.file
+            ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
+              escapeHtml(b.id) +
+              '">Preview</button>'
+            : "") +
           '  <button type="button" class="app-btn ' +
           (isSelected ? "app-btn-primary" : "app-btn-secondary") +
           '" data-background-id="' +
@@ -3065,6 +3298,14 @@
         );
       })
       .join("");
+    list.querySelectorAll("[data-background-preview]").forEach(function (pbtn) {
+      pbtn.addEventListener("click", function () {
+        var pid = pbtn.getAttribute("data-background-preview");
+        previewBackgroundById(pid, function (msg) {
+          setBackgroundsMessage(msg, "error");
+        });
+      });
+    });
     list.querySelectorAll("[data-background-id]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var backgroundID = btn.getAttribute("data-background-id");
@@ -4780,8 +5021,8 @@
       activeCategoryID = categoryPremade && categoryPremade.categoryID ? categoryPremade.categoryID : null;
     }
 
-    function optionRowHtml(opt, selected) {
-      return (
+    function optionRowHtml(opt, selected, includeBgPreview) {
+      var mainBtn =
         '<button type="button" class="app-picker-option' +
         (selected ? " is-selected" : "") +
         '" data-media-option="' +
@@ -4793,8 +5034,18 @@
         '<span class="app-picker-check" aria-hidden="true">' +
         (selected ? "✓" : "") +
         "</span>" +
-        "</button>"
-      );
+        "</button>";
+      if (includeBgPreview && opt.file) {
+        return (
+          '<div class="app-picker-option-row">' +
+          mainBtn +
+          '<button type="button" class="app-btn app-btn-ghost app-picker-preview-btn" data-preview-background="' +
+          escapeHtml(opt.id) +
+          '" aria-label="Preview background">▶</button>' +
+          "</div>"
+        );
+      }
+      return mainBtn;
     }
 
     function sectionHtml(titleText, items, selectedID) {
@@ -4806,7 +5057,7 @@
         "</p>" +
         items
           .map(function (opt) {
-            return optionRowHtml(opt, opt.id === selectedID);
+            return optionRowHtml(opt, opt.id === selectedID, !isVoice);
           })
           .join("") +
         "</div>"
@@ -4856,24 +5107,34 @@
     }
 
     function bindPickerOptionClicks() {
-      list.querySelectorAll("[data-media-option]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var selectedID = btn.getAttribute("data-media-option");
-        if (!selectedID || !mediaPickerTarget) return;
-        if (mediaPickerTarget.kind === "script") {
-          var patch = mediaPickerTarget.field === "voice" ? { voiceID: selectedID } : { backgroundID: selectedID };
-          updateScriptMediaSettings(mediaPickerTarget.id, patch);
-          closeMediaPicker();
-          return;
-        }
-        if (mediaPickerTarget.field === "voice") {
-          premadeVoiceOverrideById[mediaPickerTarget.id] = selectedID;
-        } else {
-          premadeBackgroundOverrideById[mediaPickerTarget.id] = selectedID;
-        }
-        renderPremade();
-        closeMediaPicker();
+      list.querySelectorAll("[data-preview-background]").forEach(function (pv) {
+        pv.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var bid = pv.getAttribute("data-preview-background");
+          previewBackgroundById(bid, function (msg) {
+            setMediaPickerMessage(msg, "error");
+          });
+        });
       });
+      list.querySelectorAll("[data-media-option]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          var selectedID = btn.getAttribute("data-media-option");
+          if (!selectedID || !mediaPickerTarget) return;
+          if (mediaPickerTarget.kind === "script") {
+            var patch = mediaPickerTarget.field === "voice" ? { voiceID: selectedID } : { backgroundID: selectedID };
+            updateScriptMediaSettings(mediaPickerTarget.id, patch);
+            closeMediaPicker();
+            return;
+          }
+          if (mediaPickerTarget.field === "voice") {
+            premadeVoiceOverrideById[mediaPickerTarget.id] = selectedID;
+          } else {
+            premadeBackgroundOverrideById[mediaPickerTarget.id] = selectedID;
+          }
+          renderPremade();
+          closeMediaPicker();
+        });
       });
     }
 
@@ -4892,6 +5153,7 @@
   }
 
   function closeMediaPicker() {
+    stopBackgroundPreview();
     var backdrop = document.getElementById("media-picker-backdrop");
     if (backdrop) backdrop.hidden = true;
     mediaPickerTarget = null;
@@ -5281,7 +5543,7 @@
           });
         })
         .then(function (ctx) {
-          return waitForAudioJob(script, ctx.jobId);
+          return waitForAudioJob(script, ctx.jobId, effectiveBackgroundIdForScript(script));
         })
         .then(function (result) {
           var vId = effectiveVoiceIdForScript(script);
@@ -5417,7 +5679,11 @@
           });
         })
         .then(function (ctx) {
-          return waitForAudioJob({ id: jobScriptId, title: premade.title }, ctx.jobId);
+          return waitForAudioJob(
+            { id: jobScriptId, title: premade.title },
+            ctx.jobId,
+            String(resolvePremadeBackgroundSelection(premade) || "").trim()
+          );
         })
         .then(function (result) {
           var vId = String(resolvePremadeVoiceSelection(premade) || "").trim();
@@ -5457,8 +5723,9 @@
     });
   }
 
-  function waitForAudioJob(script, jobId) {
+  function waitForAudioJob(script, jobId, backgroundIdForMix) {
     return new Promise(function (resolve, reject) {
+      var mixStarted = false;
       var timeout = setTimeout(function () {
         cleanup();
         reject(new Error("Audio generation timed out. Please try again."));
@@ -5480,12 +5747,48 @@
               return;
             }
             if (status === "awaiting_client_mix") {
-              cleanup();
-              reject(
-                new Error(
-                  "This script needs client-side background mixing which is not supported on web yet. Try with no background."
-                )
-              );
+              if (mixStarted) return;
+              mixStarted = true;
+              var ttsUrl = data.ttsDownloadURL;
+              if (!ttsUrl) {
+                cleanup();
+                reject(new Error("Missing TTS download URL for background mix."));
+                return;
+              }
+              var bgMix = (backgroundIdForMix && String(backgroundIdForMix).trim()) || "";
+              if (!bgMix || bgMix === "bg-none") {
+                cleanup();
+                reject(new Error("Background mix was requested but no background is selected."));
+                return;
+              }
+              finalizeAwaitingClientMix(currentUser.uid, script.id, ttsUrl, bgMix)
+                .then(function (url) {
+                  return db
+                    .collection("users")
+                    .doc(currentUser.uid)
+                    .collection("audioJobs")
+                    .doc(jobId)
+                    .set(
+                      {
+                        status: "completed",
+                        finalDownloadURL: url,
+                        persistentAudioURL: url,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                      },
+                      { merge: true }
+                    )
+                    .then(function () {
+                      return url;
+                    });
+                })
+                .then(function (url) {
+                  cleanup();
+                  resolve({ audioURL: url });
+                })
+                .catch(function (e) {
+                  cleanup();
+                  reject(e instanceof Error ? e : new Error(String(e)));
+                });
               return;
             }
             if (status === "completed") {

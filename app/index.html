@@ -680,6 +680,23 @@
       letter-spacing: 0.05em;
       color: var(--muted, #a7b7cf);
     }
+    .app-picker-option-row {
+      display: flex;
+      align-items: stretch;
+      gap: 0.35rem;
+      width: 100%;
+    }
+    .app-picker-option-row .app-picker-option {
+      flex: 1;
+      min-width: 0;
+      width: auto;
+    }
+    .app-picker-preview-btn {
+      flex: 0 0 auto;
+      padding: 0.35rem 0.55rem;
+      font-size: 0.85rem;
+      align-self: center;
+    }
     .app-picker-option {
       width: 100%;
       border: 1px solid rgba(255,255,255,0.10);
@@ -1307,6 +1324,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=67"></script>
+  <script src="app.js?v=68"></script>
 </body>
 </html>
