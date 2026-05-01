@@ -197,6 +197,7 @@
     "sports-performance",
     "sleep-rest",
   ];
+  var backgroundCategoryOpenById = { general: true };
   function backgroundCategoryDisplayName(id) {
     switch (id) {
       case "general":
@@ -3417,10 +3418,15 @@
       .map(function (cid) {
         var items = grouped[cid] || [];
         if (!items.length) return "";
-        var open = selectedBackgroundId !== "bg-none" && items.some(function (b) { return b.id === selectedBackgroundId; });
-        if (cid === "general") open = true;
+        if (backgroundCategoryOpenById[cid] == null) {
+          var containsSelected = selectedBackgroundId !== "bg-none" && items.some(function (b) { return b.id === selectedBackgroundId; });
+          backgroundCategoryOpenById[cid] = cid === "general" || containsSelected;
+        }
+        var open = backgroundCategoryOpenById[cid] === true;
         return (
-          '<details class="app-bg-category" ' +
+          '<details class="app-bg-category" data-bg-category="' +
+          escapeHtml(cid) +
+          '" ' +
           (open ? "open" : "") +
           ">" +
           '<summary class="app-bg-category-summary">' +
@@ -3451,6 +3457,13 @@
         }).then(function () {
           renderBackgrounds();
         });
+      });
+    });
+    list.querySelectorAll("[data-bg-category]").forEach(function (sec) {
+      sec.addEventListener("toggle", function () {
+        var cid = sec.getAttribute("data-bg-category");
+        if (!cid) return;
+        backgroundCategoryOpenById[cid] = !!sec.open;
       });
     });
     list.querySelectorAll("[data-background-id]").forEach(function (btn) {
