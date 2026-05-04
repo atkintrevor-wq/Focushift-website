@@ -6535,6 +6535,61 @@
     });
   }
 
+  function playlistModeChipSvg(kind) {
+    if (kind === "loop") {
+      return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>'
+      );
+    }
+    if (kind === "shuffle") {
+      return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M3 7h6.5l3.5 10H21"/><path d="M3 17h6.5l3.5-10H21"/><path d="M17 3l4 4-4 4"/><path d="M7 21l-4-4 4-4"/></svg>'
+      );
+    }
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h6"/><path d="M10 10h6"/><path d="M18 6h4"/></svg>'
+    );
+  }
+
+  function playlistPlaybackOptionsRow(loopOn, shuffleOn, mixOn) {
+    function chip(id, kind, shortLabel, tip, on) {
+      return (
+        '<button type="button" class="playlist-mode-chip' +
+        (on ? " is-on" : "") +
+        '" id="' +
+        id +
+        '" aria-pressed="' +
+        (on ? "true" : "false") +
+        '" title="' +
+        escapeHtml(tip) +
+        '">' +
+        '<span class="playlist-mode-chip-icon">' +
+        playlistModeChipSvg(kind) +
+        "</span>" +
+        '<span class="playlist-mode-chip-label">' +
+        escapeHtml(shortLabel) +
+        "</span>" +
+        "</button>"
+      );
+    }
+    return (
+      '<div class="playlist-detail-toggles" role="group" aria-label="Playlist playback">' +
+      chip("toggle-playlist-loop", "loop", "Loop", "Repeat this playlist when it ends", loopOn) +
+      chip("toggle-playlist-shuffle", "shuffle", "Shuffle", "Play tracks in random order", shuffleOn) +
+      chip(
+        "toggle-playlist-mix",
+        "mix",
+        "Mix",
+        "Mix mode (saved for iOS; web uses a simple queue for now)",
+        mixOn
+      ) +
+      "</div>"
+    );
+  }
+
   function renderSelectedPlaylistDetail() {
     var el = document.getElementById("playlist-detail");
     if (!el) return;
@@ -6563,18 +6618,8 @@
     var mixOn = !!p.mixMode;
     el.innerHTML =
       '<article class="app-card playlist-detail-card">' +
-      '<div class="playlist-detail-toggles">' +
-      '<label class="playlist-toggle-row"><input type="checkbox" id="toggle-playlist-loop"' +
-      (loopOn ? " checked" : "") +
-      '> Loop all</label>' +
-      '<label class="playlist-toggle-row"><input type="checkbox" id="toggle-playlist-shuffle"' +
-      (shuffleOn ? " checked" : "") +
-      '> Shuffle</label>' +
-      '<label class="playlist-toggle-row"><input type="checkbox" id="toggle-playlist-mix"' +
-      (mixOn ? " checked" : "") +
-      '> Mix mode <span class="app-muted">(saved; simple queue on web)</span></label>' +
-      "</div>" +
-      '<div class="app-card-actions" style="margin-top:0.65rem;flex-wrap:wrap;">' +
+      playlistPlaybackOptionsRow(loopOn, shuffleOn, mixOn) +
+      '<div class="app-card-actions playlist-detail-actions">' +
       '  <button type="button" class="app-btn" id="btn-play-playlist">' +
       (isPlayingThisQueue ? "Restart playlist" : "Play playlist") +
       "</button>" +
@@ -6623,15 +6668,27 @@
         : '<p class="app-muted">No scripts in this playlist yet. Use <strong>Add audio…</strong> or add from My Library.</p>') +
       "</article>";
 
-    document.getElementById("toggle-playlist-loop").addEventListener("change", function () {
-      persistPlaylistPlaybackField(p.id, { loop: !!this.checked });
-    });
-    document.getElementById("toggle-playlist-shuffle").addEventListener("change", function () {
-      persistPlaylistPlaybackField(p.id, { shuffle: !!this.checked });
-    });
-    document.getElementById("toggle-playlist-mix").addEventListener("change", function () {
-      persistPlaylistPlaybackField(p.id, { mixMode: !!this.checked });
-    });
+    function bindPlaylistModeChip(btnId, field) {
+      var btn = document.getElementById(btnId);
+      if (!btn) return;
+      btn.addEventListener("click", function () {
+        var pl = currentPlaylists.find(function (x) {
+          return x.id === selectedPlaylistId;
+        });
+        if (!pl) return;
+        var next = !pl[field];
+        persistPlaylistPlaybackField(pl.id, (function () {
+          var o = {};
+          o[field] = next;
+          return o;
+        })());
+        pl[field] = next;
+        renderSelectedPlaylistDetail();
+      });
+    }
+    bindPlaylistModeChip("toggle-playlist-loop", "loop");
+    bindPlaylistModeChip("toggle-playlist-shuffle", "shuffle");
+    bindPlaylistModeChip("toggle-playlist-mix", "mixMode");
     document.getElementById("btn-play-playlist").addEventListener("click", function () {
       startPlaylistPlayback(p);
     });
