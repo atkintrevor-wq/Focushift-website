@@ -328,60 +328,100 @@
     }
     .playlist-detail-body { margin-top: 0.25rem; }
     .playlist-detail-card { padding-top: 0.65rem; padding-bottom: 0.75rem; }
-    .playlist-detail-toggles {
+    .playlist-detail-toggles,
+    .playlist-detail-icon-toolbar {
       display: flex;
       flex-direction: row;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       align-items: center;
+      justify-content: space-between;
       gap: 0.35rem;
       margin: 0 0 0.45rem;
+      max-width: 100%;
     }
-    .playlist-mode-chip {
+    .playlist-mode-icon-btn {
+      flex: 1 1 0;
+      min-width: 0;
       display: inline-flex;
       align-items: center;
-      gap: 0.32rem;
-      padding: 0.32rem 0.55rem 0.32rem 0.42rem;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      background: rgba(255, 255, 255, 0.04);
+      justify-content: center;
+      height: 38px;
+      padding: 0 0.2rem;
+      border-radius: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.32);
+      background: rgba(255, 255, 255, 0.05);
       color: #94a3b8;
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.01em;
       cursor: pointer;
-      line-height: 1;
       font-family: inherit;
       -webkit-tap-highlight-color: transparent;
-      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, filter 0.15s ease;
     }
-    .playlist-mode-chip:hover {
+    .playlist-mode-icon-btn:hover {
       border-color: rgba(96, 165, 250, 0.45);
       color: #cbd5e1;
     }
-    .playlist-mode-chip.is-on {
-      border-color: rgba(96, 165, 250, 0.75);
-      background: rgba(37, 99, 235, 0.38);
+    .playlist-mode-icon-btn.is-on {
+      border-color: rgba(96, 165, 250, 0.8);
+      background: rgba(37, 99, 235, 0.42);
       color: #e0f2fe;
     }
-    .playlist-mode-chip.is-on .playlist-mode-chip-icon {
-      color: #93c5fd;
+    .playlist-mode-icon-btn.is-on .playlist-mode-icon-inner {
+      color: #bfdbfe;
     }
-    .playlist-mode-chip:focus-visible {
+    .playlist-timer-toolbar-btn {
+      color: #93c5fd;
+      border-color: rgba(96, 165, 250, 0.4);
+    }
+    .playlist-mode-icon-btn:focus-visible {
       outline: 2px solid rgba(96, 165, 250, 0.9);
       outline-offset: 2px;
     }
-    .playlist-mode-chip-icon {
+    .playlist-mode-icon-inner {
       display: flex;
       align-items: center;
       justify-content: center;
-      color: inherit;
-      opacity: 0.92;
+      pointer-events: none;
     }
-    .playlist-mode-chip-icon svg {
+    .playlist-mode-icon-inner svg {
       display: block;
     }
-    .playlist-mode-chip-label {
+    .playlist-add-dual {
+      flex-shrink: 0;
+    }
+    .playlist-dual-rename {
+      width: auto !important;
+      min-width: 4.25rem;
+      padding: 0 0.5rem !important;
+      font-size: 0.72rem !important;
+      font-weight: 600;
       white-space: nowrap;
+    }
+    .app-btn-iconish {
+      min-width: 2.1rem;
+      padding: 0.28rem 0.45rem !important;
+      font-size: 0.82rem;
+      line-height: 1;
+    }
+    .playlist-track-remove {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 34px;
+      padding: 0;
+      border-radius: 8px;
+      border: 1px solid rgba(248, 113, 113, 0.35);
+      background: rgba(248, 113, 113, 0.08);
+      color: #fca5a5;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .playlist-track-remove:hover {
+      background: rgba(220, 38, 38, 0.25);
+      border-color: rgba(248, 113, 113, 0.65);
+      color: #fecaca;
     }
     .playlist-detail-actions {
       margin-top: 0.45rem !important;
@@ -400,10 +440,11 @@
       align-items: center;
       justify-content: space-between;
       gap: 0.5rem;
-      padding: 0.5rem 0.55rem;
+      padding: 0.45rem 0.5rem;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.1);
       background: rgba(255,255,255,0.03);
+      touch-action: pan-y;
     }
     .playlist-track-title { flex: 1; min-width: 0; font-size: 0.92rem; }
     .playlist-track-actions {
@@ -1426,6 +1467,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=77"></script>
+  <script src="app.js?v=78"></script>
 </body>
 </html>

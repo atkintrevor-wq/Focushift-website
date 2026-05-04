@@ -6535,29 +6535,48 @@
     });
   }
 
-  function playlistModeChipSvg(kind) {
+  function playlistTimerToolbarSvg() {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l3 2"/><path d="M9 3h6"/><path d="M12 3v2"/></svg>'
+    );
+  }
+
+  function playlistModeChipSvg(kind, on) {
+    var sw = on ? "2.35" : "2";
     if (kind === "loop") {
       return (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' +
+        sw +
+        '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        (on
+          ? '<path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>'
+          : '<path d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>') +
+        "</svg>"
       );
     }
     if (kind === "shuffle") {
       return (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-        '<path d="M3 7h6.5l3.5 10H21"/><path d="M3 17h6.5l3.5-10H21"/><path d="M17 3l4 4-4 4"/><path d="M7 21l-4-4 4-4"/></svg>'
+        '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' +
+        sw +
+        '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+        '<path d="M3 7h6.5l3.5 10H21"/><path d="M3 17h6.5l3.5-10H21"/><path d="M17 3l4 4-4 4"/><path d="M7 21l-4-4 4-4"/>' +
+        "</svg>"
       );
     }
     return (
-      '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/><path d="M2 14h6"/><path d="M10 10h6"/><path d="M18 6h4"/></svg>'
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' +
+      sw +
+      '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/>' +
+      "</svg>"
     );
   }
 
-  function playlistPlaybackOptionsRow(loopOn, shuffleOn, mixOn) {
-    function chip(id, kind, shortLabel, tip, on) {
+  function playlistPlaybackIconToolbar(loopOn, shuffleOn, mixOn) {
+    function iconToggle(id, kind, on, tip) {
       return (
-        '<button type="button" class="playlist-mode-chip' +
+        '<button type="button" class="playlist-mode-icon-btn' +
         (on ? " is-on" : "") +
         '" id="' +
         id +
@@ -6566,26 +6585,22 @@
         '" title="' +
         escapeHtml(tip) +
         '">' +
-        '<span class="playlist-mode-chip-icon">' +
-        playlistModeChipSvg(kind) +
-        "</span>" +
-        '<span class="playlist-mode-chip-label">' +
-        escapeHtml(shortLabel) +
-        "</span>" +
-        "</button>"
+        '<span class="playlist-mode-icon-inner">' +
+        playlistModeChipSvg(kind, on) +
+        "</span></button>"
       );
     }
+    var mixTip =
+      "Mix mode (iOS): hear affirmations over Apple Music or other audio. Web browsers cannot duck or mix with those apps the same way; this setting is saved and applies on iPhone/iPad.";
     return (
-      '<div class="playlist-detail-toggles" role="group" aria-label="Playlist playback">' +
-      chip("toggle-playlist-loop", "loop", "Loop", "Repeat this playlist when it ends", loopOn) +
-      chip("toggle-playlist-shuffle", "shuffle", "Shuffle", "Play tracks in random order", shuffleOn) +
-      chip(
-        "toggle-playlist-mix",
-        "mix",
-        "Mix",
-        "Mix mode (saved for iOS; web uses a simple queue for now)",
-        mixOn
-      ) +
+      '<div class="playlist-detail-toggles playlist-detail-icon-toolbar" role="toolbar" aria-label="Playlist controls">' +
+      '<button type="button" class="playlist-mode-icon-btn playlist-timer-toolbar-btn" id="btn-playlist-timer" title="Sleep timer — countdown shows in the header">' +
+      '<span class="playlist-mode-icon-inner">' +
+      playlistTimerToolbarSvg() +
+      "</span></button>" +
+      iconToggle("toggle-playlist-loop", "loop", loopOn, "Loop — repeat this playlist when it ends") +
+      iconToggle("toggle-playlist-shuffle", "shuffle", shuffleOn, "Shuffle — random order when you play") +
+      iconToggle("toggle-playlist-mix", "mix", mixOn, mixTip) +
       "</div>"
     );
   }
@@ -6618,18 +6633,16 @@
     var mixOn = !!p.mixMode;
     el.innerHTML =
       '<article class="app-card playlist-detail-card">' +
-      playlistPlaybackOptionsRow(loopOn, shuffleOn, mixOn) +
+      playlistPlaybackIconToolbar(loopOn, shuffleOn, mixOn) +
       '<div class="app-card-actions playlist-detail-actions">' +
       '  <button type="button" class="app-btn" id="btn-play-playlist">' +
       (isPlayingThisQueue ? "Restart playlist" : "Play playlist") +
       "</button>" +
       '  <button type="button" class="app-btn" id="btn-stop-playlist">Stop</button>' +
-      '  <button type="button" class="app-btn app-btn-secondary" id="btn-playlist-add-audio">Add audio…</button>' +
-      '  <button type="button" class="app-btn app-btn-secondary" id="btn-playlist-rename">Rename</button>' +
-      "</div>" +
-      '<div class="playlist-timer-row">' +
-      '  <button type="button" class="app-btn app-btn-secondary" id="btn-playlist-timer">Timer…</button>' +
-      '  <span class="app-muted" style="font-size:0.82rem;">Countdown appears in the top bar so you can switch tabs while listening.</span>' +
+      '  <div class="library-dual-btn playlist-add-dual" role="group" aria-label="Add tracks or rename playlist">' +
+      '    <button type="button" class="library-dual-btn-main" id="btn-playlist-add-audio">Add audio</button>' +
+      '    <button type="button" class="library-dual-btn-menu playlist-dual-rename" id="btn-playlist-rename" title="Rename playlist">Rename</button>' +
+      "  </div>" +
       "</div>" +
       (scripts.length
         ? '<ul class="playlist-track-list">' +
@@ -6643,12 +6656,14 @@
                   ? ' <span class="playlist-now-playing">▶</span>'
                   : "";
               var playBtn = hasAudio
-                ? '<button type="button" class="app-btn app-btn-secondary" data-playlist-play-script="' +
+                ? '<button type="button" class="app-btn app-btn-secondary app-btn-iconish" data-playlist-play-script="' +
                   escapeHtml(s.id) +
-                  '">Play</button>'
+                  '" title="Play this track">▶</button>'
                 : "";
               return (
-                "<li class=\"playlist-track-row\">" +
+                '<li class="playlist-track-row" data-playlist-track-id="' +
+                escapeHtml(s.id) +
+                '">' +
                 '<span class="playlist-track-title">' +
                 escapeHtml(s.title || "Untitled") +
                 (hasAudio ? "" : ' <span class="app-muted">(no audio)</span>') +
@@ -6656,16 +6671,18 @@
                 "</span>" +
                 '<span class="playlist-track-actions">' +
                 playBtn +
-                '<button type="button" class="app-btn app-btn-ghost" data-playlist-remove-script="' +
+                '<button type="button" class="playlist-track-remove" data-playlist-remove-script="' +
                 escapeHtml(s.id) +
-                '">Remove</button>' +
+                '" title="Remove from playlist" aria-label="Remove from playlist">' +
+                '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>' +
+                "</button>" +
                 "</span>" +
                 "</li>"
               );
             })
             .join("") +
           "</ul>"
-        : '<p class="app-muted">No scripts in this playlist yet. Use <strong>Add audio…</strong> or add from My Library.</p>') +
+        : '<p class="app-muted">No scripts in this playlist yet. Use <strong>Add audio</strong> or add from My Library.</p>') +
       "</article>";
 
     function bindPlaylistModeChip(btnId, field) {
@@ -6689,6 +6706,9 @@
     bindPlaylistModeChip("toggle-playlist-loop", "loop");
     bindPlaylistModeChip("toggle-playlist-shuffle", "shuffle");
     bindPlaylistModeChip("toggle-playlist-mix", "mixMode");
+    document.getElementById("btn-playlist-timer").addEventListener("click", function () {
+      openPlaylistTimerModal();
+    });
     document.getElementById("btn-play-playlist").addEventListener("click", function () {
       startPlaylistPlayback(p);
     });
@@ -6713,12 +6733,48 @@
       });
     });
     el.querySelectorAll("[data-playlist-remove-script]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
+      btn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
         var sid = btn.getAttribute("data-playlist-remove-script");
         removeScriptFromPlaylist(p, sid).then(function () {
           setPlaylistsMessage("Removed from playlist.", "success");
         });
       });
+    });
+    el.querySelectorAll(".playlist-track-row[data-playlist-track-id]").forEach(function (row) {
+      var touchStartX = null;
+      var touchStartY = null;
+      row.addEventListener(
+        "touchstart",
+        function (e) {
+          if (e.touches.length !== 1) return;
+          touchStartX = e.touches[0].clientX;
+          touchStartY = e.touches[0].clientY;
+        },
+        { passive: true }
+      );
+      row.addEventListener(
+        "touchend",
+        function (e) {
+          if (touchStartX == null || !e.changedTouches.length) return;
+          var dx = e.changedTouches[0].clientX - touchStartX;
+          var dy = e.changedTouches[0].clientY - touchStartY;
+          touchStartX = null;
+          if (dx > -72 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+          var sid = row.getAttribute("data-playlist-track-id");
+          if (!sid) return;
+          var tr = scripts.find(function (x) {
+            return x.id === sid;
+          });
+          var tlab = (tr && tr.title) || "this track";
+          if (window.confirm('Remove "' + tlab + '" from this playlist?')) {
+            removeScriptFromPlaylist(p, sid).then(function () {
+              setPlaylistsMessage("Removed from playlist.", "success");
+            });
+          }
+        },
+        { passive: true }
+      );
     });
     updatePlaylistTimerBadge();
   }
