@@ -16,20 +16,41 @@
     .app-shell { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
     .app-shell h1,
     .app-admin-title { font-size: 1.6rem; margin-top: 0; letter-spacing: -0.01em; }
+    .app-admin-sticky-head {
+      position: sticky;
+      top: 0;
+      z-index: 960;
+      margin: 0 0 0.35rem;
+      padding: 0;
+      background: linear-gradient(180deg, rgba(11, 18, 32, 0.98) 0%, rgba(11, 18, 32, 0.9) 90%, rgba(11, 18, 32, 0) 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(10px);
+    }
+    .admin-mode-banner {
+      padding: 0.45rem 0.65rem 0.5rem;
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: #fef3c7;
+      background: rgba(234, 179, 8, 0.22);
+      border-bottom: 1px solid rgba(234, 179, 8, 0.4);
+    }
+    .admin-mode-banner strong {
+      color: #fde68a;
+    }
     .app-admin-header {
       display: flex;
       flex-wrap: wrap;
       align-items: flex-start;
       justify-content: space-between;
       gap: 0.75rem 1rem;
-      margin: 0 0 0.35rem;
+      margin: 0;
       padding: 0.5rem 0.15rem 0.85rem;
-      position: sticky;
-      top: 0;
-      z-index: 950;
-      background: linear-gradient(180deg, rgba(11, 18, 32, 0.98) 0%, rgba(11, 18, 32, 0.88) 85%, rgba(11, 18, 32, 0) 100%);
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      backdrop-filter: blur(10px);
+      position: static;
+      top: auto;
+      z-index: auto;
+      background: none;
+      border-bottom: none;
+      backdrop-filter: none;
     }
     .app-admin-header-main { flex: 1; min-width: 0; }
     .app-admin-tagline { margin: 0.25rem 0 0; font-size: 0.86rem; line-height: 1.45; }
@@ -1355,6 +1376,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=74"></script>
+  <script src="app.js?v=75"></script>
 </body>
 </html>

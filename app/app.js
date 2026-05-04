@@ -34,6 +34,9 @@
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
   var PREF_AUTO_PLAY_KEY = "focusshiftWebPrefAutoPlay";
   var PREF_LISTEN_SHORTCUT_KEY = "focusshiftWebPrefListenTodayShortcut";
+  /** Mirrors iOS @AppStorage("adminModeEnabled"); gates catalog publish/edit on web. */
+  var PREF_ADMIN_MODE_KEY = "focusshiftWebAdminModeEnabled";
+  var adminModeEnabled = false;
   var accountEscapeBound = false;
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
@@ -434,6 +437,48 @@
     return "https://us-central1-focushift-eeb60.cloudfunctions.net/api";
   }
 
+  function readAdminModeEnabled() {
+    try {
+      return localStorage.getItem(PREF_ADMIN_MODE_KEY) === "1";
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function writeAdminModeEnabled(on) {
+    adminModeEnabled = !!on;
+    try {
+      if (adminModeEnabled) {
+        localStorage.setItem(PREF_ADMIN_MODE_KEY, "1");
+      } else {
+        localStorage.removeItem(PREF_ADMIN_MODE_KEY);
+      }
+    } catch (_e) {}
+    applyAdminModeUi();
+  }
+
+  function applyAdminModeUi() {
+    var banner = document.getElementById("admin-mode-banner");
+    if (banner) {
+      banner.hidden = !adminModeEnabled;
+    }
+    var pub = document.getElementById("btn-open-publish-premade");
+    if (pub) {
+      pub.style.display = adminModeEnabled ? "" : "none";
+    }
+    var chk = document.getElementById("pref-admin-mode");
+    if (chk) {
+      chk.checked = adminModeEnabled;
+    }
+    if (!adminModeEnabled) {
+      closePublishPremadeModal();
+      closeEditPremadeModal();
+    }
+    if (document.getElementById("premade-list")) {
+      renderPremade();
+    }
+  }
+
   function renderSignedOut() {
     hasVoiceCloneConsent = false;
     stopVoiceRecording();
@@ -480,6 +525,10 @@
 
   function renderAdminShell(email, displayName) {
     root.innerHTML =
+      '<div class="app-admin-sticky-head">' +
+      '<div id="admin-mode-banner" class="admin-mode-banner" role="status" hidden>' +
+      "<strong>Admin mode is on.</strong> You can publish to the App Library catalog and edit premade entries in Firestore. Turn this off in Account → Admin mode when you are done." +
+      "</div>" +
       '<header class="app-admin-header">' +
       '  <div class="app-admin-header-main">' +
       '    <h1 class="app-admin-title">Focus Shift</h1>' +
@@ -502,7 +551,7 @@
       "      </svg>" +
       "    </button>" +
       "  </div>" +
-      "</header>" +
+      "</header></div>" +
       '<p class="app-muted app-admin-intro">Home, Library, Playlists, Voices, and Backgrounds — use the account button (top right) for settings and sign out.</p>' +
       '<nav class="app-tabs" aria-label="Admin sections">' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
@@ -673,6 +722,11 @@
       '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-library-stats">Refresh library stats</button>' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-sync-cloud">Sync status</button>' +
       "        </div>" +
+      "      </section>" +
+      '      <section id="account-admin-tools-section" class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
+      '        <strong style="display:block;margin-bottom:0.3rem;">Admin tools</strong>' +
+      '        <p class="app-muted" style="margin:0 0 0.45rem;">Same idea as the iOS app: turn on only when publishing or editing App Library catalog data in Firestore. This browser remembers your choice.</p>' +
+      '        <label class="account-pref-row"><input type="checkbox" id="pref-admin-mode" /> Admin mode (catalog publish &amp; edit)</label>' +
       "      </section>" +
       '      <div id="account-insights" class="account-insights-grid"></div>' +
       '      <form id="account-form" class="app-form" style="margin-top:0.65rem;">' +
@@ -1205,6 +1259,12 @@
         renderLibrarySubtab();
       }
     });
+    var prefAdminMode = document.getElementById("pref-admin-mode");
+    if (prefAdminMode) {
+      prefAdminMode.addEventListener("change", function () {
+        writeAdminModeEnabled(!!prefAdminMode.checked);
+      });
+    }
     document.getElementById("account-pref-open-voices").addEventListener("click", function () {
       closeAccountModal();
       setAdminTab("voices");
@@ -1438,6 +1498,7 @@
     updatePlaylistTimerBadge();
     var sdkEl = document.getElementById("account-privacy-firebase-sdk");
     if (sdkEl) sdkEl.textContent = (firebase && firebase.SDK_VERSION) || "-";
+    applyAdminModeUi();
   }
 
   function openPlaylistPicker(script, onSuccess) {
@@ -1464,6 +1525,7 @@
   }
 
   function openPublishPremadeModal() {
+    if (!adminModeEnabled) return;
     var backdrop = document.getElementById("premade-publish-backdrop");
     if (!backdrop) return;
     populatePublishScriptOptions();
@@ -1569,6 +1631,7 @@
   }
 
   function publishPremadeFromModal() {
+    if (!adminModeEnabled) return;
     if (!currentUser) return;
     var s = selectedPublishScript();
     if (!s) {
@@ -1620,6 +1683,7 @@
 
   function openEditPremadeModal(premade) {
     if (!premade) return;
+    if (!adminModeEnabled) return;
     editingPremadeId = premade.id;
     var backdrop = document.getElementById("premade-edit-backdrop");
     var title = document.getElementById("premade-edit-title");
@@ -1662,6 +1726,7 @@
   }
 
   function savePremadeEdits() {
+    if (!adminModeEnabled) return;
     if (!editingPremadeId) return;
     var title = ((document.getElementById("premade-edit-title").value || "").trim());
     var categoryID = ((document.getElementById("premade-edit-category").value || "").trim() || "confidence");
@@ -1694,6 +1759,7 @@
   }
 
   function unpublishPremade() {
+    if (!adminModeEnabled) return;
     if (!editingPremadeId) return;
     var premade = currentPremade.find(function (x) { return x.id === editingPremadeId; });
     if (!window.confirm('Unpublish "' + ((premade && premade.title) || "this premade") + '"?')) return;
@@ -1736,6 +1802,10 @@
         libMy.checked = true;
         libApp.checked = false;
       }
+    }
+    var adminModeCb = document.getElementById("pref-admin-mode");
+    if (adminModeCb) {
+      adminModeCb.checked = adminModeEnabled;
     }
   }
 
@@ -6971,9 +7041,11 @@
         '"' +
         (!currentPlaylists.length ? " disabled" : "") +
         ">Save + Add to Playlist</button>" +
-        '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="edit" data-premade-id="' +
-        escapeHtml(p.id) +
-        '">Edit</button>' +
+        (adminModeEnabled
+          ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="edit" data-premade-id="' +
+            escapeHtml(p.id) +
+            '">Edit</button>'
+          : "") +
         "</div>" +
         "</div>"
       : "";
@@ -7248,6 +7320,7 @@
         }
         var isAdmin = snap.exists && snap.data().isAdmin === true;
         if (isAdmin) {
+          adminModeEnabled = readAdminModeEnabled();
           renderAdminShell(user.email, user.displayName);
           subscribeScripts(user.uid);
           subscribePlaylists(user.uid);
