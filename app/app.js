@@ -9,6 +9,8 @@
   var currentUser = null;
   var currentScripts = [];
   var currentPlaylists = [];
+  /** Script IDs while the playlist edit modal is open (reorder draft). */
+  var playlistEditOrderIds = [];
   var currentPremade = [];
   var currentClonedVoices = [];
   var currentUserProfile = null;
@@ -36,7 +38,40 @@
   var PREF_LISTEN_SHORTCUT_KEY = "focusshiftWebPrefListenTodayShortcut";
   /** Mirrors iOS @AppStorage("adminModeEnabled"); gates catalog publish/edit on web. */
   var PREF_ADMIN_MODE_KEY = "focusshiftWebAdminModeEnabled";
+  /** 0–1, applies to script / playlist / voice-adjust preview playback in this browser. */
+  var PREF_PLAYBACK_VOLUME_KEY = "focusshiftWebPlaybackVolume";
   var adminModeEnabled = false;
+
+  function readPlaybackVolume() {
+    try {
+      var raw = localStorage.getItem(PREF_PLAYBACK_VOLUME_KEY);
+      if (raw == null || raw === "") return 1;
+      var n = parseFloat(raw);
+      if (!isFinite(n)) return 1;
+      if (n < 0) return 0;
+      if (n > 1) return 1;
+      return n;
+    } catch (_e) {
+      return 1;
+    }
+  }
+
+  function writePlaybackVolume(v) {
+    var n = Number(v);
+    if (!isFinite(n)) return;
+    if (n < 0) n = 0;
+    if (n > 1) n = 1;
+    try {
+      localStorage.setItem(PREF_PLAYBACK_VOLUME_KEY, String(n));
+    } catch (_e) {}
+  }
+
+  function applyPlaybackVolumeToActiveAudio() {
+    if (!activeAudio) return;
+    try {
+      activeAudio.volume = readPlaybackVolume();
+    } catch (_e) {}
+  }
   var accountEscapeBound = false;
   var playlistPickerScript = null;
   var playlistPickerSuccessHandler = null;
@@ -621,7 +656,10 @@
       '  <div id="playlists-detail-view" hidden>' +
       '    <div class="playlist-detail-nav">' +
       '      <button type="button" class="app-btn app-btn-ghost" id="btn-playlist-back">← Playlists</button>' +
-      '      <h2 id="playlist-detail-heading" class="playlist-detail-heading">Playlist</h2>' +
+      '      <div class="playlist-detail-head-row">' +
+      '        <h2 id="playlist-detail-heading" class="playlist-detail-heading">Playlist</h2>' +
+      '        <div id="playlist-detail-head-actions" class="playlist-detail-head-actions"></div>' +
+      "      </div>" +
       "    </div>" +
       '    <div id="playlist-detail" class="playlist-detail-body"></div>' +
       "  </div>" +
@@ -813,14 +851,21 @@
       "    </div>" +
       "  </div>" +
       "</div>" +
-      '<div id="mini-player" class="mini-player" hidden>' +
+      '<div id="mini-player" class="mini-player mini-player-is-idle" role="region" aria-label="Now playing">' +
       '  <div class="mini-player-inner">' +
-      '    <div id="mini-player-title" class="mini-player-title">Now playing</div>' +
+      '    <div id="mini-player-title" class="mini-player-title">Nothing playing</div>' +
       '    <div class="mini-player-controls">' +
-      '      <button type="button" id="mini-player-toggle" class="mini-player-btn">Play</button>' +
-      '      <button type="button" id="mini-player-stop" class="mini-player-btn">Stop</button>' +
+      '      <button type="button" id="mini-player-toggle" class="mini-player-btn" disabled>Play</button>' +
+      '      <button type="button" id="mini-player-stop" class="mini-player-btn" disabled>Stop</button>' +
       "    </div>" +
-      '    <div id="mini-player-time" class="mini-player-time">0:00</div>' +
+      '    <label class="mini-player-volume" title="Playback volume (saved in this browser)">' +
+      '      <span class="mini-player-volume-icon" aria-hidden="true">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>' +
+      "</span>" +
+      '      <span class="visually-hidden">Playback volume</span>' +
+      '      <input type="range" id="mini-player-volume" min="0" max="1" step="0.02" value="1" />' +
+      "    </label>" +
+      '    <div id="mini-player-time" class="mini-player-time">—</div>' +
       "  </div>" +
       "</div>" +
       '<div id="playlist-picker-backdrop" class="app-modal-backdrop" hidden>' +
@@ -844,6 +889,20 @@
       '    <div id="playlist-add-audio-list" class="app-modal-list"></div>' +
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="playlist-add-audio-close">Close</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="playlist-edit-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="playlist-edit-title">' +
+      '    <h3 id="playlist-edit-title">Edit playlist</h3>' +
+      '    <label for="playlist-edit-name-input">Playlist name</label>' +
+      '    <input id="playlist-edit-name-input" type="text" maxlength="120" style="width:100%;box-sizing:border-box;margin-bottom:0.55rem;padding:0.55rem;border-radius:10px;">' +
+      '    <p class="app-muted" style="margin:0 0 0.4rem;font-size:0.82rem;">Reorder tracks with the arrows. Tap Save to update the name and order in your library (syncs with iOS).</p>' +
+      '    <div id="playlist-edit-order-list" class="playlist-edit-order-list"></div>' +
+      '    <div id="playlist-edit-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="playlist-edit-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="playlist-edit-save">Save</button>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -1114,6 +1173,17 @@
     document.getElementById("playlist-add-audio-close").addEventListener("click", function () {
       closePlaylistAddAudioModal();
     });
+    document.getElementById("playlist-edit-cancel").addEventListener("click", function () {
+      closePlaylistEditModal();
+    });
+    document.getElementById("playlist-edit-save").addEventListener("click", function () {
+      savePlaylistEditFromModal();
+    });
+    document.getElementById("playlist-edit-backdrop").addEventListener("click", function (ev) {
+      if (ev.target && ev.target.id === "playlist-edit-backdrop") {
+        closePlaylistEditModal();
+      }
+    });
     document.getElementById("playlist-timer-cancel").addEventListener("click", function () {
       closePlaylistTimerModal();
     });
@@ -1316,10 +1386,22 @@
       updateMiniPlayer();
     });
     document.getElementById("mini-player-stop").addEventListener("click", function () {
+      if (!activeAudio) return;
       stopActiveAudio();
       renderScripts(currentScripts);
       renderSelectedPlaylistDetail();
     });
+    (function bindMiniPlayerVolume() {
+      var vol = document.getElementById("mini-player-volume");
+      if (!vol) return;
+      vol.value = String(readPlaybackVolume());
+      vol.addEventListener("input", function () {
+        var v = parseFloat(vol.value);
+        if (!isFinite(v)) return;
+        writePlaybackVolume(v);
+        applyPlaybackVolumeToActiveAudio();
+      });
+    })();
     document.getElementById("playlist-picker-close").addEventListener("click", function () {
       closePlaylistPicker();
     });
@@ -2918,6 +3000,7 @@
         activePreviewBlobURL = blobURL;
         stopActiveAudio(false);
         activeAudio = new Audio(blobURL);
+        applyPlaybackVolumeToActiveAudio();
         activeAudioScriptId = null;
         activeAudioTitle = "Adjustment preview — " + (cloneAdjustVoiceName || "Voice");
         bindAudioLifecycle(function () {
@@ -3398,6 +3481,7 @@
         activePreviewBlobURL = blobURL;
         stopActiveAudio(false);
         activeAudio = new Audio(blobURL);
+        applyPlaybackVolumeToActiveAudio();
         activeAudioScriptId = null;
         activeAudioTitle = "Voice preview — " + (voice.name || "Voice");
         bindAudioLifecycle(function () {
@@ -5744,6 +5828,7 @@
 
     stopActiveAudio();
     activeAudio = new Audio(audioURL);
+    applyPlaybackVolumeToActiveAudio();
     activeAudioScriptId = script.id;
     activeAudioTitle = script.title || "Audio";
     bindAudioLifecycle();
@@ -5786,6 +5871,7 @@
     activePlaylistIndex = index;
     activeAudioScriptId = script.id;
     activeAudio = new Audio(audioURL);
+    applyPlaybackVolumeToActiveAudio();
     activeAudioTitle = script.title || "Playlist audio";
     bindAudioLifecycle(function () {
       var next = activePlaylistIndex + 1;
@@ -5844,6 +5930,7 @@
     activeAudio.addEventListener("play", updateMiniPlayer);
     activeAudio.addEventListener("pause", updateMiniPlayer);
     activeAudio.addEventListener("timeupdate", updateMiniPlayer);
+    activeAudio.addEventListener("loadedmetadata", updateMiniPlayer);
     activeAudio.addEventListener("ended", function () {
       if (typeof onEnded === "function") {
         onEnded();
@@ -5868,17 +5955,42 @@
   function updateMiniPlayer() {
     var shell = document.getElementById("mini-player");
     if (!shell) return;
-    if (!activeAudio) {
-      shell.hidden = true;
-      return;
-    }
     shell.hidden = false;
     var titleEl = document.getElementById("mini-player-title");
     var toggleEl = document.getElementById("mini-player-toggle");
+    var stopEl = document.getElementById("mini-player-stop");
     var timeEl = document.getElementById("mini-player-time");
+    var volEl = document.getElementById("mini-player-volume");
+    if (volEl && document.activeElement !== volEl) {
+      volEl.value = String(readPlaybackVolume());
+    }
+    if (!activeAudio) {
+      shell.classList.add("mini-player-is-idle");
+      if (titleEl) titleEl.textContent = "Nothing playing";
+      if (toggleEl) {
+        toggleEl.textContent = "Play";
+        toggleEl.disabled = true;
+      }
+      if (stopEl) stopEl.disabled = true;
+      if (timeEl) timeEl.textContent = "—";
+      return;
+    }
+    shell.classList.remove("mini-player-is-idle");
     if (titleEl) titleEl.textContent = activeAudioTitle || "Now playing";
-    if (toggleEl) toggleEl.textContent = activeAudio.paused ? "Play" : "Pause";
-    if (timeEl) timeEl.textContent = formatTime(activeAudio.currentTime || 0);
+    if (toggleEl) {
+      toggleEl.textContent = activeAudio.paused ? "Play" : "Pause";
+      toggleEl.disabled = false;
+    }
+    if (stopEl) stopEl.disabled = false;
+    if (timeEl) {
+      var cur = formatTime(activeAudio.currentTime || 0);
+      var d = activeAudio.duration;
+      if (typeof d === "number" && isFinite(d) && d > 0) {
+        timeEl.textContent = cur + " / " + formatTime(d);
+      } else {
+        timeEl.textContent = cur;
+      }
+    }
   }
 
   function backendRequest(path, token, body) {
@@ -6336,8 +6448,132 @@
     updatePlaylistSectionVisibility();
     var h = document.getElementById("playlist-detail-heading");
     if (h) h.textContent = "Playlist";
+    var ha = document.getElementById("playlist-detail-head-actions");
+    if (ha) ha.innerHTML = "";
     var el = document.getElementById("playlist-detail");
     if (el) el.innerHTML = "";
+    closePlaylistEditModal();
+  }
+
+  function setPlaylistEditMessage(text, kind) {
+    var el = document.getElementById("playlist-edit-message");
+    if (!el) return;
+    el.className = "app-inline-msg" + (kind ? " " + kind : "");
+    el.textContent = text || "";
+  }
+
+  function closePlaylistEditModal() {
+    var bd = document.getElementById("playlist-edit-backdrop");
+    if (bd) bd.hidden = true;
+    playlistEditOrderIds = [];
+    setPlaylistEditMessage("", "");
+  }
+
+  function renderPlaylistEditOrderList() {
+    var listEl = document.getElementById("playlist-edit-order-list");
+    if (!listEl) return;
+    if (!playlistEditOrderIds.length) {
+      listEl.innerHTML = '<p class="app-muted">No tracks in this playlist yet.</p>';
+      return;
+    }
+    var byId = {};
+    currentScripts.forEach(function (s) {
+      byId[s.id] = s;
+    });
+    listEl.innerHTML = playlistEditOrderIds
+      .map(function (sid, idx) {
+        var s = byId[sid];
+        var title = (s && s.title) || "Untitled";
+        return (
+          '<div class="playlist-edit-order-row">' +
+          '<span class="playlist-edit-order-title">' +
+          escapeHtml(title) +
+          "</span>" +
+          '<span class="playlist-edit-order-btns">' +
+          '<button type="button" class="app-btn app-btn-secondary app-btn-iconish" data-edit-move="' +
+          idx +
+          '" data-edit-delta="-1"' +
+          (idx === 0 ? " disabled" : "") +
+          ' title="Move up">↑</button>' +
+          '<button type="button" class="app-btn app-btn-secondary app-btn-iconish" data-edit-move="' +
+          idx +
+          '" data-edit-delta="1"' +
+          (idx === playlistEditOrderIds.length - 1 ? " disabled" : "") +
+          ' title="Move down">↓</button>' +
+          "</span>" +
+          "</div>"
+        );
+      })
+      .join("");
+    listEl.querySelectorAll("[data-edit-move]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.disabled) return;
+        var i = parseInt(btn.getAttribute("data-edit-move"), 10);
+        var d = parseInt(btn.getAttribute("data-edit-delta"), 10);
+        var j = i + d;
+        if (j < 0 || j >= playlistEditOrderIds.length) return;
+        var t = playlistEditOrderIds[i];
+        playlistEditOrderIds[i] = playlistEditOrderIds[j];
+        playlistEditOrderIds[j] = t;
+        renderPlaylistEditOrderList();
+      });
+    });
+  }
+
+  function openPlaylistEditModal() {
+    var p = currentPlaylists.find(function (x) {
+      return x.id === selectedPlaylistId;
+    });
+    if (!p || !currentUser) return;
+    playlistEditOrderIds = (p.scriptIDs || []).slice();
+    var nameInput = document.getElementById("playlist-edit-name-input");
+    var bd = document.getElementById("playlist-edit-backdrop");
+    if (!nameInput || !bd) return;
+    nameInput.value = p.name || "";
+    setPlaylistEditMessage("", "");
+    renderPlaylistEditOrderList();
+    bd.hidden = false;
+  }
+
+  function savePlaylistEditFromModal() {
+    var p = currentPlaylists.find(function (x) {
+      return x.id === selectedPlaylistId;
+    });
+    if (!p || !currentUser) return;
+    var nameInput = document.getElementById("playlist-edit-name-input");
+    var name = ((nameInput && nameInput.value) || "").trim();
+    if (!name) {
+      setPlaylistEditMessage("Enter a playlist name.", "error");
+      return;
+    }
+    var ids = playlistEditOrderIds.slice();
+    var items = ids.map(function (id) {
+      return { type: "script", id: id };
+    });
+    setPlaylistEditMessage("Saving...", "");
+    playlistCollection(currentUser.uid)
+      .doc(p.id)
+      .set(
+        {
+          name: name,
+          scriptIDs: ids,
+          items: items,
+        },
+        { merge: true }
+      )
+      .then(function () {
+        p.name = name;
+        p.scriptIDs = ids;
+        var h = document.getElementById("playlist-detail-heading");
+        if (h) h.textContent = name;
+        closePlaylistEditModal();
+        setPlaylistsMessage("Playlist updated.", "success");
+        renderPlaylists(currentPlaylists);
+        renderSelectedPlaylistDetail();
+      })
+      .catch(function (e) {
+        setPlaylistEditMessage(e.message || "Could not save playlist.", "error");
+      });
   }
 
   function persistPlaylistPlaybackField(playlistId, patch) {
@@ -6568,12 +6804,12 @@
       '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="' +
       sw +
       '" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M4 21v-7"/><path d="M4 10V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-5"/><path d="M20 12V3"/>' +
+      '<path d="M3 7h6.5l3.5 10H21"/><path d="M3 17h6.5l3.5-10H21"/><path d="M17 3l4 4-4 4"/><path d="M7 21l-4-4 4-4"/>' +
       "</svg>"
     );
   }
 
-  function playlistPlaybackIconToolbar(loopOn, shuffleOn, mixOn) {
+  function playlistPlaybackIconToolbar(loopOn, shuffleOn) {
     function iconToggle(id, kind, on, tip) {
       return (
         '<button type="button" class="playlist-mode-icon-btn' +
@@ -6590,8 +6826,6 @@
         "</span></button>"
       );
     }
-    var mixTip =
-      "Mix mode (iOS): hear affirmations over Apple Music or other audio. Web browsers cannot duck or mix with those apps the same way; this setting is saved and applies on iPhone/iPad.";
     return (
       '<div class="playlist-detail-toggles playlist-detail-icon-toolbar" role="toolbar" aria-label="Playlist controls">' +
       '<button type="button" class="playlist-mode-icon-btn playlist-timer-toolbar-btn" id="btn-playlist-timer" title="Sleep timer — countdown shows in the header">' +
@@ -6600,7 +6834,6 @@
       "</span></button>" +
       iconToggle("toggle-playlist-loop", "loop", loopOn, "Loop — repeat this playlist when it ends") +
       iconToggle("toggle-playlist-shuffle", "shuffle", shuffleOn, "Shuffle — random order when you play") +
-      iconToggle("toggle-playlist-mix", "mix", mixOn, mixTip) +
       "</div>"
     );
   }
@@ -6615,9 +6848,19 @@
     if (!p || !playlistDetailVisible) {
       el.innerHTML = "";
       if (heading) heading.textContent = "Playlist";
+      var haClear = document.getElementById("playlist-detail-head-actions");
+      if (haClear) haClear.innerHTML = "";
       return;
     }
     if (heading) heading.textContent = p.name || "Playlist";
+    var headActions = document.getElementById("playlist-detail-head-actions");
+    if (headActions) {
+      headActions.innerHTML =
+        '<div class="library-dual-btn playlist-add-dual playlist-head-dual" role="group" aria-label="Add tracks or edit playlist">' +
+        '  <button type="button" class="library-dual-btn-main" id="btn-playlist-add-audio">Add audio</button>' +
+        '  <button type="button" class="library-dual-btn-menu playlist-dual-edit" id="btn-playlist-edit" title="Edit name and track order">Edit</button>' +
+        "</div>";
+    }
     var scripts = resolvePlaylistScripts(p);
     var idSet = {};
     (p.scriptIDs || []).forEach(function (id) {
@@ -6630,19 +6873,14 @@
       });
     var loopOn = !!p.loop;
     var shuffleOn = !!p.shuffle;
-    var mixOn = !!p.mixMode;
     el.innerHTML =
       '<article class="app-card playlist-detail-card">' +
-      playlistPlaybackIconToolbar(loopOn, shuffleOn, mixOn) +
+      playlistPlaybackIconToolbar(loopOn, shuffleOn) +
       '<div class="app-card-actions playlist-detail-actions">' +
       '  <button type="button" class="app-btn" id="btn-play-playlist">' +
       (isPlayingThisQueue ? "Restart playlist" : "Play playlist") +
       "</button>" +
       '  <button type="button" class="app-btn" id="btn-stop-playlist">Stop</button>' +
-      '  <div class="library-dual-btn playlist-add-dual" role="group" aria-label="Add tracks or rename playlist">' +
-      '    <button type="button" class="library-dual-btn-main" id="btn-playlist-add-audio">Add audio</button>' +
-      '    <button type="button" class="library-dual-btn-menu playlist-dual-rename" id="btn-playlist-rename" title="Rename playlist">Rename</button>' +
-      "  </div>" +
       "</div>" +
       (scripts.length
         ? '<ul class="playlist-track-list">' +
@@ -6705,7 +6943,6 @@
     }
     bindPlaylistModeChip("toggle-playlist-loop", "loop");
     bindPlaylistModeChip("toggle-playlist-shuffle", "shuffle");
-    bindPlaylistModeChip("toggle-playlist-mix", "mixMode");
     document.getElementById("btn-playlist-timer").addEventListener("click", function () {
       openPlaylistTimerModal();
     });
@@ -6717,15 +6954,18 @@
       renderSelectedPlaylistDetail();
       renderScripts(currentScripts);
     });
-    document.getElementById("btn-playlist-add-audio").addEventListener("click", function () {
-      openPlaylistAddAudioModal();
-    });
-    document.getElementById("btn-playlist-rename").addEventListener("click", function () {
-      renamePlaylist(p);
-    });
-    document.getElementById("btn-playlist-timer").addEventListener("click", function () {
-      openPlaylistTimerModal();
-    });
+    var addBtn = document.getElementById("btn-playlist-add-audio");
+    if (addBtn) {
+      addBtn.addEventListener("click", function () {
+        openPlaylistAddAudioModal();
+      });
+    }
+    var editBtn = document.getElementById("btn-playlist-edit");
+    if (editBtn) {
+      editBtn.addEventListener("click", function () {
+        openPlaylistEditModal();
+      });
+    }
     el.querySelectorAll("[data-playlist-play-script]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var sid = btn.getAttribute("data-playlist-play-script");

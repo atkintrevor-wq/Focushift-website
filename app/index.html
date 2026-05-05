@@ -13,7 +13,18 @@
   <link rel="stylesheet" href="../styles.css?v=8" />
   <link rel="stylesheet" href="../login/auth.css?v=1" />
   <style>
-    .app-shell { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+    .app-shell { max-width: 760px; margin: 0 auto; padding: 1.5rem 1rem calc(5.5rem + env(safe-area-inset-bottom)); }
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .app-shell h1,
     .app-admin-title { font-size: 1.6rem; margin-top: 0; letter-spacing: -0.01em; }
     .app-admin-sticky-head {
@@ -317,16 +328,75 @@
     .playlist-detail-nav {
       display: flex;
       flex-direction: column;
-      align-items: flex-start;
-      gap: 0.35rem;
-      margin-bottom: 0.75rem;
+      align-items: stretch;
+      gap: 0.45rem;
+      margin-bottom: 0.65rem;
+    }
+    .playlist-detail-head-row {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      width: 100%;
     }
     .playlist-detail-heading {
       margin: 0;
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       letter-spacing: -0.02em;
+      flex: 1 1 auto;
+      min-width: 0;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
     }
-    .playlist-detail-body { margin-top: 0.25rem; }
+    .playlist-detail-head-actions {
+      flex-shrink: 0;
+    }
+    .playlist-head-dual .library-dual-btn-main {
+      font-size: 0.78rem;
+      padding: 0 0.5rem;
+      min-height: 30px;
+    }
+    .playlist-dual-edit,
+    .playlist-dual-rename {
+      width: auto !important;
+      min-width: 3.5rem;
+      padding: 0 0.45rem !important;
+      font-size: 0.72rem !important;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .playlist-edit-order-list {
+      max-height: min(52vh, 22rem);
+      overflow-y: auto;
+      margin: 0.35rem 0 0.5rem;
+      padding: 0.15rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .playlist-edit-order-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.45rem;
+      padding: 0.4rem 0.45rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .playlist-edit-order-title {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.88rem;
+    }
+    .playlist-edit-order-btns {
+      display: flex;
+      gap: 0.25rem;
+      flex-shrink: 0;
+    }
+    .playlist-detail-body { margin-top: 0.15rem; }
     .playlist-detail-card { padding-top: 0.65rem; padding-bottom: 0.75rem; }
     .playlist-detail-toggles,
     .playlist-detail-icon-toolbar {
@@ -387,14 +457,6 @@
     }
     .playlist-add-dual {
       flex-shrink: 0;
-    }
-    .playlist-dual-rename {
-      width: auto !important;
-      min-width: 4.25rem;
-      padding: 0 0.5rem !important;
-      font-size: 0.72rem !important;
-      font-weight: 600;
-      white-space: nowrap;
     }
     .app-btn-iconish {
       min-width: 2.1rem;
@@ -692,30 +754,87 @@
       right: 0;
       bottom: 0;
       z-index: 1000;
-      padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
-      background: rgba(9, 15, 30, 0.95);
+      padding: 0.55rem 0.85rem calc(0.55rem + env(safe-area-inset-bottom));
+      background: rgba(9, 15, 30, 0.96);
       border-top: 1px solid rgba(255, 255, 255, 0.12);
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
     }
     .mini-player[hidden] { display: none !important; }
+    .mini-player-is-idle .mini-player-title {
+      color: #94a3b8;
+    }
     .mini-player-inner {
       max-width: 720px;
       margin: 0 auto;
       display: flex;
+      flex-direction: row;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 0.7rem;
+      justify-content: flex-end;
+      gap: 0.5rem 0.65rem;
     }
     .mini-player-title {
       font-size: 0.9rem;
-      flex: 1;
+      flex: 1 1 140px;
+      min-width: 0;
       overflow: hidden;
       white-space: nowrap;
       text-overflow: ellipsis;
+      order: 0;
     }
     .mini-player-controls {
       display: flex;
       align-items: center;
       gap: 0.45rem;
+      flex-shrink: 0;
+      order: 1;
+    }
+    .mini-player-volume {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-shrink: 0;
+      order: 2;
+      color: #cbd5e1;
+      cursor: pointer;
+    }
+    .mini-player-volume-icon {
+      display: flex;
+      opacity: 0.9;
+      flex-shrink: 0;
+    }
+    .mini-player-volume input[type="range"] {
+      width: 88px;
+      max-width: 28vw;
+      height: 4px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+    .mini-player-volume input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      border: 1px solid rgba(15, 23, 42, 0.35);
+      cursor: pointer;
+    }
+    .mini-player-volume input[type="range"]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #e2e8f0;
+      border: 1px solid rgba(15, 23, 42, 0.35);
+      cursor: pointer;
+    }
+    .mini-player-volume input[type="range"]::-moz-range-track {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.22);
+      border-radius: 3px;
     }
     .mini-player-btn {
       border: 1px solid rgba(255,255,255,0.25);
@@ -728,11 +847,17 @@
       font-size: 0.82rem;
       cursor: pointer;
     }
+    .mini-player-btn:disabled {
+      opacity: 0.42;
+      cursor: default;
+    }
     .mini-player-time {
       font-size: 0.75rem;
-      opacity: 0.8;
-      min-width: 58px;
+      opacity: 0.85;
+      min-width: 5.5rem;
       text-align: right;
+      flex-shrink: 0;
+      order: 3;
     }
     .app-modal-backdrop {
       position: fixed;
@@ -1188,7 +1313,7 @@
     }
     @media (max-width: 760px) {
       .app-shell {
-        padding: 1rem 0.7rem 4.8rem;
+        padding: 1rem 0.7rem calc(6rem + env(safe-area-inset-bottom));
       }
       .library-toolbar-row {
         flex-direction: column;
@@ -1467,6 +1592,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=78"></script>
+  <script src="app.js?v=80"></script>
 </body>
 </html>
