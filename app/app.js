@@ -551,8 +551,7 @@
       "<p class=\"app-muted\">Signed in as <strong>" +
       escapeHtml(email || "") +
       "</strong></p>" +
-      '<p style="margin-top:2rem"><button type="button" class="auth-btn auth-btn-primary" id="btn-out">Sign out</button></p>' +
-      '<p class="auth-back"><a href="/">← Marketing site</a></p>';
+      '<p style="margin-top:2rem"><button type="button" class="auth-btn auth-btn-primary" id="btn-out">Sign out</button></p>';
     document.getElementById("btn-out").addEventListener("click", function () {
       auth.signOut().then(redirectLogin);
     });
@@ -566,7 +565,9 @@
       "</div>" +
       '<header class="app-admin-header">' +
       '  <div class="app-admin-header-main">' +
-      '    <h1 class="app-admin-title">Focus Shift</h1>' +
+      '    <a href="/" class="app-admin-logo-link" aria-label="Focus Shift — open marketing site">' +
+      '      <img class="app-admin-logo-img" src="../images/logo.png?v=8" width="512" height="512" alt="" decoding="async" />' +
+      "    </a>" +
       '    <p class="app-muted app-admin-tagline">Signed in as <strong>' +
       escapeHtml(email || "") +
       "</strong> · " +
@@ -1131,8 +1132,7 @@
       '      <button type="button" class="app-btn app-btn-primary" id="voice-mic-help-retry">Try Again</button>' +
       "    </div>" +
       "  </div>" +
-      "</div>" +
-      '<p class="auth-back"><a href="/">← Marketing site</a></p>';
+      "</div>";
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
       openEditor(null);
