@@ -1087,11 +1087,20 @@
       '<div id="admin-mode-banner" class="admin-mode-banner" role="status" hidden>' +
       "<strong>Admin mode is on.</strong> You can publish to the App Library catalog and edit premade entries in Firestore. Turn this off in Account → Admin mode when you are done." +
       "</div>" +
-      '<div class="app-brand-top-bar">' +
-      '  <a href="/" class="app-brand-top-link" aria-label="Focus Shift — open marketing site">' +
-      '    <img class="app-brand-top-img" src="../images/focus-shift-brand.png?v=1" width="640" height="160" alt="Focus Shift" decoding="async" />' +
-      "  </a>" +
-      "</div>" +
+      '<nav class="site-top app-site-top-in-shell" aria-label="Focus Shift site">' +
+      '  <a class="site-top-skip" href="#admin-main-tabs">Skip to content</a>' +
+      '  <div class="site-top-inner">' +
+      '    <a class="site-top-home" href="/" aria-label="Focus Shift — marketing site home">' +
+      '      <img class="site-top-app-brand" src="../images/focus-shift-app-brand.png?v=7" alt="Focus Shift" width="1174" height="417" decoding="async" />' +
+      "    </a>" +
+      '    <div class="site-top-links">' +
+      '      <a href="/">Website</a>' +
+      '      <a href="/#why">Why it works</a>' +
+      '      <a href="/terms">Terms</a>' +
+      '      <a href="/privacy">Privacy</a>' +
+      "    </div>" +
+      "  </div>" +
+      "</nav>" +
       '<header class="app-admin-header">' +
       '  <div class="app-admin-header-main">' +
       '    <p class="app-muted app-admin-tagline">Signed in as <strong>' +
