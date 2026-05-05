@@ -652,9 +652,11 @@
       '  <div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '  <section aria-label="Playlists" style="margin-top:0.5rem;">' +
       '  <div id="playlists-list-view">' +
-      '    <div class="app-section-title-row"><h2>Playlists</h2></div>' +
-      '    <div class="app-toolbar" style="margin-top:0;">' +
-      '      <button type="button" class="app-btn" id="btn-create-playlist">+ New Playlist</button>' +
+      '    <div class="app-section-title-row playlist-list-title-row">' +
+      "      <h2>Playlists</h2>" +
+      '      <div class="library-dual-btn playlist-add-dual playlist-list-new-dual" role="group" aria-label="Create playlist">' +
+      '        <button type="button" class="library-dual-btn-main" id="btn-create-playlist">+ New Playlist</button>' +
+      "      </div>" +
       "    </div>" +
       '    <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
       "  </div>" +
@@ -6782,45 +6784,52 @@
       .map(function (p) {
         var selected = p.id === selectedPlaylistId && playlistDetailVisible;
         return (
-          '<article class="app-card playlist-card-tappable" tabindex="0" role="button" aria-label="Open playlist" data-playlist-card="' +
+          '<article class="app-card playlist-card-tappable" tabindex="0" aria-label="Open playlist" data-playlist-card="' +
           escapeHtml(p.id) +
           '" style="' +
           (selected ? "border-color:#2563eb;" : "") +
           (selected ? "" : "cursor:pointer;") +
           '">' +
-          "<h3>" +
+          '<div class="playlist-card-head">' +
+          "<h3 class=\"playlist-card-title\">" +
           escapeHtml(p.name || "Untitled Playlist") +
           "</h3>" +
+          '<div class="playlist-card-head-actions" role="toolbar" aria-label="Playlist actions">' +
+          '  <button type="button" class="playlist-card-icon-btn" data-playlist-action="rename" data-playlist-id="' +
+          escapeHtml(p.id) +
+          '" title="Rename playlist" aria-label="Rename playlist">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>' +
+          "</button>" +
+          '  <button type="button" class="playlist-card-icon-btn playlist-card-icon-btn--danger" data-playlist-action="delete" data-playlist-id="' +
+          escapeHtml(p.id) +
+          '" title="Delete playlist" aria-label="Delete playlist">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>' +
+          "</button>" +
+          "</div>" +
+          "</div>" +
           '<div class="app-card-meta">' +
           (p.scriptIDs ? p.scriptIDs.length : 0) +
           " item(s)</div>" +
-          '<div class="app-card-actions">' +
-          '  <button type="button" class="app-btn app-btn-secondary" data-playlist-action="rename" data-playlist-id="' +
-          escapeHtml(p.id) +
-          '">Rename</button>' +
-          '  <button type="button" class="app-btn app-btn-danger" data-playlist-action="delete" data-playlist-id="' +
-          escapeHtml(p.id) +
-          '">Delete</button>' +
-          "</div>" +
           "</article>"
         );
       })
       .join("");
 
-    list.querySelectorAll(".app-card-actions").forEach(function (row) {
+    list.querySelectorAll(".playlist-card-head-actions").forEach(function (row) {
       row.addEventListener("click", function (ev) {
         ev.stopPropagation();
       });
     });
     list.querySelectorAll("[data-playlist-card]").forEach(function (card) {
-      card.addEventListener("click", function () {
+      card.addEventListener("click", function (ev) {
+        if (ev.target.closest && ev.target.closest(".playlist-card-head-actions")) return;
         openPlaylistDetailView(card.getAttribute("data-playlist-card"));
       });
       card.addEventListener("keydown", function (ev) {
-        if (ev.key === "Enter" || ev.key === " ") {
-          ev.preventDefault();
-          openPlaylistDetailView(card.getAttribute("data-playlist-card"));
-        }
+        if (ev.key !== "Enter" && ev.key !== " ") return;
+        if (ev.target.closest && ev.target.closest(".playlist-card-head-actions")) return;
+        ev.preventDefault();
+        openPlaylistDetailView(card.getAttribute("data-playlist-card"));
       });
     });
     list.querySelectorAll("[data-playlist-action]").forEach(function (btn) {

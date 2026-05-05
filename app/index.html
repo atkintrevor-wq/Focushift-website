@@ -325,6 +325,65 @@
       outline: 2px solid rgba(96, 165, 250, 0.85);
       outline-offset: 2px;
     }
+    .playlist-card-head {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+      margin-bottom: 0.35rem;
+    }
+    .playlist-card-title {
+      margin: 0;
+      flex: 1;
+      min-width: 0;
+      font-size: 1.08rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    .playlist-card-head-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.28rem;
+      flex-shrink: 0;
+    }
+    .playlist-card-icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 34px;
+      padding: 0;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.4);
+      background: rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+      cursor: pointer;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+    }
+    .playlist-card-icon-btn:hover {
+      border-color: rgba(96, 165, 250, 0.55);
+      color: #cbd5e1;
+      background: rgba(37, 99, 235, 0.2);
+    }
+    .playlist-card-icon-btn:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.9);
+      outline-offset: 2px;
+    }
+    .playlist-card-icon-btn--danger {
+      border-color: rgba(248, 113, 113, 0.35);
+      background: rgba(248, 113, 113, 0.08);
+      color: #fca5a5;
+    }
+    .playlist-card-icon-btn--danger:hover {
+      background: rgba(220, 38, 38, 0.25);
+      border-color: rgba(248, 113, 113, 0.65);
+      color: #fecaca;
+    }
     .app-admin-tab-box {
       margin: 0 0 0.85rem;
       padding: 0.48rem 0.55rem 0.52rem;
@@ -428,6 +487,23 @@
     .playlist-head-dual .library-dual-btn-main {
       font-size: 0.78rem;
       padding: 0 0.5rem;
+      min-height: 30px;
+    }
+    .playlist-list-title-row {
+      margin-top: 0.35rem;
+      margin-bottom: 0.55rem;
+    }
+    .playlist-list-title-row h2 {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .playlist-list-new-dual.library-dual-btn {
+      flex-shrink: 0;
+      border-radius: 10px;
+    }
+    .playlist-list-new-dual .library-dual-btn-main {
+      font-size: 0.78rem;
+      padding: 0 0.52rem;
       min-height: 30px;
     }
     .playlist-dual-edit,
@@ -1752,6 +1828,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=83"></script>
+  <script src="app.js?v=85"></script>
 </body>
 </html>
