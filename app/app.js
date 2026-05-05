@@ -588,7 +588,7 @@
       "  </div>" +
       "</header></div>" +
       '<p class="app-muted app-admin-intro">Home, Library, Playlists, Voices, and Backgrounds — use the account button (top right) for settings and sign out.</p>' +
-      '<nav class="app-tabs" aria-label="Admin sections">' +
+      '<nav id="admin-main-tabs" class="app-tabs" aria-label="Admin sections">' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" id="count-library">0</span></button>' +
       '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
@@ -654,15 +654,28 @@
       '    <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
       "  </div>" +
       '  <div id="playlists-detail-view" hidden>' +
-      '    <div class="playlist-detail-nav">' +
-      '      <button type="button" class="app-btn app-btn-ghost" id="btn-playlist-back">← Playlists</button>' +
-      '      <div class="playlist-detail-head-row">' +
-      '        <h2 id="playlist-detail-heading" class="playlist-detail-heading">Playlist</h2>' +
-      '        <div id="playlist-detail-head-toolbar" class="playlist-detail-head-toolbar"></div>' +
-      '        <div id="playlist-detail-head-actions" class="playlist-detail-head-actions"></div>' +
+      '    <div class="playlist-detail-screen-layout">' +
+      '      <div class="playlist-detail-back-aside">' +
+      '        <button type="button" class="app-btn app-btn-ghost playlist-detail-back-btn" id="btn-playlist-back">← Playlists</button>' +
+      "      </div>" +
+      '      <div class="playlist-detail-panel app-card">' +
+      '        <nav class="app-tabs playlist-detail-main-tabs" aria-label="Admin sections">' +
+      '          <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
+      '          <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" data-tab-count-mirror="library">0</span></button>' +
+      '          <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" data-tab-count-mirror="playlists">0</span></button>' +
+      '          <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
+      '          <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
+      "        </nav>" +
+      '        <div class="playlist-detail-nav">' +
+      '          <div class="playlist-detail-head-row">' +
+      '            <h2 id="playlist-detail-heading" class="playlist-detail-heading">Playlist</h2>' +
+      '            <div id="playlist-detail-head-toolbar" class="playlist-detail-head-toolbar"></div>' +
+      '            <div id="playlist-detail-head-actions" class="playlist-detail-head-actions"></div>' +
+      "          </div>" +
+      "        </div>" +
+      '        <div id="playlist-detail" class="playlist-detail-body"></div>' +
       "      </div>" +
       "    </div>" +
-      '    <div id="playlist-detail" class="playlist-detail-body"></div>' +
       "  </div>" +
       "  </section>" +
       "</section>" +
@@ -1365,6 +1378,9 @@
     root.querySelectorAll("[data-admin-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var tab = btn.getAttribute("data-admin-tab");
+        if (tab !== "playlists" && playlistDetailVisible) {
+          closePlaylistDetailView();
+        }
         if (tab === "home") {
           setHomeFlowStep("landing", displayName || "");
         }
@@ -4893,12 +4909,18 @@
   }
 
   function updateTabCounts() {
-    var cLib = document.getElementById("count-library");
-    var cPlay = document.getElementById("count-playlists");
-    var cPre = document.getElementById("count-premade");
-    if (cLib) cLib.textContent = String(currentScripts.length);
-    if (cPlay) cPlay.textContent = String(currentPlaylists.length);
-    if (cPre) cPre.textContent = String(currentPremade.length);
+    function applyTabCountMirror(key, n) {
+      var s = String(n);
+      var idMap = { library: "count-library", playlists: "count-playlists", premade: "count-premade" };
+      var byId = document.getElementById(idMap[key]);
+      if (byId) byId.textContent = s;
+      root.querySelectorAll('[data-tab-count-mirror="' + key + '"]').forEach(function (el) {
+        el.textContent = s;
+      });
+    }
+    applyTabCountMirror("library", currentScripts.length);
+    applyTabCountMirror("playlists", currentPlaylists.length);
+    applyTabCountMirror("premade", currentPremade.length);
     renderAccountInsights();
   }
 
@@ -6491,6 +6513,8 @@
     var showDetail = !!playlistDetailVisible && !!selectedPlaylistId;
     listView.hidden = showDetail;
     detailView.hidden = !showDetail;
+    var mainTabs = document.getElementById("admin-main-tabs");
+    if (mainTabs) mainTabs.hidden = showDetail;
   }
 
   function openPlaylistDetailView(playlistId) {
@@ -6940,7 +6964,7 @@
         return !!idSet[s.id];
       });
     el.innerHTML =
-      '<article class="app-card playlist-detail-card">' +
+      '<article class="playlist-detail-card">' +
       (scripts.length
         ? '<ul class="playlist-track-list">' +
           scripts

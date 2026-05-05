@@ -325,12 +325,37 @@
       outline: 2px solid rgba(96, 165, 250, 0.85);
       outline-offset: 2px;
     }
+    .playlist-detail-screen-layout {
+      display: flex;
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 0.65rem;
+      width: 100%;
+    }
+    .playlist-detail-back-aside {
+      flex-shrink: 0;
+      padding-top: 0.2rem;
+    }
+    .playlist-detail-back-btn {
+      white-space: nowrap;
+    }
+    .playlist-detail-panel {
+      flex: 1;
+      min-width: 0;
+    }
+    .playlist-detail-panel.app-card {
+      margin-bottom: 0;
+    }
+    .playlist-detail-main-tabs {
+      margin: 0 0 0.7rem;
+      flex-wrap: wrap;
+    }
     .playlist-detail-nav {
       display: flex;
       flex-direction: column;
       align-items: stretch;
       gap: 0.45rem;
-      margin-bottom: 0.65rem;
+      margin-bottom: 0.55rem;
     }
     .playlist-detail-head-row {
       display: flex;
@@ -420,8 +445,16 @@
       gap: 0.25rem;
       flex-shrink: 0;
     }
-    .playlist-detail-body { margin-top: 0.15rem; }
-    .playlist-detail-card { padding-top: 0.65rem; padding-bottom: 0.75rem; }
+    .playlist-detail-panel .playlist-detail-body {
+      margin-top: 0;
+    }
+    .playlist-detail-card {
+      padding-top: 0.35rem;
+      padding-bottom: 0.5rem;
+      margin: 0;
+      background: transparent;
+      border: none;
+    }
     .playlist-detail-toggles,
     .playlist-detail-icon-toolbar {
       display: flex;
@@ -1687,6 +1720,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=81"></script>
+  <script src="app.js?v=82"></script>
 </body>
 </html>
