@@ -6,6 +6,9 @@
   var playlistsUnsubscribe = null;
   var premadeUnsubscribe = null;
   var clonedVoicesUnsubscribe = null;
+  var listeningUnsubscribe = null;
+  /** Latest `users/{uid}/meta/listening` (plays, streaks, last played); mirrors iOS UsageManager + Firestore. */
+  var webListeningStats = null;
   var currentUser = null;
   var currentScripts = [];
   var currentPlaylists = [];
@@ -38,6 +41,7 @@
   var PREF_LISTEN_SHORTCUT_KEY = "focusshiftWebPrefListenTodayShortcut";
   /** Mirrors iOS @AppStorage("adminModeEnabled"); gates catalog publish/edit on web. */
   var PREF_ADMIN_MODE_KEY = "focusshiftWebAdminModeEnabled";
+  var PREF_HOME_PLAYS_PERIOD_KEY = "focusshiftWebHomePlaysPeriod";
   /** 0–1, applies to script / playlist / voice-adjust preview playback in this browser. */
   var PREF_PLAYBACK_VOLUME_KEY = "focusshiftWebPlaybackVolume";
   var adminModeEnabled = false;
@@ -429,6 +433,296 @@
     }
   }
 
+  function teardownListeningListener() {
+    if (typeof listeningUnsubscribe === "function") {
+      listeningUnsubscribe();
+      listeningUnsubscribe = null;
+    }
+    webListeningStats = null;
+  }
+
+  function listeningMetaDocRef(uid) {
+    return db.collection("users").doc(uid).collection("meta").doc("listening");
+  }
+
+  function intFromFirestoreListening(val) {
+    if (val == null) return 0;
+    var n = Number(val);
+    return isFinite(n) ? Math.floor(n) : 0;
+  }
+
+  function parsePlayDateStampsFromDoc(val) {
+    if (!val) return [];
+    if (Array.isArray(val)) {
+      return val
+        .map(function (x) {
+          if (typeof x === "number" && isFinite(x)) return x;
+          if (x && typeof x === "object" && typeof x.toMillis === "function") return x.toMillis() / 1000;
+          return NaN;
+        })
+        .filter(function (x) {
+          return isFinite(x);
+        });
+    }
+    return [];
+  }
+
+  function normalizeListeningDoc(data) {
+    var d = data || {};
+    return {
+      playCount: intFromFirestoreListening(d.playCount),
+      streakCount: intFromFirestoreListening(d.streakCount),
+      bestStreakCount: intFromFirestoreListening(d.bestStreakCount),
+      lastPlayedTitle: (d.lastPlayedTitle && String(d.lastPlayedTitle)) || "",
+      lastPlayedTime: (d.lastPlayedTime && String(d.lastPlayedTime)) || "",
+      lastPlayedAudioURL: (d.lastPlayedAudioURL && String(d.lastPlayedAudioURL).trim()) || "",
+      lastPlayDate: d.lastPlayDate || null,
+      playDateStamps: parsePlayDateStampsFromDoc(d.playDateStamps),
+    };
+  }
+
+  function subscribeListeningStats(uid) {
+    teardownListeningListener();
+    if (!uid) return;
+    listeningUnsubscribe = listeningMetaDocRef(uid).onSnapshot(
+      function (snap) {
+        webListeningStats = snap.exists ? normalizeListeningDoc(snap.data()) : normalizeListeningDoc({});
+        if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+      },
+      function () {
+        webListeningStats = null;
+        if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+      }
+    );
+  }
+
+  function startOfLocalDayMs(d) {
+    var x = new Date(d.getTime());
+    x.setHours(0, 0, 0, 0);
+    return x.getTime();
+  }
+
+  function isTodayLocal(d) {
+    if (!d || isNaN(d.getTime())) return false;
+    var now = new Date();
+    return startOfLocalDayMs(d) === startOfLocalDayMs(now);
+  }
+
+  function isYesterdayLocal(d) {
+    if (!d || isNaN(d.getTime())) return false;
+    var y = new Date();
+    y.setDate(y.getDate() - 1);
+    return startOfLocalDayMs(d) === startOfLocalDayMs(y);
+  }
+
+  function effectiveStreakDisplayed(stats) {
+    if (!stats) return 0;
+    var lp = stats.lastPlayDate;
+    if (!lp || typeof lp.toDate !== "function") return 0;
+    try {
+      var d = lp.toDate();
+      if (!isTodayLocal(d) && !isYesterdayLocal(d)) return 0;
+    } catch (_e) {
+      return 0;
+    }
+    return stats.streakCount || 0;
+  }
+
+  function startOfWeekMondayMs(d) {
+    var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    var day = x.getDay();
+    var diff = day === 0 ? -6 : 1 - day;
+    x.setDate(x.getDate() + diff);
+    x.setHours(0, 0, 0, 0);
+    return x.getTime();
+  }
+
+  function countPlaysInRangeSec(stamps, startSec, endExclusiveSec) {
+    if (!stamps || !stamps.length) return 0;
+    var n = 0;
+    stamps.forEach(function (t) {
+      var ts = Number(t);
+      if (isFinite(ts) && ts >= startSec && ts < endExclusiveSec) n++;
+    });
+    return n;
+  }
+
+  function playsCountForHomePeriod(stats, period) {
+    if (!stats) return 0;
+    var total = stats.playCount || 0;
+    if (period === "total") return total;
+    var stamps = stats.playDateStamps || [];
+    var now = new Date();
+    if (period === "week") {
+      var w0 = startOfWeekMondayMs(now) / 1000;
+      var w1 = w0 + 7 * 86400;
+      return countPlaysInRangeSec(stamps, w0, w1);
+    }
+    if (period === "month") {
+      var m0 = new Date(now.getFullYear(), now.getMonth(), 1).getTime() / 1000;
+      var m1 = new Date(now.getFullYear(), now.getMonth() + 1, 1).getTime() / 1000;
+      return countPlaysInRangeSec(stamps, m0, m1);
+    }
+    if (period === "year") {
+      var y0 = new Date(now.getFullYear(), 0, 1).getTime() / 1000;
+      var y1 = new Date(now.getFullYear() + 1, 0, 1).getTime() / 1000;
+      return countPlaysInRangeSec(stamps, y0, y1);
+    }
+    return total;
+  }
+
+  function readHomePlaysPeriod() {
+    try {
+      var v = localStorage.getItem(PREF_HOME_PLAYS_PERIOD_KEY);
+      if (v === "week" || v === "month" || v === "year" || v === "total") return v;
+    } catch (_e) {}
+    return "total";
+  }
+
+  function cycleHomePlaysPeriod() {
+    var order = ["week", "month", "year", "total"];
+    var cur = readHomePlaysPeriod();
+    var i = order.indexOf(cur);
+    var next = order[(i + 1) % order.length];
+    try {
+      localStorage.setItem(PREF_HOME_PLAYS_PERIOD_KEY, next);
+    } catch (_e) {}
+    return next;
+  }
+
+  function homePlaysPeriodParen(period) {
+    if (period === "week") return "(W)";
+    if (period === "month") return "(M)";
+    if (period === "year") return "(Y)";
+    return "(T)";
+  }
+
+  function recomputeStreakFromStamps(stamps) {
+    if (!stamps || !stamps.length) {
+      return { streak: 0, lastPlayDateMs: null };
+    }
+    var daysWithPlay = {};
+    stamps.forEach(function (t) {
+      var sec = Number(t);
+      if (!isFinite(sec)) return;
+      var key = startOfLocalDayMs(new Date(sec * 1000));
+      daysWithPlay[key] = true;
+    });
+    var lastTs = Math.max.apply(
+      null,
+      stamps.map(function (x) {
+        return Number(x);
+      })
+    );
+    var lastPlayDateMs = Math.floor(lastTs * 1000);
+    var today = new Date();
+    var todayStart = startOfLocalDayMs(today);
+    var yest = new Date(today);
+    yest.setDate(yest.getDate() - 1);
+    var yesterdayStart = startOfLocalDayMs(yest);
+    var anchorStart = null;
+    if (daysWithPlay[todayStart]) anchorStart = todayStart;
+    else if (daysWithPlay[yesterdayStart]) anchorStart = yesterdayStart;
+    else return { streak: 0, lastPlayDateMs: lastPlayDateMs };
+    var streak = 0;
+    var d = anchorStart;
+    while (true) {
+      if (!daysWithPlay[d]) break;
+      streak++;
+      var prev = new Date(d);
+      prev.setDate(prev.getDate() - 1);
+      d = startOfLocalDayMs(prev);
+    }
+    return { streak: streak, lastPlayDateMs: lastPlayDateMs };
+  }
+
+  function highestPlayMilestone(playCount) {
+    var n = Math.max(0, intFromFirestoreListening(playCount));
+    if (n >= 100) return { title: "Centurion", subtitle: "100 plays" };
+    if (n >= 25) return { title: "Devotee", subtitle: "25 plays" };
+    if (n >= 10) return { title: "Listener", subtitle: "10 plays" };
+    if (n >= 3) return { title: "Getting Started", subtitle: "3 plays" };
+    if (n >= 1) return { title: "First Step", subtitle: "1 play" };
+    return null;
+  }
+
+  function highestStreakMilestone(streak) {
+    var s = Math.max(0, intFromFirestoreListening(streak));
+    if (s >= 30) return { title: "30-Day Streak", subtitle: "30 days in a row" };
+    if (s >= 14) return { title: "2-Week Streak", subtitle: "14 days in a row" };
+    if (s >= 7) return { title: "7-Day Streak", subtitle: "7 days in a row" };
+    if (s >= 3) return { title: "3-Day Streak", subtitle: "3 days in a row" };
+    return null;
+  }
+
+  function formatLastPlayedNow() {
+    try {
+      return new Date().toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    } catch (_e) {
+      return String(new Date());
+    }
+  }
+
+  function recordWebListen(title, audioUrl) {
+    if (!currentUser || !currentUser.uid) return Promise.resolve();
+    var uid = currentUser.uid;
+    var ref = listeningMetaDocRef(uid);
+    var titleStr = (title && String(title).trim()) || "Listening";
+    var urlStr = (audioUrl && String(audioUrl).trim()) || "";
+    var timeStr = formatLastPlayedNow();
+    return db
+      .runTransaction(function (tx) {
+        return tx.get(ref).then(function (snap) {
+          var data = snap.exists ? snap.data() || {} : {};
+          var stamps = parsePlayDateStampsFromDoc(data.playDateStamps);
+          stamps.push(Date.now() / 1000);
+          if (stamps.length > 500) stamps = stamps.slice(-500);
+          var rec = recomputeStreakFromStamps(stamps);
+          var bestPrev = intFromFirestoreListening(data.bestStreakCount);
+          var best = Math.max(bestPrev, rec.streak);
+          var upd = {
+            playCount: firebase.firestore.FieldValue.increment(1),
+            playDateStamps: stamps,
+            streakCount: rec.streak,
+            bestStreakCount: best,
+            lastPlayedTitle: titleStr,
+            lastPlayedTime: timeStr,
+            lastPlayedAudioURL: urlStr,
+          };
+          if (rec.lastPlayDateMs != null) {
+            upd.lastPlayDate = firebase.firestore.Timestamp.fromMillis(rec.lastPlayDateMs);
+          }
+          tx.set(ref, upd, { merge: true });
+        });
+      })
+      .catch(function (_e) {});
+  }
+
+  function playLastListenedAgain() {
+    var s = webListeningStats;
+    var url = s && s.lastPlayedAudioURL ? String(s.lastPlayedAudioURL).trim() : "";
+    if (!url) return;
+    stopActiveAudio();
+    activeAudio = new Audio(url);
+    applyPlaybackVolumeToActiveAudio();
+    activeAudioScriptId = null;
+    activeAudioTitle = (s.lastPlayedTitle && String(s.lastPlayedTitle).trim()) || "Listen again";
+    bindAudioLifecycle();
+    activeAudio
+      .play()
+      .then(function () {
+        updateMiniPlayer();
+        renderScripts(currentScripts);
+        renderSelectedPlaylistDetail();
+        var t = (s.lastPlayedTitle && String(s.lastPlayedTitle).trim()) || "Listen again";
+        recordWebListen(t, url);
+      })
+      .catch(function () {
+        stopActiveAudio();
+        generationMessage("Could not play last listened track in browser.", "error");
+      });
+  }
+
   function formatDate(ts) {
     if (!ts || typeof ts.toDate !== "function") return "No date";
     try {
@@ -527,6 +821,7 @@
     teardownPlaylistsListener();
     teardownPremadeListener();
     teardownClonedVoicesListener();
+    teardownListeningListener();
     redirectLogin();
   }
 
@@ -543,6 +838,7 @@
     teardownPlaylistsListener();
     teardownPremadeListener();
     teardownClonedVoicesListener();
+    teardownListeningListener();
     root.innerHTML =
       "<h1>You're signed in</h1>" +
       "<p class=\"app-muted\">Hi " +
@@ -4600,6 +4896,59 @@
     if (!el) return;
     var cat = selectedCategory();
     if (homeFlowStep === "landing") {
+      var ls = webListeningStats || normalizeListeningDoc({});
+      var period = readHomePlaysPeriod();
+      var effStreak = effectiveStreakDisplayed(ls);
+      var playsShown = playsCountForHomePeriod(ls, period);
+      var periodParen = escapeHtml(homePlaysPeriodParen(period));
+      var periodPhrase =
+        period === "week"
+          ? "This week"
+          : period === "month"
+            ? "This month"
+            : period === "year"
+              ? "This year"
+              : "All time";
+      var lastTitle = (ls.lastPlayedTitle && String(ls.lastPlayedTitle).trim()) || "";
+      var lastTime = (ls.lastPlayedTime && String(ls.lastPlayedTime).trim()) || "";
+      var lastHtml =
+        lastTitle || lastTime
+          ? "<span>" +
+            escapeHtml(lastTitle) +
+            "</span>" +
+            (lastTime ? ' <span class="app-muted">· ' + escapeHtml(lastTime) + "</span>" : "")
+          : '<span class="app-muted">Nothing yet — play something from Library or Playlists.</span>';
+      var pm = highestPlayMilestone(ls.playCount);
+      var sm = highestStreakMilestone(effStreak);
+      var mileParts = [];
+      if (pm) {
+        mileParts.push(
+          '<div class="home-milestone"><strong>' +
+            escapeHtml(pm.title) +
+            '</strong><span class="app-muted"> — ' +
+            escapeHtml(pm.subtitle) +
+            "</span></div>"
+        );
+      }
+      if (sm) {
+        mileParts.push(
+          '<div class="home-milestone"><strong>' +
+            escapeHtml(sm.title) +
+            '</strong><span class="app-muted"> — ' +
+            escapeHtml(sm.subtitle) +
+            "</span></div>"
+        );
+      }
+      var milestonesBlock =
+        mileParts.length > 0
+          ? '<div class="home-milestones">' + mileParts.join("") + "</div>"
+          : '<p class="app-muted" style="margin:0.55rem 0 0;font-size:0.85rem;">Milestones unlock as your play count and streak grow (same thresholds as the iOS app).</p>';
+      var hasLastUrl = !!(ls.lastPlayedAudioURL && String(ls.lastPlayedAudioURL).trim());
+      var bestStreak = ls.bestStreakCount || 0;
+      var bestStreakHtml =
+        bestStreak > 0
+          ? '<div class="app-muted" style="font-size:0.72rem;margin-top:0.2rem;">Best streak: ' + escapeHtml(String(bestStreak)) + "</div>"
+          : "";
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
@@ -4612,8 +4961,46 @@
         "      </div>" +
         '      <span class="app-chip">' + escapeHtml(resolvePlanLabel()) + "</span>" +
         "    </div>" +
+        '    <div style="margin-top:0.85rem;padding-top:0.85rem;border-top:1px solid rgba(255,255,255,0.1);">' +
+        '      <strong style="font-size:0.95rem;">Listening activity</strong>' +
+        '      <p class="app-muted" style="margin:0.3rem 0 0;font-size:0.82rem;">Streak, plays, last session, and milestones sync with the iOS app (same Firestore fields).</p>' +
+        '      <div class="home-listening-grid">' +
+        '        <div class="home-listen-stat">' +
+        '          <div class="app-muted home-listen-label">Streak</div>' +
+        '          <div class="home-listen-value">' +
+        escapeHtml(String(effStreak)) +
+        '<span class="app-muted" style="font-weight:500;font-size:0.78rem;margin-left:0.2rem;">days</span></div>' +
+        bestStreakHtml +
+        "        </div>" +
+        '        <button type="button" class="home-listen-stat home-listen-stat-btn" id="home-plays-period" title="Tap to cycle: week → month → year → all time (matches iOS)">' +
+        '          <div class="app-muted home-listen-label">Plays ' +
+        periodParen +
+        "</div>" +
+        '          <div class="home-listen-value">' +
+        escapeHtml(String(playsShown)) +
+        "</div>" +
+        '          <div class="app-muted" style="font-size:0.72rem;margin-top:0.2rem;">' +
+        escapeHtml(periodPhrase) +
+        "</div>" +
+        "        </button>" +
+        "      </div>" +
+        '      <div style="margin-top:0.65rem;">' +
+        '        <div class="app-muted home-listen-label" style="margin-bottom:0.2rem;">Last played</div>' +
+        '        <div style="font-size:0.9rem;line-height:1.4;">' +
+        lastHtml +
+        "</div>" +
+        "      </div>" +
+        milestonesBlock +
+        '      <div style="margin-top:0.75rem;">' +
+        '        <button type="button" class="app-btn app-btn-secondary" id="home-listen-again"' +
+        (hasLastUrl ? "" : " disabled") +
+        ">Listen again</button>" +
+        "      </div>" +
+        "    </div>" +
+        "  </div>" +
+        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
         '    <div style="display:flex;justify-content:space-between;align-items:center;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
-        '      <strong style="font-size:0.95rem;">Your Dashboard</strong>' +
+        '      <strong style="font-size:0.95rem;">Your library</strong>' +
         '      <span class="app-muted" style="font-size:0.8rem;">Cross-device sync</span>' +
         "    </div>" +
         '    <div class="app-stat-grid">' +
@@ -4626,10 +5013,18 @@
         '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📚</span> Playlists</div><div class="app-stat-value">' +
         escapeHtml(String(currentPlaylists.length)) +
         "</div></div>" +
-        '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">☁️</span> Published</div><div class="app-stat-value">' +
+        "    </div>" +
+        '    <details class="home-dashboard-details">' +
+        '      <summary class="home-dashboard-summary"><span class="home-chevron" aria-hidden="true">▸</span> Publishing &amp; admin</summary>' +
+        '      <div class="home-dashboard-details-body">' +
+        '        <p class="app-muted" style="margin:0 0 0.45rem;font-size:0.82rem;">Premade catalog entries you have published. Use <strong>Admin mode</strong> in Account to publish or edit premades.</p>' +
+        '        <div class="app-stat-tile" style="max-width:220px;">' +
+        '          <div class="app-stat-label"><span aria-hidden="true">☁️</span> Published</div>' +
+        '          <div class="app-stat-value">' +
         escapeHtml(String(publishedByMeCount())) +
         "</div></div>" +
-        "    </div>" +
+        "      </div>" +
+        "    </details>" +
         '    <p class="app-muted" style="margin:0.55rem 0 0;">' + escapeHtml(mostRecentScriptUpdateLabel()) + "</p>" +
         "  </div>" +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
@@ -4653,6 +5048,19 @@
       if (startBtn) {
         startBtn.addEventListener("click", function () {
           setHomeFlowStep("category", displayName);
+        });
+      }
+      var playsPeriodBtn = document.getElementById("home-plays-period");
+      if (playsPeriodBtn) {
+        playsPeriodBtn.addEventListener("click", function () {
+          cycleHomePlaysPeriod();
+          renderHomeFlow(displayName);
+        });
+      }
+      var listenAgainBtn = document.getElementById("home-listen-again");
+      if (listenAgainBtn) {
+        listenAgainBtn.addEventListener("click", function () {
+          playLastListenedAgain();
         });
       }
       return;
@@ -5862,6 +6270,7 @@
       .then(function () {
         updateMiniPlayer();
         renderScripts(currentScripts);
+        recordWebListen(activeAudioTitle, audioURL);
       })
       .catch(function () {
         setMessage("Could not play audio in browser.", "error");
@@ -5918,6 +6327,7 @@
         updateMiniPlayer();
         renderSelectedPlaylistDetail();
         renderScripts(currentScripts);
+        recordWebListen(activeAudioTitle, audioURL);
       })
       .catch(function () {
         setPlaylistsMessage("Could not play playlist audio in browser.", "error");
@@ -7775,6 +8185,7 @@
           subscribePlaylists(user.uid);
           subscribePremade();
           subscribeClonedVoices(user.uid);
+          subscribeListeningStats(user.uid);
         } else {
           renderNonAdmin(user.email, user.displayName);
         }

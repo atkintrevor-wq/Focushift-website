@@ -320,6 +320,74 @@
       font-weight: 700;
       letter-spacing: -0.01em;
     }
+    .home-listening-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .home-listen-stat {
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 14px;
+      padding: 0.65rem 0.65rem 0.6rem;
+      background: rgba(255,255,255,0.05);
+      text-align: left;
+    }
+    .home-listen-stat-btn {
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+      width: 100%;
+      transition: background 0.12s ease, border-color 0.12s ease;
+    }
+    .home-listen-stat-btn:hover {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.26);
+    }
+    .home-listen-label {
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .home-listen-value {
+      margin-top: 0.2rem;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+    .home-milestones {
+      margin-top: 0.65rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .home-milestone { font-size: 0.88rem; line-height: 1.35; }
+    .home-dashboard-details { margin-top: 0.5rem; }
+    .home-dashboard-summary {
+      cursor: pointer;
+      list-style: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.82rem;
+      color: var(--muted, #9bb0d0);
+      user-select: none;
+    }
+    .home-dashboard-summary::-webkit-details-marker { display: none; }
+    .home-dashboard-details .home-chevron {
+      display: inline-block;
+      transition: transform 0.15s ease;
+      font-size: 0.75rem;
+      opacity: 0.85;
+    }
+    .home-dashboard-details[open] .home-chevron {
+      transform: rotate(90deg);
+    }
+    .home-dashboard-details-body {
+      margin-top: 0.5rem;
+      padding-left: 0.85rem;
+      border-left: 2px solid rgba(255,255,255,0.12);
+    }
     .app-card h3 { margin: 0 0 0.4rem; font-size: 1.08rem; letter-spacing: -0.01em; }
     .app-card-meta { font-size: 0.82rem; color: var(--muted, #8b9bb4); margin-bottom: 0.6rem; }
     .app-card-meta-row {
@@ -1851,6 +1919,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=86"></script>
+  <script src="app.js?v=87"></script>
 </body>
 </html>
