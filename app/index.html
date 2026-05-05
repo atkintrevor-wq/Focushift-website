@@ -353,6 +353,30 @@
     .playlist-detail-head-actions {
       flex-shrink: 0;
     }
+    .playlist-detail-head-toolbar {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .playlist-head-inline-toolbar.playlist-detail-icon-toolbar {
+      margin: 0;
+      justify-content: flex-start;
+      flex-wrap: nowrap;
+      gap: 0.28rem;
+      max-width: none;
+    }
+    .playlist-head-inline-toolbar .playlist-mode-icon-btn {
+      flex: 0 0 auto;
+      width: 30px;
+      min-width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 8px;
+    }
+    .playlist-head-inline-toolbar .playlist-mode-icon-inner svg {
+      width: 15px;
+      height: 15px;
+    }
     .playlist-head-dual .library-dual-btn-main {
       font-size: 0.78rem;
       padding: 0 0.5rem;
@@ -508,7 +532,36 @@
       background: rgba(255,255,255,0.03);
       touch-action: pan-y;
     }
-    .playlist-track-title { flex: 1; min-width: 0; font-size: 0.92rem; }
+    .playlist-track-title {
+      flex: 1;
+      min-width: 0;
+      font-size: 0.92rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .playlist-track-row--tappable {
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+    .playlist-track-row--tappable:hover {
+      background: rgba(255, 255, 255, 0.06);
+      border-color: rgba(148, 163, 184, 0.35);
+    }
+    .playlist-track-row--tappable:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.85);
+      outline-offset: 2px;
+    }
+    .playlist-track-row.is-current {
+      border-color: rgba(96, 165, 250, 0.55);
+      background: rgba(37, 99, 235, 0.12);
+    }
+    .playlist-track-transport {
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      color: #93c5fd;
+    }
     .playlist-track-actions {
       display: flex;
       align-items: center;
@@ -517,7 +570,6 @@
       flex-wrap: wrap;
       justify-content: flex-end;
     }
-    .playlist-now-playing { color: #60a5fa; font-size: 0.85rem; }
     .app-card-header-row {
       display: flex;
       align-items: flex-start;
@@ -785,27 +837,57 @@
     .mini-player-controls {
       display: flex;
       align-items: center;
-      gap: 0.45rem;
+      gap: 0.35rem;
       flex-shrink: 0;
       order: 1;
     }
-    .mini-player-volume {
+    .mini-player-icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 42px;
+      height: 42px;
+      padding: 0;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+    }
+    .mini-player-icon-btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: rgba(147, 197, 253, 0.55);
+    }
+    .mini-player-icon-btn:disabled {
+      opacity: 0.38;
+      cursor: default;
+    }
+    .mini-player-icon-btn:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.95);
+      outline-offset: 2px;
+    }
+    .mini-player-toggle-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .mini-player-toggle-icon svg {
+      display: block;
+    }
+    .mini-player-volume-cluster {
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
       flex-shrink: 0;
       order: 2;
       color: #cbd5e1;
-      cursor: pointer;
     }
-    .mini-player-volume-icon {
-      display: flex;
-      opacity: 0.9;
-      flex-shrink: 0;
-    }
-    .mini-player-volume input[type="range"] {
+    .mini-player-volume-cluster input[type="range"] {
       width: 88px;
-      max-width: 28vw;
+      max-width: 26vw;
       height: 4px;
       -webkit-appearance: none;
       appearance: none;
@@ -813,7 +895,7 @@
       border-radius: 3px;
       cursor: pointer;
     }
-    .mini-player-volume input[type="range"]::-webkit-slider-thumb {
+    .mini-player-volume-cluster input[type="range"]::-webkit-slider-thumb {
       -webkit-appearance: none;
       appearance: none;
       width: 14px;
@@ -823,7 +905,7 @@
       border: 1px solid rgba(15, 23, 42, 0.35);
       cursor: pointer;
     }
-    .mini-player-volume input[type="range"]::-moz-range-thumb {
+    .mini-player-volume-cluster input[type="range"]::-moz-range-thumb {
       width: 14px;
       height: 14px;
       border-radius: 50%;
@@ -831,25 +913,32 @@
       border: 1px solid rgba(15, 23, 42, 0.35);
       cursor: pointer;
     }
-    .mini-player-volume input[type="range"]::-moz-range-track {
+    .mini-player-volume-cluster input[type="range"]::-moz-range-track {
       height: 4px;
       background: rgba(255, 255, 255, 0.22);
       border-radius: 3px;
     }
-    .mini-player-btn {
-      border: 1px solid rgba(255,255,255,0.25);
-      background: rgba(255,255,255,0.06);
-      color: #fff;
-      border-radius: 999px;
-      min-width: 34px;
-      height: 34px;
-      padding: 0 0.65rem;
-      font-size: 0.82rem;
+    .mini-player-step-btn {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.06);
+      color: #e2e8f0;
+      font-size: 1.1rem;
+      line-height: 1;
+      font-weight: 600;
       cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
-    .mini-player-btn:disabled {
-      opacity: 0.42;
-      cursor: default;
+    .mini-player-step-btn:hover {
+      background: rgba(255, 255, 255, 0.12);
+      border-color: rgba(147, 197, 253, 0.45);
+    }
+    .mini-player-step-btn:focus-visible {
+      outline: 2px solid rgba(96, 165, 250, 0.95);
+      outline-offset: 2px;
     }
     .mini-player-time {
       font-size: 0.75rem;
@@ -1372,17 +1461,23 @@
         font-size: 0.95rem;
       }
       .mini-player-inner {
-        gap: 0.45rem;
+        gap: 0.4rem;
       }
-      .mini-player-btn {
-        min-width: 32px;
-        height: 32px;
+      .mini-player-icon-btn {
+        width: 38px;
+        height: 38px;
+      }
+      .mini-player-step-btn {
+        width: 28px;
+        height: 28px;
+        font-size: 1rem;
       }
       .mini-player-title {
         font-size: 0.84rem;
       }
       .mini-player-time {
-        min-width: 48px;
+        min-width: 4.75rem;
+        font-size: 0.72rem;
       }
       .voice-recording-guide {
         padding: 0.8rem;
@@ -1592,6 +1687,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=80"></script>
+  <script src="app.js?v=81"></script>
 </body>
 </html>

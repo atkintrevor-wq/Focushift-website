@@ -658,6 +658,7 @@
       '      <button type="button" class="app-btn app-btn-ghost" id="btn-playlist-back">← Playlists</button>' +
       '      <div class="playlist-detail-head-row">' +
       '        <h2 id="playlist-detail-heading" class="playlist-detail-heading">Playlist</h2>' +
+      '        <div id="playlist-detail-head-toolbar" class="playlist-detail-head-toolbar"></div>' +
       '        <div id="playlist-detail-head-actions" class="playlist-detail-head-actions"></div>' +
       "      </div>" +
       "    </div>" +
@@ -855,16 +856,16 @@
       '  <div class="mini-player-inner">' +
       '    <div id="mini-player-title" class="mini-player-title">Nothing playing</div>' +
       '    <div class="mini-player-controls">' +
-      '      <button type="button" id="mini-player-toggle" class="mini-player-btn" disabled>Play</button>' +
-      '      <button type="button" id="mini-player-stop" class="mini-player-btn" disabled>Stop</button>' +
+      '      <button type="button" id="mini-player-toggle" class="mini-player-icon-btn" disabled aria-label="Play">' +
+      '<span class="mini-player-toggle-icon">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>' +
+      "</span></button>" +
       "    </div>" +
-      '    <label class="mini-player-volume" title="Playback volume (saved in this browser)">' +
-      '      <span class="mini-player-volume-icon" aria-hidden="true">' +
-      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>' +
-      "</span>" +
-      '      <span class="visually-hidden">Playback volume</span>' +
-      '      <input type="range" id="mini-player-volume" min="0" max="1" step="0.02" value="1" />' +
-      "    </label>" +
+      '    <div class="mini-player-volume-cluster" role="group" aria-label="Volume">' +
+      '      <button type="button" id="mini-player-vol-down" class="mini-player-step-btn" aria-label="Volume down">−</button>' +
+      '      <input type="range" id="mini-player-volume" min="0" max="1" step="0.02" value="1" aria-label="Volume" />' +
+      '      <button type="button" id="mini-player-vol-up" class="mini-player-step-btn" aria-label="Volume up">+</button>' +
+      "    </div>" +
       '    <div id="mini-player-time" class="mini-player-time">—</div>' +
       "  </div>" +
       "</div>" +
@@ -1385,22 +1386,37 @@
       }
       updateMiniPlayer();
     });
-    document.getElementById("mini-player-stop").addEventListener("click", function () {
-      if (!activeAudio) return;
-      stopActiveAudio();
-      renderScripts(currentScripts);
-      renderSelectedPlaylistDetail();
-    });
     (function bindMiniPlayerVolume() {
       var vol = document.getElementById("mini-player-volume");
-      if (!vol) return;
-      vol.value = String(readPlaybackVolume());
-      vol.addEventListener("input", function () {
-        var v = parseFloat(vol.value);
-        if (!isFinite(v)) return;
-        writePlaybackVolume(v);
+      var step = 0.07;
+      function bump(delta) {
+        var cur = readPlaybackVolume();
+        var next = Math.min(1, Math.max(0, cur + delta));
+        writePlaybackVolume(next);
         applyPlaybackVolumeToActiveAudio();
-      });
+        if (vol) vol.value = String(next);
+      }
+      if (vol) {
+        vol.value = String(readPlaybackVolume());
+        vol.addEventListener("input", function () {
+          var v = parseFloat(vol.value);
+          if (!isFinite(v)) return;
+          writePlaybackVolume(v);
+          applyPlaybackVolumeToActiveAudio();
+        });
+      }
+      var down = document.getElementById("mini-player-vol-down");
+      if (down) {
+        down.addEventListener("click", function () {
+          bump(-step);
+        });
+      }
+      var up = document.getElementById("mini-player-vol-up");
+      if (up) {
+        up.addEventListener("click", function () {
+          bump(step);
+        });
+      }
     })();
     document.getElementById("playlist-picker-close").addEventListener("click", function () {
       closePlaylistPicker();
@@ -5925,6 +5941,38 @@
     playQueueAt(start);
   }
 
+  function togglePlaylistTrackPlayback(playlist, scriptId) {
+    if (!playlist || !scriptId) return;
+    var scripts = resolvePlaylistScripts(playlist);
+    var track = scripts.find(function (s) {
+      return s.id === scriptId;
+    });
+    if (!track || !(track.audioURL && String(track.audioURL).trim())) return;
+    var idSet = {};
+    (playlist.scriptIDs || []).forEach(function (id) {
+      idSet[id] = true;
+    });
+    var isPlayingThisQueue =
+      activePlaylistQueue.length > 0 &&
+      activePlaylistQueue.every(function (s) {
+        return !!idSet[s.id];
+      });
+    if (isPlayingThisQueue && activeAudioScriptId === scriptId && activeAudio) {
+      if (activeAudio.paused) {
+        activeAudio.play().catch(function () {
+          setPlaylistsMessage("Could not resume in browser.", "error");
+        });
+      } else {
+        activeAudio.pause();
+      }
+      updateMiniPlayer();
+      renderSelectedPlaylistDetail();
+      renderScripts(currentScripts);
+      return;
+    }
+    startPlaylistPlayback(playlist, scriptId);
+  }
+
   function bindAudioLifecycle(onEnded) {
     if (!activeAudio) return;
     activeAudio.addEventListener("play", updateMiniPlayer);
@@ -5952,13 +6000,18 @@
     return m + ":" + (r < 10 ? "0" : "") + r;
   }
 
+  var MINI_PLAYER_PLAY_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+  var MINI_PLAYER_PAUSE_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>';
+
   function updateMiniPlayer() {
     var shell = document.getElementById("mini-player");
     if (!shell) return;
     shell.hidden = false;
     var titleEl = document.getElementById("mini-player-title");
     var toggleEl = document.getElementById("mini-player-toggle");
-    var stopEl = document.getElementById("mini-player-stop");
+    var iconWrap = toggleEl ? toggleEl.querySelector(".mini-player-toggle-icon") : null;
     var timeEl = document.getElementById("mini-player-time");
     var volEl = document.getElementById("mini-player-volume");
     if (volEl && document.activeElement !== volEl) {
@@ -5968,20 +6021,25 @@
       shell.classList.add("mini-player-is-idle");
       if (titleEl) titleEl.textContent = "Nothing playing";
       if (toggleEl) {
-        toggleEl.textContent = "Play";
         toggleEl.disabled = true;
+        toggleEl.setAttribute("aria-label", "Play");
+        if (iconWrap) iconWrap.innerHTML = MINI_PLAYER_PLAY_SVG;
       }
-      if (stopEl) stopEl.disabled = true;
       if (timeEl) timeEl.textContent = "—";
       return;
     }
     shell.classList.remove("mini-player-is-idle");
     if (titleEl) titleEl.textContent = activeAudioTitle || "Now playing";
     if (toggleEl) {
-      toggleEl.textContent = activeAudio.paused ? "Play" : "Pause";
       toggleEl.disabled = false;
+      if (activeAudio.paused) {
+        toggleEl.setAttribute("aria-label", "Play");
+        if (iconWrap) iconWrap.innerHTML = MINI_PLAYER_PLAY_SVG;
+      } else {
+        toggleEl.setAttribute("aria-label", "Pause");
+        if (iconWrap) iconWrap.innerHTML = MINI_PLAYER_PAUSE_SVG;
+      }
     }
-    if (stopEl) stopEl.disabled = false;
     if (timeEl) {
       var cur = formatTime(activeAudio.currentTime || 0);
       var d = activeAudio.duration;
@@ -6450,6 +6508,8 @@
     if (h) h.textContent = "Playlist";
     var ha = document.getElementById("playlist-detail-head-actions");
     if (ha) ha.innerHTML = "";
+    var ht = document.getElementById("playlist-detail-head-toolbar");
+    if (ht) ht.innerHTML = "";
     var el = document.getElementById("playlist-detail");
     if (el) el.innerHTML = "";
     closePlaylistEditModal();
@@ -6827,7 +6887,7 @@
       );
     }
     return (
-      '<div class="playlist-detail-toggles playlist-detail-icon-toolbar" role="toolbar" aria-label="Playlist controls">' +
+      '<div class="playlist-detail-icon-toolbar playlist-head-inline-toolbar" role="toolbar" aria-label="Playlist controls">' +
       '<button type="button" class="playlist-mode-icon-btn playlist-timer-toolbar-btn" id="btn-playlist-timer" title="Sleep timer — countdown shows in the header">' +
       '<span class="playlist-mode-icon-inner">' +
       playlistTimerToolbarSvg() +
@@ -6850,10 +6910,18 @@
       if (heading) heading.textContent = "Playlist";
       var haClear = document.getElementById("playlist-detail-head-actions");
       if (haClear) haClear.innerHTML = "";
+      var htClear = document.getElementById("playlist-detail-head-toolbar");
+      if (htClear) htClear.innerHTML = "";
       return;
     }
     if (heading) heading.textContent = p.name || "Playlist";
+    var headToolbar = document.getElementById("playlist-detail-head-toolbar");
     var headActions = document.getElementById("playlist-detail-head-actions");
+    var loopOn = !!p.loop;
+    var shuffleOn = !!p.shuffle;
+    if (headToolbar) {
+      headToolbar.innerHTML = playlistPlaybackIconToolbar(loopOn, shuffleOn);
+    }
     if (headActions) {
       headActions.innerHTML =
         '<div class="library-dual-btn playlist-add-dual playlist-head-dual" role="group" aria-label="Add tracks or edit playlist">' +
@@ -6871,44 +6939,52 @@
       activePlaylistQueue.every(function (s) {
         return !!idSet[s.id];
       });
-    var loopOn = !!p.loop;
-    var shuffleOn = !!p.shuffle;
     el.innerHTML =
       '<article class="app-card playlist-detail-card">' +
-      playlistPlaybackIconToolbar(loopOn, shuffleOn) +
-      '<div class="app-card-actions playlist-detail-actions">' +
-      '  <button type="button" class="app-btn" id="btn-play-playlist">' +
-      (isPlayingThisQueue ? "Restart playlist" : "Play playlist") +
-      "</button>" +
-      '  <button type="button" class="app-btn" id="btn-stop-playlist">Stop</button>' +
-      "</div>" +
       (scripts.length
         ? '<ul class="playlist-track-list">' +
           scripts
             .map(function (s) {
               var hasAudio = !!(s.audioURL && String(s.audioURL).trim());
-              var marker =
+              var isCurrentTrack =
+                hasAudio &&
                 isPlayingThisQueue &&
                 activePlaylistQueue[activePlaylistIndex] &&
-                activePlaylistQueue[activePlaylistIndex].id === s.id
-                  ? ' <span class="playlist-now-playing">▶</span>'
+                activePlaylistQueue[activePlaylistIndex].id === s.id;
+              var rowPaused = !!(isCurrentTrack && activeAudio && activeAudio.paused);
+              var rowClasses = "playlist-track-row";
+              if (hasAudio) rowClasses += " playlist-track-row--tappable";
+              if (isCurrentTrack) rowClasses += rowPaused ? " is-current is-paused" : " is-current";
+              var rowLabel =
+                hasAudio
+                  ? escapeHtml((rowPaused ? "Resume: " : isCurrentTrack ? "Pause: " : "Play: ") + (s.title || "Untitled"))
                   : "";
-              var playBtn = hasAudio
-                ? '<button type="button" class="app-btn app-btn-secondary app-btn-iconish" data-playlist-play-script="' +
-                  escapeHtml(s.id) +
-                  '" title="Play this track">▶</button>'
-                : "";
+              var transportHint = "";
+              if (isCurrentTrack && activeAudio) {
+                transportHint = rowPaused
+                  ? '<span class="playlist-track-transport" aria-hidden="true">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>'
+                  : '<span class="playlist-track-transport" aria-hidden="true">' +
+                    '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="4" height="14"/><rect x="13" y="5" width="4" height="14"/></svg></span>';
+              } else if (hasAudio) {
+                transportHint =
+                  '<span class="playlist-track-transport" aria-hidden="true">' +
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></span>';
+              }
               return (
-                '<li class="playlist-track-row" data-playlist-track-id="' +
+                '<li class="' +
+                rowClasses +
+                '" data-playlist-track-id="' +
                 escapeHtml(s.id) +
-                '">' +
+                '"' +
+                (hasAudio ? ' role="button" tabindex="0" aria-label="' + rowLabel + '"' : "") +
+                ">" +
                 '<span class="playlist-track-title">' +
+                transportHint +
                 escapeHtml(s.title || "Untitled") +
                 (hasAudio ? "" : ' <span class="app-muted">(no audio)</span>') +
-                marker +
                 "</span>" +
                 '<span class="playlist-track-actions">' +
-                playBtn +
                 '<button type="button" class="playlist-track-remove" data-playlist-remove-script="' +
                 escapeHtml(s.id) +
                 '" title="Remove from playlist" aria-label="Remove from playlist">' +
@@ -6946,14 +7022,6 @@
     document.getElementById("btn-playlist-timer").addEventListener("click", function () {
       openPlaylistTimerModal();
     });
-    document.getElementById("btn-play-playlist").addEventListener("click", function () {
-      startPlaylistPlayback(p);
-    });
-    document.getElementById("btn-stop-playlist").addEventListener("click", function () {
-      stopActiveAudio();
-      renderSelectedPlaylistDetail();
-      renderScripts(currentScripts);
-    });
     var addBtn = document.getElementById("btn-playlist-add-audio");
     if (addBtn) {
       addBtn.addEventListener("click", function () {
@@ -6966,10 +7034,20 @@
         openPlaylistEditModal();
       });
     }
-    el.querySelectorAll("[data-playlist-play-script]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var sid = btn.getAttribute("data-playlist-play-script");
-        startPlaylistPlayback(p, sid);
+    el.querySelectorAll(".playlist-track-row--tappable").forEach(function (row) {
+      function activateFromRow() {
+        var sid = row.getAttribute("data-playlist-track-id");
+        if (sid) togglePlaylistTrackPlayback(p, sid);
+      }
+      row.addEventListener("click", function (ev) {
+        if (ev.target.closest && ev.target.closest(".playlist-track-remove")) return;
+        activateFromRow();
+      });
+      row.addEventListener("keydown", function (ev) {
+        if (ev.key !== "Enter" && ev.key !== " ") return;
+        ev.preventDefault();
+        if (ev.target.closest && ev.target.closest(".playlist-track-remove")) return;
+        activateFromRow();
       });
     });
     el.querySelectorAll("[data-playlist-remove-script]").forEach(function (btn) {
