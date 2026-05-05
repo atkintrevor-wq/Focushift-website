@@ -39,6 +39,10 @@
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
   var PREF_AUTO_PLAY_KEY = "focusshiftWebPrefAutoPlay";
   var PREF_LISTEN_SHORTCUT_KEY = "focusshiftWebPrefListenTodayShortcut";
+  /** Display name when shortcut raw is playlist:<id> (same idea as iOS ListenTodayShortcut). */
+  var PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY = "focusshiftWebPrefListenTodayPlaylistName";
+  /** "1" = Your library section expanded on home; "0" = collapsed. */
+  var PREF_HOME_LIBRARY_OPEN_KEY = "focusshiftWebHomeLibraryOpen";
   /** Mirrors iOS @AppStorage("adminModeEnabled"); gates catalog publish/edit on web. */
   var PREF_ADMIN_MODE_KEY = "focusshiftWebAdminModeEnabled";
   var PREF_HOME_PLAYS_PERIOD_KEY = "focusshiftWebHomePlaysPeriod";
@@ -597,6 +601,230 @@
     return "(T)";
   }
 
+  function readListenShortcutRaw() {
+    try {
+      var raw = (localStorage.getItem(PREF_LISTEN_SHORTCUT_KEY) || "playlists").trim();
+      if (raw === "library" || raw === "playlists") return raw;
+      if (raw.indexOf("playlist:") === 0) return raw;
+      return "playlists";
+    } catch (_e) {
+      return "playlists";
+    }
+  }
+
+  function readListenShortcutPlaylistName() {
+    try {
+      return (localStorage.getItem(PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY) || "").trim();
+    } catch (_e2) {
+      return "";
+    }
+  }
+
+  function writeListenShortcutPlaylist(id, name) {
+    if (!id) return;
+    try {
+      localStorage.setItem(PREF_LISTEN_SHORTCUT_KEY, "playlist:" + String(id));
+      localStorage.setItem(PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY, (name && String(name)) || "Playlist");
+    } catch (_e) {}
+  }
+
+  function writeListenShortcutTab(tab) {
+    var t = tab === "library" ? "library" : "playlists";
+    try {
+      localStorage.setItem(PREF_LISTEN_SHORTCUT_KEY, t);
+      localStorage.removeItem(PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY);
+    } catch (_e) {}
+  }
+
+  function readHomeLibrarySectionOpen() {
+    try {
+      return localStorage.getItem(PREF_HOME_LIBRARY_OPEN_KEY) !== "0";
+    } catch (_e) {
+      return true;
+    }
+  }
+
+  function writeHomeLibrarySectionOpen(open) {
+    try {
+      localStorage.setItem(PREF_HOME_LIBRARY_OPEN_KEY, open ? "1" : "0");
+    } catch (_e) {}
+  }
+
+  function hasPlayedTodayWeb(stats) {
+    var stamps = stats && stats.playDateStamps ? stats.playDateStamps : [];
+    if (!stamps.length) return false;
+    var day0 = startOfLocalDayMs(new Date()) / 1000;
+    var tmr = new Date();
+    tmr.setDate(tmr.getDate() + 1);
+    var day1 = startOfLocalDayMs(tmr) / 1000;
+    return stamps.some(function (x) {
+      var ts = Number(x);
+      return isFinite(ts) && ts >= day0 && ts < day1;
+    });
+  }
+
+  function listenTodaySubtitleWeb(stats) {
+    var raw = readListenShortcutRaw();
+    var plName = readListenShortcutPlaylistName();
+    if (raw.indexOf("playlist:") === 0 && plName) {
+      return 'Tap to play "' + plName + '"';
+    }
+    var eff = stats ? effectiveStreakDisplayed(stats) : 0;
+    if (eff > 0) {
+      return "Keep your " + eff + "-day streak going.";
+    }
+    return "A few minutes can shift your focus.";
+  }
+
+  function performListenTodayPrimaryAction() {
+    var raw = readListenShortcutRaw();
+    if (raw.indexOf("playlist:") === 0) {
+      var pid = raw.slice("playlist:".length);
+      var pl = currentPlaylists.find(function (p) {
+        return p.id === pid;
+      });
+      if (pl) {
+        startPlaylistPlayback(pl, null);
+        setAdminTab("playlists");
+        return;
+      }
+      setAdminTab("playlists");
+      generationMessage("That playlist is no longer in your account. Open Listen today → Shortcuts to pick another.", "error");
+      return;
+    }
+    if (raw === "library") {
+      setAdminTab("library");
+      activeLibraryTab = "my-library";
+      renderLibrarySubtab();
+      return;
+    }
+    setAdminTab("playlists");
+  }
+
+  function closeListenTodayModal() {
+    var bd = document.getElementById("listen-today-backdrop");
+    if (bd) bd.hidden = true;
+  }
+
+  function openListenTodayModal() {
+    var bd = document.getElementById("listen-today-backdrop");
+    var host = document.getElementById("listen-today-modal-body");
+    if (!bd || !host) return;
+    var ls = webListeningStats || normalizeListeningDoc({});
+    var hasLast = !!(ls.lastPlayedAudioURL && String(ls.lastPlayedAudioURL).trim());
+    var scriptsPlayable = currentScripts.filter(function (s) {
+      return !!(s.audioURL && String(s.audioURL).trim());
+    });
+    var parts = [];
+    parts.push(
+      '<p class="app-muted" style="margin:0 0 0.65rem;font-size:0.86rem;">Same idea as the iOS home card: tap the big row for your saved shortcut, or use the options below.</p>'
+    );
+    parts.push('<div class="listen-today-modal-section"><strong>Replay</strong>');
+    parts.push(
+      '<button type="button" class="app-btn app-btn-secondary listen-today-block-btn" id="listen-today-replay-last"' +
+        (hasLast ? "" : " disabled") +
+        ">Last played session</button></div>"
+    );
+    parts.push('<div class="listen-today-modal-section"><strong>Play a library track now</strong>');
+    if (!scriptsPlayable.length) {
+      parts.push('<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.82rem;">No scripts with audio yet — generate audio in Library.</p>');
+    } else {
+      parts.push(
+        '<div class="app-modal-list listen-today-script-scroll">' +
+          scriptsPlayable
+            .map(function (s) {
+              return (
+                '<button type="button" class="app-modal-list-item listen-today-script-pick" data-listen-script-id="' +
+                escapeHtml(s.id) +
+                '">' +
+                escapeHtml(s.title || "Script") +
+                "</button>"
+              );
+            })
+            .join("") +
+          "</div>"
+      );
+    }
+    parts.push("</div>");
+    parts.push('<div class="listen-today-modal-section"><strong>Shortcut when you tap the home row</strong>');
+    parts.push('<p class="app-muted" style="margin:0.25rem 0 0.45rem;font-size:0.8rem;">Saved in this browser (Account → Preferences can reset tab-only).</p>');
+    parts.push(
+      '<div style="display:flex;flex-direction:column;gap:0.35rem;">' +
+        '<button type="button" class="app-btn app-btn-secondary listen-today-block-btn" id="listen-today-shortcut-library">Open <strong>Library</strong> tab</button>' +
+        '<button type="button" class="app-btn app-btn-secondary listen-today-block-btn" id="listen-today-shortcut-playlists">Open <strong>Playlists</strong> tab</button>' +
+        "</div>"
+    );
+    if (currentPlaylists.length) {
+      parts.push('<p class="app-muted" style="margin:0.55rem 0 0.35rem;font-size:0.8rem;">Or quick-start a playlist:</p>');
+      parts.push(
+        '<div class="app-modal-list listen-today-playlist-scroll">' +
+          currentPlaylists
+            .map(function (p) {
+              return (
+                '<button type="button" class="app-modal-list-item listen-today-set-playlist" data-playlist-id="' +
+                escapeHtml(p.id) +
+                '" data-playlist-name="' +
+                escapeHtml(p.name || "Playlist") +
+                '">' +
+                escapeHtml(p.name || "Playlist") +
+                "</button>"
+              );
+            })
+            .join("") +
+          "</div>"
+      );
+    } else {
+      parts.push('<p class="app-muted" style="margin:0.55rem 0 0;font-size:0.8rem;">Create a playlist first to use a playlist shortcut.</p>');
+    }
+    parts.push("</div>");
+    host.innerHTML = parts.join("");
+    var replay = document.getElementById("listen-today-replay-last");
+    if (replay) {
+      replay.addEventListener("click", function () {
+        closeListenTodayModal();
+        playLastListenedAgain();
+      });
+    }
+    host.querySelectorAll(".listen-today-script-pick").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var sid = btn.getAttribute("data-listen-script-id");
+        var script = currentScripts.find(function (s) {
+          return s.id === sid;
+        });
+        closeListenTodayModal();
+        if (script) {
+          setAdminTab("library");
+          activeLibraryTab = "my-library";
+          renderLibrarySubtab();
+          togglePlayScriptAudio(script);
+        }
+      });
+    });
+    document.getElementById("listen-today-shortcut-library").addEventListener("click", function () {
+      writeListenShortcutTab("library");
+      closeListenTodayModal();
+      if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+      generationMessage("Home row will open your Library tab.", "success");
+    });
+    document.getElementById("listen-today-shortcut-playlists").addEventListener("click", function () {
+      writeListenShortcutTab("playlists");
+      closeListenTodayModal();
+      if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+      generationMessage("Home row will open your Playlists tab.", "success");
+    });
+    host.querySelectorAll(".listen-today-set-playlist").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-playlist-id");
+        var nm = btn.getAttribute("data-playlist-name") || "Playlist";
+        writeListenShortcutPlaylist(id, nm);
+        closeListenTodayModal();
+        if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+        generationMessage('Shortcut set — tap "Listen today" on Home to play "' + nm + '".', "success");
+      });
+    });
+    bd.hidden = false;
+  }
+
   function recomputeStreakFromStamps(stamps) {
     if (!stamps || !stamps.length) {
       return { streak: 0, lastPlayDateMs: null };
@@ -859,11 +1087,13 @@
       '<div id="admin-mode-banner" class="admin-mode-banner" role="status" hidden>' +
       "<strong>Admin mode is on.</strong> You can publish to the App Library catalog and edit premade entries in Firestore. Turn this off in Account → Admin mode when you are done." +
       "</div>" +
+      '<div class="app-brand-top-bar">' +
+      '  <a href="/" class="app-brand-top-link" aria-label="Focus Shift — open marketing site">' +
+      '    <img class="app-brand-top-img" src="../images/focus-shift-brand.png?v=1" width="640" height="160" alt="Focus Shift" decoding="async" />' +
+      "  </a>" +
+      "</div>" +
       '<header class="app-admin-header">' +
       '  <div class="app-admin-header-main">' +
-      '    <a href="/" class="app-admin-logo-link" aria-label="Focus Shift — open marketing site">' +
-      '      <img class="app-admin-logo-img" src="../images/logo.png?v=8" width="512" height="512" alt="" decoding="async" />' +
-      "    </a>" +
       '    <p class="app-muted app-admin-tagline">Signed in as <strong>' +
       escapeHtml(email || "") +
       "</strong> · " +
@@ -1170,6 +1400,15 @@
       '      <button type="button" id="mini-player-vol-up" class="mini-player-step-btn" aria-label="Volume up">+</button>' +
       "    </div>" +
       '    <div id="mini-player-time" class="mini-player-time">—</div>' +
+      "  </div>" +
+      "</div>" +
+      '<div id="listen-today-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal app-modal-listen-today" role="dialog" aria-modal="true" aria-labelledby="listen-today-title">' +
+      '    <h3 id="listen-today-title">Listen today</h3>' +
+      '    <div id="listen-today-modal-body"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="listen-today-close">Close</button>' +
+      "    </div>" +
       "  </div>" +
       "</div>" +
       '<div id="playlist-picker-backdrop" class="app-modal-backdrop" hidden>' +
@@ -1607,9 +1846,7 @@
     });
     document.getElementById("pref-listen-shortcut").addEventListener("change", function () {
       var next = this.value === "library" ? "library" : "playlists";
-      try {
-        localStorage.setItem(PREF_LISTEN_SHORTCUT_KEY, next);
-      } catch (_e) {}
+      writeListenShortcutTab(next);
       setAccountMessage("Listen today shortcut preference saved.", "success");
     });
     document.getElementById("pref-library-sub-my").addEventListener("change", function () {
@@ -1725,6 +1962,12 @@
     })();
     document.getElementById("playlist-picker-close").addEventListener("click", function () {
       closePlaylistPicker();
+    });
+    document.getElementById("listen-today-close").addEventListener("click", function () {
+      closeListenTodayModal();
+    });
+    document.getElementById("listen-today-backdrop").addEventListener("click", function (ev) {
+      if (ev.target === ev.currentTarget) closeListenTodayModal();
     });
     document.getElementById("playlist-create-btn").addEventListener("click", function () {
       var input = document.getElementById("playlist-new-name");
@@ -2233,12 +2476,8 @@
   }
 
   function readPrefListenTodayShortcut() {
-    try {
-      var raw = localStorage.getItem(PREF_LISTEN_SHORTCUT_KEY);
-      return raw === "library" ? "library" : "playlists";
-    } catch (_e) {
-      return "playlists";
-    }
+    var raw = readListenShortcutRaw();
+    return raw === "library" ? "library" : "playlists";
   }
 
   function openAccountModal() {
@@ -4943,12 +5182,14 @@
         mileParts.length > 0
           ? '<div class="home-milestones">' + mileParts.join("") + "</div>"
           : '<p class="app-muted" style="margin:0.55rem 0 0;font-size:0.85rem;">Milestones unlock as your play count and streak grow (same thresholds as the iOS app).</p>';
-      var hasLastUrl = !!(ls.lastPlayedAudioURL && String(ls.lastPlayedAudioURL).trim());
       var bestStreak = ls.bestStreakCount || 0;
       var bestStreakHtml =
         bestStreak > 0
           ? '<div class="app-muted" style="font-size:0.72rem;margin-top:0.2rem;">Best streak: ' + escapeHtml(String(bestStreak)) + "</div>"
           : "";
+      var listenHead = hasPlayedTodayWeb(ls) ? "Listen again" : "Listen to an affirmation today";
+      var listenSub = escapeHtml(listenTodaySubtitleWeb(ls));
+      var libDetailsOpen = readHomeLibrarySectionOpen() ? " open" : "";
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
@@ -4961,71 +5202,6 @@
         "      </div>" +
         '      <span class="app-chip">' + escapeHtml(resolvePlanLabel()) + "</span>" +
         "    </div>" +
-        '    <div style="margin-top:0.85rem;padding-top:0.85rem;border-top:1px solid rgba(255,255,255,0.1);">' +
-        '      <strong style="font-size:0.95rem;">Listening activity</strong>' +
-        '      <p class="app-muted" style="margin:0.3rem 0 0;font-size:0.82rem;">Streak, plays, last session, and milestones sync with the iOS app (same Firestore fields).</p>' +
-        '      <div class="home-listening-grid">' +
-        '        <div class="home-listen-stat">' +
-        '          <div class="app-muted home-listen-label">Streak</div>' +
-        '          <div class="home-listen-value">' +
-        escapeHtml(String(effStreak)) +
-        '<span class="app-muted" style="font-weight:500;font-size:0.78rem;margin-left:0.2rem;">days</span></div>' +
-        bestStreakHtml +
-        "        </div>" +
-        '        <button type="button" class="home-listen-stat home-listen-stat-btn" id="home-plays-period" title="Tap to cycle: week → month → year → all time (matches iOS)">' +
-        '          <div class="app-muted home-listen-label">Plays ' +
-        periodParen +
-        "</div>" +
-        '          <div class="home-listen-value">' +
-        escapeHtml(String(playsShown)) +
-        "</div>" +
-        '          <div class="app-muted" style="font-size:0.72rem;margin-top:0.2rem;">' +
-        escapeHtml(periodPhrase) +
-        "</div>" +
-        "        </button>" +
-        "      </div>" +
-        '      <div style="margin-top:0.65rem;">' +
-        '        <div class="app-muted home-listen-label" style="margin-bottom:0.2rem;">Last played</div>' +
-        '        <div style="font-size:0.9rem;line-height:1.4;">' +
-        lastHtml +
-        "</div>" +
-        "      </div>" +
-        milestonesBlock +
-        '      <div style="margin-top:0.75rem;">' +
-        '        <button type="button" class="app-btn app-btn-secondary" id="home-listen-again"' +
-        (hasLastUrl ? "" : " disabled") +
-        ">Listen again</button>" +
-        "      </div>" +
-        "    </div>" +
-        "  </div>" +
-        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
-        '    <div style="display:flex;justify-content:space-between;align-items:center;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
-        '      <strong style="font-size:0.95rem;">Your library</strong>' +
-        '      <span class="app-muted" style="font-size:0.8rem;">Cross-device sync</span>' +
-        "    </div>" +
-        '    <div class="app-stat-grid">' +
-        '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📝</span> Scripts</div><div class="app-stat-value">' +
-        escapeHtml(String(currentScripts.length)) +
-        "</div></div>" +
-        '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">🎧</span> Audio Ready</div><div class="app-stat-value">' +
-        escapeHtml(String(scriptsWithAudioCount())) +
-        "</div></div>" +
-        '      <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📚</span> Playlists</div><div class="app-stat-value">' +
-        escapeHtml(String(currentPlaylists.length)) +
-        "</div></div>" +
-        "    </div>" +
-        '    <details class="home-dashboard-details">' +
-        '      <summary class="home-dashboard-summary"><span class="home-chevron" aria-hidden="true">▸</span> Publishing &amp; admin</summary>' +
-        '      <div class="home-dashboard-details-body">' +
-        '        <p class="app-muted" style="margin:0 0 0.45rem;font-size:0.82rem;">Premade catalog entries you have published. Use <strong>Admin mode</strong> in Account to publish or edit premades.</p>' +
-        '        <div class="app-stat-tile" style="max-width:220px;">' +
-        '          <div class="app-stat-label"><span aria-hidden="true">☁️</span> Published</div>' +
-        '          <div class="app-stat-value">' +
-        escapeHtml(String(publishedByMeCount())) +
-        "</div></div>" +
-        "      </div>" +
-        "    </details>" +
-        '    <p class="app-muted" style="margin:0.55rem 0 0;">' + escapeHtml(mostRecentScriptUpdateLabel()) + "</p>" +
         "  </div>" +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
         '    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">' +
@@ -5036,13 +5212,83 @@
         "    </div>" +
         '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
         "  </div>" +
-        '  <div class="app-card" style="margin:0;padding:0.85rem;border-radius:14px;">' +
-        '    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
-        '      <strong style="font-size:0.95rem;">Account-linked data</strong>' +
-        '      <span class="app-chip">' + escapeHtml(resolvePlanLabel()) + "</span>" +
+        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
+        '    <strong style="font-size:0.95rem;">Listening activity</strong>' +
+        '    <p class="app-muted" style="margin:0.3rem 0 0.65rem;font-size:0.82rem;">Streak, plays, last session, and milestones sync with the iOS app (same Firestore fields).</p>' +
+        '    <button type="button" class="home-listen-today-row" id="home-listen-today-row">' +
+        '      <span class="home-listen-today-icon" aria-hidden="true">' +
+        '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#60a5fa" stroke-width="1.4"/><path d="M8 10c1.5 1.2 3.5 1.2 5 0M8 14h8" stroke="#93c5fd" stroke-width="1.3" stroke-linecap="round"/></svg></span>' +
+        '      <span class="home-listen-today-text">' +
+        '        <span class="home-listen-today-title">' +
+        escapeHtml(listenHead) +
+        "</span>" +
+        '        <span class="home-listen-today-sub">' +
+        listenSub +
+        "</span>" +
+        "      </span>" +
+        '      <span class="home-listen-today-chev" aria-hidden="true">›</span>' +
+        "    </button>" +
+        '    <button type="button" class="home-listen-today-manage" id="home-listen-today-manage">Shortcuts &amp; picks…</button>' +
+        '    <div class="home-listening-grid" style="margin-top:0.75rem;">' +
+        '      <div class="home-listen-stat">' +
+        '        <div class="app-muted home-listen-label">Streak</div>' +
+        '        <div class="home-listen-value">' +
+        escapeHtml(String(effStreak)) +
+        '<span class="app-muted" style="font-weight:500;font-size:0.78rem;margin-left:0.2rem;">days</span></div>' +
+        bestStreakHtml +
+        "      </div>" +
+        '      <button type="button" class="home-listen-stat home-listen-stat-btn" id="home-plays-period" title="Tap to cycle: week → month → year → all time (matches iOS)">' +
+        '        <div class="app-muted home-listen-label">Plays ' +
+        periodParen +
+        "</div>" +
+        '        <div class="home-listen-value">' +
+        escapeHtml(String(playsShown)) +
+        "</div>" +
+        '        <div class="app-muted" style="font-size:0.72rem;margin-top:0.2rem;">' +
+        escapeHtml(periodPhrase) +
+        "</div>" +
+        "      </button>" +
         "    </div>" +
-        '    <p class="app-muted" style="margin:0;">This dashboard is pulled from your Firebase account data so your numbers stay consistent across devices.</p>' +
+        '    <div style="margin-top:0.65rem;">' +
+        '      <div class="app-muted home-listen-label" style="margin-bottom:0.2rem;">Last played</div>' +
+        '      <div style="font-size:0.9rem;line-height:1.4;">' +
+        lastHtml +
+        "</div>" +
+        "    </div>" +
+        milestonesBlock +
         "  </div>" +
+        '  <details class="home-library-details" id="home-library-details"' +
+        libDetailsOpen +
+        ">" +
+        '    <summary class="home-library-summary">' +
+        '      <span class="home-library-chevron" aria-hidden="true">▸</span>' +
+        '      <span class="home-library-summary-main">' +
+        '        <span class="home-library-summary-title">Your library</span>' +
+        '        <span class="app-muted home-library-summary-hint">Scripts · audio ready · playlists · published</span>' +
+        "      </span>" +
+        "    </summary>" +
+        '    <div class="home-library-body">' +
+        '      <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.8rem;">Cross-device sync from your Firebase account.</p>' +
+        '      <div class="app-stat-grid">' +
+        '        <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📝</span> Scripts</div><div class="app-stat-value">' +
+        escapeHtml(String(currentScripts.length)) +
+        "</div></div>" +
+        '        <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">🎧</span> Audio Ready</div><div class="app-stat-value">' +
+        escapeHtml(String(scriptsWithAudioCount())) +
+        "</div></div>" +
+        '        <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📚</span> Playlists</div><div class="app-stat-value">' +
+        escapeHtml(String(currentPlaylists.length)) +
+        "</div></div>" +
+        "      </div>" +
+        '      <p class="app-muted" style="margin:0.55rem 0 0;font-size:0.82rem;line-height:1.45;">' +
+        '<span aria-hidden="true">☁️</span> <strong>Published</strong> (App Library): ' +
+        escapeHtml(String(publishedByMeCount())) +
+        ". Turn on <strong>Admin mode</strong> in Account to publish or edit premades.</p>" +
+        '      <p class="app-muted" style="margin:0.45rem 0 0;">' +
+        escapeHtml(mostRecentScriptUpdateLabel()) +
+        "</p>" +
+        "    </div>" +
+        "  </details>" +
         "</div>";
       var startBtn = document.getElementById("home-start-create");
       if (startBtn) {
@@ -5052,15 +5298,29 @@
       }
       var playsPeriodBtn = document.getElementById("home-plays-period");
       if (playsPeriodBtn) {
-        playsPeriodBtn.addEventListener("click", function () {
+        playsPeriodBtn.addEventListener("click", function (ev) {
+          ev.stopPropagation();
           cycleHomePlaysPeriod();
           renderHomeFlow(displayName);
         });
       }
-      var listenAgainBtn = document.getElementById("home-listen-again");
-      if (listenAgainBtn) {
-        listenAgainBtn.addEventListener("click", function () {
-          playLastListenedAgain();
+      var listenRow = document.getElementById("home-listen-today-row");
+      if (listenRow) {
+        listenRow.addEventListener("click", function () {
+          performListenTodayPrimaryAction();
+        });
+      }
+      var listenManage = document.getElementById("home-listen-today-manage");
+      if (listenManage) {
+        listenManage.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          openListenTodayModal();
+        });
+      }
+      var libDetails = document.getElementById("home-library-details");
+      if (libDetails) {
+        libDetails.addEventListener("toggle", function () {
+          writeHomeLibrarySectionOpen(!!libDetails.open);
         });
       }
       return;
