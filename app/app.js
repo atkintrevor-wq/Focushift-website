@@ -588,13 +588,18 @@
       "  </div>" +
       "</header></div>" +
       '<p class="app-muted app-admin-intro">Home, Library, Playlists, Voices, and Backgrounds — use the account button (top right) for settings and sign out.</p>' +
-      '<nav id="admin-main-tabs" class="app-tabs" aria-label="Admin sections">' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" id="count-library">0</span></button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
-      '  <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
-      "</nav>" +
+      '<div class="app-admin-tab-box">' +
+      '  <nav id="admin-main-tabs" class="app-tabs app-admin-tab-box-nav" aria-label="Admin sections">' +
+      '    <div class="app-admin-tab-lead">' +
+      '      <button type="button" class="playlist-back-arrow-btn" id="btn-playlist-back" hidden aria-label="Back to playlists">←</button>' +
+      '      <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
+      "    </div>" +
+      '    <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" id="count-library">0</span></button>' +
+      '    <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
+      '    <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
+      '    <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
+      "  </nav>" +
+      "</div>" +
       '<section id="section-home" class="app-section" aria-label="Home">' +
       '<section class="app-card" aria-label="Focus Shift home">' +
       '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Home</h2>' +
@@ -654,28 +659,14 @@
       '    <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
       "  </div>" +
       '  <div id="playlists-detail-view" hidden>' +
-      '    <div class="playlist-detail-screen-layout">' +
-      '      <div class="playlist-detail-back-aside">' +
-      '        <button type="button" class="app-btn app-btn-ghost playlist-detail-back-btn" id="btn-playlist-back">← Playlists</button>' +
-      "      </div>" +
-      '      <div class="playlist-detail-panel app-card">' +
-      '        <nav class="app-tabs playlist-detail-main-tabs" aria-label="Admin sections">' +
-      '          <button type="button" class="app-tab-btn" data-admin-tab="home">Home</button>' +
-      '          <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" data-tab-count-mirror="library">0</span></button>' +
-      '          <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" data-tab-count-mirror="playlists">0</span></button>' +
-      '          <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
-      '          <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
-      "        </nav>" +
-      '        <div class="playlist-detail-nav">' +
-      '          <div class="playlist-detail-head-row">' +
-      '            <h2 id="playlist-detail-heading" class="playlist-detail-heading">Playlist</h2>' +
-      '            <div id="playlist-detail-head-toolbar" class="playlist-detail-head-toolbar"></div>' +
-      '            <div id="playlist-detail-head-actions" class="playlist-detail-head-actions"></div>' +
-      "          </div>" +
-      "        </div>" +
-      '        <div id="playlist-detail" class="playlist-detail-body"></div>' +
+      '    <div class="playlist-detail-nav">' +
+      '      <div class="playlist-detail-head-row">' +
+      '        <h2 id="playlist-detail-heading" class="playlist-detail-heading">Playlist</h2>' +
+      '        <div id="playlist-detail-head-toolbar" class="playlist-detail-head-toolbar"></div>' +
+      '        <div id="playlist-detail-head-actions" class="playlist-detail-head-actions"></div>' +
       "      </div>" +
       "    </div>" +
+      '    <div id="playlist-detail" class="playlist-detail-body"></div>' +
       "  </div>" +
       "  </section>" +
       "</section>" +
@@ -4909,18 +4900,12 @@
   }
 
   function updateTabCounts() {
-    function applyTabCountMirror(key, n) {
-      var s = String(n);
-      var idMap = { library: "count-library", playlists: "count-playlists", premade: "count-premade" };
-      var byId = document.getElementById(idMap[key]);
-      if (byId) byId.textContent = s;
-      root.querySelectorAll('[data-tab-count-mirror="' + key + '"]').forEach(function (el) {
-        el.textContent = s;
-      });
-    }
-    applyTabCountMirror("library", currentScripts.length);
-    applyTabCountMirror("playlists", currentPlaylists.length);
-    applyTabCountMirror("premade", currentPremade.length);
+    var cLib = document.getElementById("count-library");
+    var cPlay = document.getElementById("count-playlists");
+    var cPre = document.getElementById("count-premade");
+    if (cLib) cLib.textContent = String(currentScripts.length);
+    if (cPlay) cPlay.textContent = String(currentPlaylists.length);
+    if (cPre) cPre.textContent = String(currentPremade.length);
     renderAccountInsights();
   }
 
@@ -6513,8 +6498,8 @@
     var showDetail = !!playlistDetailVisible && !!selectedPlaylistId;
     listView.hidden = showDetail;
     detailView.hidden = !showDetail;
-    var mainTabs = document.getElementById("admin-main-tabs");
-    if (mainTabs) mainTabs.hidden = showDetail;
+    var backBtn = document.getElementById("btn-playlist-back");
+    if (backBtn) backBtn.hidden = !showDetail;
   }
 
   function openPlaylistDetailView(playlistId) {
@@ -6964,7 +6949,7 @@
         return !!idSet[s.id];
       });
     el.innerHTML =
-      '<article class="playlist-detail-card">' +
+      '<article class="app-card playlist-detail-card">' +
       (scripts.length
         ? '<ul class="playlist-track-list">' +
           scripts
