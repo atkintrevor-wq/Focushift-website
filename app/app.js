@@ -1290,10 +1290,10 @@
       '        <strong style="display:block;margin-bottom:0.3rem;">Subscription</strong>' +
       '        <p class="app-muted" style="margin:0 0 0.5rem;">iOS billing uses the App Store. On the web, upgrades use <strong>Stripe</strong> Checkout (same Firebase account). In test mode use card <code style="font-size:0.85em;">4242&nbsp;4242&nbsp;4242&nbsp;4242</code>.</p>' +
       '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.35rem;">' +
-      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-starter-month">Starter — monthly</button>' +
-      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-starter-year">Starter — yearly</button>' +
-      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-creator-month">Creator — monthly</button>' +
-      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-creator-year">Creator — yearly</button>' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-starter-month" data-stripe-plan="starter-month">Starter — monthly</button>' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-starter-year" data-stripe-plan="starter-year">Starter — yearly</button>' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-creator-month" data-stripe-plan="creator-month">Creator — monthly</button>' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-creator-year" data-stripe-plan="creator-year">Creator — yearly</button>' +
       "        </div>" +
       '        <p class="app-muted" style="margin:0;font-size:0.82rem;">Set the four <code style="font-size:0.85em;">STRIPE_PRICE_*</code> env vars on the api function to match your Stripe Price IDs.</p>' +
       "      </section>" +
@@ -1777,18 +1777,27 @@
     document.getElementById("account-refresh-token").addEventListener("click", function () {
       refreshSessionToken();
     });
-    document.getElementById("account-stripe-checkout-starter-month").addEventListener("click", function () {
-      postStripeCheckoutTier("starter", "month");
-    });
-    document.getElementById("account-stripe-checkout-starter-year").addEventListener("click", function () {
-      postStripeCheckoutTier("starter", "year");
-    });
-    document.getElementById("account-stripe-checkout-creator-month").addEventListener("click", function () {
-      postStripeCheckoutTier("creator", "month");
-    });
-    document.getElementById("account-stripe-checkout-creator-year").addEventListener("click", function () {
-      postStripeCheckoutTier("creator", "year");
-    });
+    (function bindStripePlanButtons() {
+      var planMap = {
+        "starter-month": ["starter", "month"],
+        "starter-year": ["starter", "year"],
+        "creator-month": ["creator", "month"],
+        "creator-year": ["creator", "year"],
+      };
+      var accountBackdrop = document.getElementById("account-modal-backdrop");
+      if (accountBackdrop) {
+        accountBackdrop.addEventListener("click", function (ev) {
+          var btn = ev.target && ev.target.closest && ev.target.closest("button[data-stripe-plan]");
+          if (!btn || !accountBackdrop.contains(btn)) return;
+          var key = (btn.getAttribute("data-stripe-plan") || "").trim();
+          var pair = planMap[key];
+          if (!pair) return;
+          ev.preventDefault();
+          ev.stopPropagation();
+          postStripeCheckoutTier(pair[0], pair[1]);
+        });
+      }
+    })();
     document.getElementById("account-manage-devices").addEventListener("click", function () {
       setAccountMessage("Device management is currently available in the iOS app. Web mirrors your account counts.", "");
     });
@@ -6760,11 +6769,22 @@
       },
       body: JSON.stringify(body),
     }).then(function (resp) {
-      return resp.json().then(function (json) {
-        if (!resp.ok) {
-          throw new Error((json && json.error) || "Request failed");
+      return resp.text().then(function (text) {
+        var json = null;
+        if (text) {
+          try {
+            json = JSON.parse(text);
+          } catch (_e) {
+            json = null;
+          }
         }
-        return json;
+        if (!resp.ok) {
+          throw new Error((json && json.error) || text || "Request failed (" + resp.status + ")");
+        }
+        if (json == null && text) {
+          throw new Error("Could not parse JSON from server.");
+        }
+        return json != null ? json : {};
       });
     });
   }
@@ -6772,6 +6792,10 @@
   function postStripeCheckoutTier(tier, billingInterval) {
     if (!currentUser) return;
     setAccountMessage("Opening Stripe checkout…", "");
+    try {
+      var msgEl = document.getElementById("account-message");
+      if (msgEl && msgEl.scrollIntoView) msgEl.scrollIntoView({ block: "nearest" });
+    } catch (_scroll) {}
     currentUser
       .getIdToken(true)
       .then(function (token) {
