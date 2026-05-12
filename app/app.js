@@ -1288,8 +1288,14 @@
       "</strong></p>" +
       '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
       '        <strong style="display:block;margin-bottom:0.3rem;">Subscription</strong>' +
-      '        <p class="app-muted" style="margin:0 0 0.5rem;">Plan and billing currently come from your account profile. During beta, plan upgrades are managed in the iOS app.</p>' +
-      '        <button type="button" class="app-btn app-btn-secondary" id="account-subscription-manage">Manage subscription (iOS)</button>' +
+      '        <p class="app-muted" style="margin:0 0 0.5rem;">iOS billing uses the App Store. On the web, upgrades use <strong>Stripe</strong> Checkout (same Firebase account). In test mode use card <code style="font-size:0.85em;">4242&nbsp;4242&nbsp;4242&nbsp;4242</code>.</p>' +
+      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.35rem;">' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-starter-month">Starter — monthly</button>' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-starter-year">Starter — yearly</button>' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-creator-month">Creator — monthly</button>' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-creator-year">Creator — yearly</button>' +
+      "        </div>" +
+      '        <p class="app-muted" style="margin:0;font-size:0.82rem;">Set the four <code style="font-size:0.85em;">STRIPE_PRICE_*</code> env vars on the api function to match your Stripe Price IDs.</p>' +
       "      </section>" +
       '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
       '        <strong style="display:block;margin-bottom:0.3rem;">Devices & Sharing</strong>' +
@@ -1771,11 +1777,17 @@
     document.getElementById("account-refresh-token").addEventListener("click", function () {
       refreshSessionToken();
     });
-    document.getElementById("account-subscription-manage").addEventListener("click", function () {
-      setAccountMessage(
-        "Subscriptions: iOS uses App Store today. Web/Android billing uses Stripe: point Stripe webhooks to POST …/api/stripe/webhook on your Cloud Functions URL, set STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET (+ optional STRIPE_PRICE_STARTER / STRIPE_PRICE_CREATOR), and pass firebaseUid in Checkout metadata. Until checkout UI exists, tiers can still be set manually in Firestore.",
-        ""
-      );
+    document.getElementById("account-stripe-checkout-starter-month").addEventListener("click", function () {
+      postStripeCheckoutTier("starter", "month");
+    });
+    document.getElementById("account-stripe-checkout-starter-year").addEventListener("click", function () {
+      postStripeCheckoutTier("starter", "year");
+    });
+    document.getElementById("account-stripe-checkout-creator-month").addEventListener("click", function () {
+      postStripeCheckoutTier("creator", "month");
+    });
+    document.getElementById("account-stripe-checkout-creator-year").addEventListener("click", function () {
+      postStripeCheckoutTier("creator", "year");
     });
     document.getElementById("account-manage-devices").addEventListener("click", function () {
       setAccountMessage("Device management is currently available in the iOS app. Web mirrors your account counts.", "");
@@ -6757,6 +6769,29 @@
     });
   }
 
+  function postStripeCheckoutTier(tier, billingInterval) {
+    if (!currentUser) return;
+    setAccountMessage("Opening Stripe checkout…", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return backendRequest("/stripe/create-checkout-session", token, {
+          tier: tier,
+          billingInterval: billingInterval || "month",
+        });
+      })
+      .then(function (json) {
+        if (json && json.ok && json.url) {
+          window.location.assign(json.url);
+          return;
+        }
+        throw new Error((json && json.error) || "Checkout failed");
+      })
+      .catch(function (err) {
+        setAccountMessage(err.message || "Could not start checkout.", "error");
+      });
+  }
+
   function generateAudioForScript(script) {
     if (!currentUser) return;
     var text = (script.text || "").trim();
@@ -8450,6 +8485,24 @@
         if (isAdmin) {
           adminModeEnabled = readAdminModeEnabled();
           renderAdminShell(user.email, user.displayName);
+          try {
+            var stripeParams = new URLSearchParams(window.location.search || "");
+            var stripeCheckout = stripeParams.get("stripe_checkout");
+            if (stripeCheckout === "success" || stripeCheckout === "cancel") {
+              stripeParams.delete("stripe_checkout");
+              var stripeQs = stripeParams.toString();
+              var stripePath = window.location.pathname + (stripeQs ? "?" + stripeQs : "") + (window.location.hash || "");
+              window.history.replaceState({}, "", stripePath);
+              if (stripeCheckout === "success") {
+                setMessage(
+                  "Stripe checkout finished. Your plan updates when the webhook runs (usually within a minute). Refresh if quotas do not change.",
+                  "success"
+                );
+              } else {
+                setMessage("Checkout was canceled — no billing changes.", "");
+              }
+            }
+          } catch (_stripeRet) {}
           subscribeScripts(user.uid);
           subscribePlaylists(user.uid);
           subscribePremade();
