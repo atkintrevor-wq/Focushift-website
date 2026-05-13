@@ -2,6 +2,17 @@
 <html lang="en" class="fs-app">
 <head>
   <meta charset="utf-8" />
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("focusshiftWebAppTheme") || "system";
+        if (t !== "dark" && t !== "light" && t !== "system") t = "system";
+        document.documentElement.setAttribute("data-app-theme", t);
+      } catch (_e) {
+        document.documentElement.setAttribute("data-app-theme", "system");
+      }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Focus Shift — Web</title>
   <meta name="robots" content="noindex" />
@@ -12,7 +23,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../styles.css?v=10" />
   <link rel="stylesheet" href="../login/auth.css?v=1" />
-  <link rel="stylesheet" href="app.css?v=8" />
+  <link rel="stylesheet" href="app.css?v=9" />
 
 </head>
 <body class="fs-app-body">
@@ -26,6 +37,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="app.js?v=98"></script>
+  <script src="app.js?v=99"></script>
 </body>
 </html>

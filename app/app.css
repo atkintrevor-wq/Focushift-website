@@ -7,7 +7,25 @@
   --app-radius: 16px;
   --app-radius-sm: 12px;
   --app-transition: 0.18s ease;
-  --app-shadow-card: 0 4px 24px rgba(0, 0, 0, 0.3);
+  /* Softer iOS-like surfaces (shared with account modal) */
+  --app-surface-card: rgba(255, 255, 255, 0.045);
+  --app-surface-card-border: rgba(255, 255, 255, 0.09);
+  --app-surface-card-shine: rgba(255, 255, 255, 0.05);
+  --app-surface-card-shadow: 0 1px 0 var(--app-surface-card-shine) inset, 0 4px 18px rgba(0, 0, 0, 0.18);
+  --app-surface-elevated: #12151a;
+  --app-surface-muted: rgba(0, 0, 0, 0.14);
+  --app-surface-inset: rgba(0, 0, 0, 0.12);
+  --app-surface-glass-top: rgba(255, 255, 255, 0.07);
+  --app-surface-glass-bottom: rgba(255, 255, 255, 0.035);
+  --app-tab-box-bg: rgba(255, 255, 255, 0.05);
+  --app-tab-box-border: rgba(255, 255, 255, 0.1);
+  --app-modal-row-bg: rgba(255, 255, 255, 0.04);
+  --app-modal-row-border: rgba(255, 255, 255, 0.1);
+  --app-stat-tile-bg: rgba(255, 255, 255, 0.045);
+  --app-stat-tile-border: rgba(255, 255, 255, 0.12);
+  --app-mini-player-top: rgba(15, 23, 42, 0.92);
+  --app-mini-player-bottom: rgba(9, 15, 30, 0.98);
+  --app-shadow-card: 0 4px 18px rgba(0, 0, 0, 0.22);
   --app-shadow-dock: 0 -10px 36px rgba(0, 0, 0, 0.42);
   --app-tab-active-bg: rgba(37, 99, 235, 0.32);
   --app-tab-active-border: rgba(96, 165, 250, 0.85);
@@ -222,24 +240,25 @@
   display: none !important;
 }
 .account-section-card {
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--app-surface-card-border);
   border-radius: 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
+  background: var(--app-surface-card);
   padding: 0.88rem 0.95rem;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+  box-shadow: var(--app-surface-card-shadow);
 }
 .account-section-card__title {
   margin: 0 0 0.55rem;
   font-size: 0.94rem;
   font-weight: 700;
   letter-spacing: 0.02em;
-  color: #f1f5f9;
+  color: var(--text, #f1f5f9);
 }
 .account-section-card__text,
 .account-section-card__lede {
   margin: 0 0 0.45rem;
   font-size: 0.88rem;
   line-height: 1.45;
+  color: var(--muted, #94a3b8);
 }
 .account-section-card__lede:last-of-type {
   margin-bottom: 0.5rem;
@@ -371,18 +390,17 @@
 }
 .account-pref-row input { width: 1rem; height: 1rem; accent-color: #2563eb; flex-shrink: 0; }
 
-/* Account modal: quiet iOS-like inset grouped surfaces (subtle lift, not loud gray) */
 .app-modal.app-modal-account {
-  background: #12151a;
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--app-surface-elevated);
+  border-color: var(--app-surface-card-border);
 }
 .app-modal.app-modal-account .account-modal-head h3 {
-  color: #f8fafc;
+  color: var(--text, #f8fafc);
 }
 .app-modal.app-modal-account .account-modal-tabs .app-tab-btn {
-  border-color: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--app-surface-card-border);
+  color: var(--muted, #94a3b8);
+  background: var(--app-modal-row-bg);
 }
 .app-modal.app-modal-account .account-modal-tabs .app-tab-btn:hover:not(.is-active) {
   background: rgba(255, 255, 255, 0.07);
@@ -391,31 +409,16 @@
 .app-modal.app-modal-account .account-modal-tabs .app-tab-btn.is-active {
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.16);
-  color: #fff;
-}
-.app-modal.app-modal-account .account-section-card {
-  background: rgba(255, 255, 255, 0.045);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.05) inset,
-    0 4px 18px rgba(0, 0, 0, 0.18);
-}
-.app-modal.app-modal-account .account-section-card__title {
-  color: #f8fafc;
-}
-.app-modal.app-modal-account .account-section-card__text,
-.app-modal.app-modal-account .account-section-card__lede,
-.app-modal.app-modal-account .account-section-card .app-muted {
-  color: rgba(226, 232, 240, 0.88);
+  color: var(--text, #fff);
 }
 .app-modal.app-modal-account .account-section-card .app-muted strong {
-  color: #f1f5f9;
+  color: var(--text, #f1f5f9);
 }
 .app-modal.app-modal-account .account-section-card .account-pref-row {
-  color: rgba(241, 245, 249, 0.94);
+  color: var(--text, #f1f5f9);
 }
 .app-modal.app-modal-account .account-section-card .app-form.account-section-card__form label {
-  color: rgba(226, 232, 240, 0.72);
+  color: var(--muted, #94a3b8);
 }
 .app-modal.app-modal-account .account-section-card .app-form.account-section-card__form input[type="text"] {
   background: #f1f5f9;
@@ -434,21 +437,21 @@
 }
 .app-modal.app-modal-account .account-pref-fieldset,
 .app-modal.app-modal-account .account-pref-fieldset--in-card {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: rgba(0, 0, 0, 0.14);
+  border-color: var(--app-surface-card-border);
+  background: var(--app-surface-muted);
 }
 .app-modal.app-modal-account .account-pref-legend {
-  color: #f1f5f9;
+  color: var(--text, #f1f5f9);
 }
 .app-modal.app-modal-account .account-plans-panel {
-  background: rgba(0, 0, 0, 0.16);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--app-surface-muted);
+  border-color: var(--app-surface-card-border);
 }
 .app-modal.app-modal-account .account-subscription-plan-line {
-  color: #f8fafc;
+  color: var(--text, #f8fafc);
 }
 .app-modal.app-modal-account .account-subscription-plan-line.tier-free {
-  color: #cbd5e1;
+  color: var(--muted, #cbd5e1);
 }
 .app-modal.app-modal-account .account-subscription-plan-line.tier-starter {
   color: #bfdbfe;
@@ -457,30 +460,30 @@
   color: #fde047;
 }
 .app-modal.app-modal-account .account-subscription-desc {
-  color: rgba(226, 232, 240, 0.85);
+  color: var(--muted, #94a3b8);
 }
 .app-modal.app-modal-account .account-insight-card {
-  background: rgba(0, 0, 0, 0.12);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: var(--app-surface-inset);
+  border-color: var(--app-surface-card-border);
 }
 .app-modal.app-modal-account .account-insight-card h4 {
-  color: rgba(241, 245, 249, 0.92);
+  color: var(--text, #f1f5f9);
 }
 .app-modal.app-modal-account .account-kv-label {
-  color: rgba(203, 213, 225, 0.75);
+  color: var(--muted, #94a3b8);
 }
 .app-modal.app-modal-account .account-kv-value {
-  color: #f8fafc;
+  color: var(--text, #f8fafc);
 }
 .app-modal.app-modal-account #account-message.app-inline-msg {
   border-radius: 12px;
   padding: 0.55rem 0.65rem;
 }
 .app-modal.app-modal-account .account-modal-close-x {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--muted, #94a3b8);
 }
 .app-modal.app-modal-account .account-modal-close-x:hover {
-  color: #fff;
+  color: var(--text, #fff);
   background: rgba(255, 255, 255, 0.08);
 }
 .playlist-timer-row {
@@ -557,21 +560,21 @@
   color: var(--muted, #9fb0ca);
 }
 .app-card {
-  background: var(--bg-card, rgba(255, 255, 255, 0.06));
-  border: 1px solid var(--border, rgba(148, 163, 184, 0.2));
+  background: var(--app-surface-card);
+  border: 1px solid var(--app-surface-card-border);
   border-radius: var(--app-radius, 16px);
   padding: 1.15rem 1.1rem;
   margin-bottom: 1rem;
-  box-shadow: var(--app-shadow-card);
+  box-shadow: var(--app-surface-card-shadow);
   transition:
     box-shadow var(--app-transition),
     border-color var(--app-transition);
 }
 .app-glass-card {
-  background: linear-gradient(180deg, rgba(255,255,255,0.11), rgba(255,255,255,0.04));
-  border: 1px solid rgba(255,255,255,0.2);
+  background: linear-gradient(180deg, var(--app-surface-glass-top), var(--app-surface-glass-bottom));
+  border: 1px solid var(--app-surface-card-border);
   border-radius: 18px;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--app-surface-card-shadow);
   backdrop-filter: blur(12px);
 }
 .app-stat-grid {
@@ -581,11 +584,11 @@
   margin: 0.2rem 0 0;
 }
 .app-stat-tile {
-  border: 1px solid rgba(255,255,255,0.18);
+  border: 1px solid var(--app-stat-tile-border);
   border-radius: 14px;
   padding: 0.65rem 0.65rem 0.6rem;
-  background: rgba(255,255,255,0.05);
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
+  background: var(--app-stat-tile-bg);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.14);
   transition: border-color var(--app-transition), background-color var(--app-transition);
 }
 .app-stat-label {
@@ -864,9 +867,9 @@
   margin: 0 0 0.95rem;
   padding: 0.5rem 0.58rem 0.55rem;
   border-radius: 16px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(15, 23, 42, 0.55) 100%);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--app-tab-box-border);
+  background: var(--app-tab-box-bg);
+  box-shadow: var(--app-surface-card-shadow);
 }
 .app-admin-tab-box-nav.app-tabs {
   margin: 0;
@@ -1463,8 +1466,8 @@
   bottom: 0;
   z-index: 1000;
   padding: 0.65rem clamp(0.75rem, 2vw, 1.25rem) calc(0.65rem + env(safe-area-inset-bottom));
-  background: linear-gradient(180deg, rgba(15, 23, 42, 0.92) 0%, rgba(9, 15, 30, 0.98) 45%);
-  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  background: linear-gradient(180deg, var(--app-mini-player-top), var(--app-mini-player-bottom));
+  border-top: 1px solid var(--app-surface-card-border);
   box-shadow: var(--app-shadow-dock);
   backdrop-filter: blur(14px) saturate(1.2);
 }
@@ -1619,13 +1622,17 @@
 .app-modal {
   width: 100%;
   max-width: 520px;
-  background: var(--bg-elevated, #121a2b);
-  border: 1px solid var(--border, rgba(148, 163, 184, 0.22));
+  background: var(--app-surface-elevated);
+  border: 1px solid var(--app-surface-card-border);
   border-radius: var(--app-radius, 14px);
   padding: 1.1rem;
   box-shadow: 0 24px 56px rgba(0, 0, 0, 0.5);
+  color: var(--text, #e8edf7);
 }
-.app-modal h3 { margin: 0 0 0.35rem; }
+.app-modal h3 {
+  margin: 0 0 0.35rem;
+  color: var(--text, #e8edf7);
+}
 .app-modal-list {
   margin: 0.75rem 0;
   display: flex;
@@ -1639,10 +1646,10 @@
   gap: 0.45rem;
   align-items: center;
   justify-content: space-between;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--app-modal-row-border);
   border-radius: 10px;
   padding: 0.55rem 0.7rem;
-  background: rgba(255,255,255,0.03);
+  background: var(--app-modal-row-bg);
 }
 .app-modal-row-name {
   font-size: 0.92rem;
@@ -1655,9 +1662,9 @@
   margin-bottom: 0.55rem;
 }
 .app-bg-category {
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--app-surface-card-border);
   border-radius: 10px;
-  background: rgba(255,255,255,0.02);
+  background: var(--app-modal-row-bg);
   margin-bottom: 0.5rem;
   overflow: hidden;
 }
@@ -2426,5 +2433,96 @@ article.app-card.playlist-card-tappable:hover {
   article.app-card[data-premade-id]:hover,
   article.app-card.playlist-card-tappable:hover {
     box-shadow: var(--app-shadow-card);
+  }
+}
+
+/* ----- Appearance: Light or System (light OS) — Account → Preferences ----- */
+html.fs-app[data-app-theme="light"] {
+  --bg: #e8edf4;
+  --bg-elevated: #f8fafc;
+  --bg-card: #ffffff;
+  --text: #0f172a;
+  --muted: #64748b;
+  --border: rgba(15, 23, 42, 0.12);
+  --app-surface-card: #ffffff;
+  --app-surface-card-border: rgba(15, 23, 42, 0.1);
+  --app-surface-card-shine: rgba(255, 255, 255, 0.95);
+  --app-surface-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.98) inset, 0 4px 20px rgba(15, 23, 42, 0.07);
+  --app-surface-elevated: #f1f5f9;
+  --app-surface-muted: rgba(15, 23, 42, 0.06);
+  --app-surface-inset: rgba(15, 23, 42, 0.05);
+  --app-surface-glass-top: rgba(255, 255, 255, 0.95);
+  --app-surface-glass-bottom: #f1f5f9;
+  --app-tab-box-bg: rgba(255, 255, 255, 0.88);
+  --app-tab-box-border: rgba(15, 23, 42, 0.1);
+  --app-modal-row-bg: rgba(15, 23, 42, 0.04);
+  --app-modal-row-border: rgba(15, 23, 42, 0.1);
+  --app-stat-tile-bg: rgba(255, 255, 255, 0.92);
+  --app-stat-tile-border: rgba(15, 23, 42, 0.1);
+  --app-mini-player-top: rgba(248, 250, 252, 0.97);
+  --app-mini-player-bottom: rgba(241, 245, 249, 0.99);
+  --app-shadow-card: 0 4px 20px rgba(15, 23, 42, 0.08);
+  --app-shadow-dock: 0 -8px 28px rgba(15, 23, 42, 0.1);
+}
+
+html.fs-app[data-app-theme="light"] body.fs-app-body {
+  background-color: var(--bg);
+  background-image: radial-gradient(ellipse 120% 70% at 50% -20%, rgba(59, 130, 246, 0.12), transparent 55%),
+    radial-gradient(ellipse 90% 50% at 100% 0%, rgba(99, 102, 241, 0.08), transparent 50%);
+}
+
+html.fs-app[data-app-theme="light"] .fs-app-body .site-top {
+  background: rgba(255, 255, 255, 0.86);
+  border-bottom-color: var(--border);
+}
+
+html.fs-app[data-app-theme="light"] #library-segmented-tabs.voice-segmented-tabs {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+@media (prefers-color-scheme: light) {
+  html.fs-app[data-app-theme="system"] {
+    --bg: #e8edf4;
+    --bg-elevated: #f8fafc;
+    --bg-card: #ffffff;
+    --text: #0f172a;
+    --muted: #64748b;
+    --border: rgba(15, 23, 42, 0.12);
+    --app-surface-card: #ffffff;
+    --app-surface-card-border: rgba(15, 23, 42, 0.1);
+    --app-surface-card-shine: rgba(255, 255, 255, 0.95);
+    --app-surface-card-shadow: 0 1px 0 rgba(255, 255, 255, 0.98) inset, 0 4px 20px rgba(15, 23, 42, 0.07);
+    --app-surface-elevated: #f1f5f9;
+    --app-surface-muted: rgba(15, 23, 42, 0.06);
+    --app-surface-inset: rgba(15, 23, 42, 0.05);
+    --app-surface-glass-top: rgba(255, 255, 255, 0.95);
+    --app-surface-glass-bottom: #f1f5f9;
+    --app-tab-box-bg: rgba(255, 255, 255, 0.88);
+    --app-tab-box-border: rgba(15, 23, 42, 0.1);
+    --app-modal-row-bg: rgba(15, 23, 42, 0.04);
+    --app-modal-row-border: rgba(15, 23, 42, 0.1);
+    --app-stat-tile-bg: rgba(255, 255, 255, 0.92);
+    --app-stat-tile-border: rgba(15, 23, 42, 0.1);
+    --app-mini-player-top: rgba(248, 250, 252, 0.97);
+    --app-mini-player-bottom: rgba(241, 245, 249, 0.99);
+    --app-shadow-card: 0 4px 20px rgba(15, 23, 42, 0.08);
+    --app-shadow-dock: 0 -8px 28px rgba(15, 23, 42, 0.1);
+  }
+
+  html.fs-app[data-app-theme="system"] body.fs-app-body {
+    background-color: var(--bg);
+    background-image: radial-gradient(ellipse 120% 70% at 50% -20%, rgba(59, 130, 246, 0.12), transparent 55%),
+      radial-gradient(ellipse 90% 50% at 100% 0%, rgba(99, 102, 241, 0.08), transparent 50%);
+  }
+
+  html.fs-app[data-app-theme="system"] .fs-app-body .site-top {
+    background: rgba(255, 255, 255, 0.86);
+    border-bottom-color: var(--border);
+  }
+
+  html.fs-app[data-app-theme="system"] #library-segmented-tabs.voice-segmented-tabs {
+    background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(15, 23, 42, 0.12);
   }
 }

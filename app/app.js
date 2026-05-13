@@ -45,10 +45,33 @@
   var PREF_HOME_LIBRARY_OPEN_KEY = "focusshiftWebHomeLibraryOpen";
   /** Mirrors iOS @AppStorage("adminModeEnabled"); gates catalog publish/edit on web. */
   var PREF_ADMIN_MODE_KEY = "focusshiftWebAdminModeEnabled";
+  var PREF_APP_THEME_KEY = "focusshiftWebAppTheme";
   var PREF_HOME_PLAYS_PERIOD_KEY = "focusshiftWebHomePlaysPeriod";
   /** 0–1, applies to script / playlist / voice-adjust preview playback in this browser. */
   var PREF_PLAYBACK_VOLUME_KEY = "focusshiftWebPlaybackVolume";
   var adminModeEnabled = false;
+
+  function readAppTheme() {
+    try {
+      var v = (localStorage.getItem(PREF_APP_THEME_KEY) || "system").toLowerCase();
+      if (v === "dark" || v === "light" || v === "system") return v;
+    } catch (_e) {}
+    return "system";
+  }
+
+  function applyAppThemeToDocument(theme) {
+    var t = theme === "dark" || theme === "light" || theme === "system" ? theme : "system";
+    document.documentElement.setAttribute("data-app-theme", t);
+  }
+
+  function writeAppTheme(theme) {
+    try {
+      localStorage.setItem(PREF_APP_THEME_KEY, theme);
+    } catch (_e) {}
+    applyAppThemeToDocument(theme);
+  }
+
+  applyAppThemeToDocument(readAppTheme());
 
   function readPlaybackVolume() {
     try {
@@ -1361,6 +1384,16 @@
       "        </select>" +
       "      </section>" +
       '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Appearance</h4>' +
+      '        <p class="app-muted account-section-card__text">Match this workspace to your device, or choose a fixed light or dark look (saved in this browser).</p>' +
+      '        <fieldset class="account-pref-fieldset account-pref-fieldset--in-card">' +
+      '          <legend class="account-pref-legend">Theme</legend>' +
+      '          <label class="account-pref-row"><input type="radio" name="pref-app-theme" id="pref-theme-system" value="system" /> System</label>' +
+      '          <label class="account-pref-row"><input type="radio" name="pref-app-theme" id="pref-theme-dark" value="dark" /> Dark</label>' +
+      '          <label class="account-pref-row"><input type="radio" name="pref-app-theme" id="pref-theme-light" value="light" /> Light</label>' +
+      "        </fieldset>" +
+      "      </section>" +
+      '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Workspace</h4>' +
       '        <label class="account-pref-row"><input type="checkbox" id="pref-resume-last-screen" /> Remember my last workspace screen after sign-in</label>' +
       '        <fieldset class="account-pref-fieldset account-pref-fieldset--in-card">' +
@@ -1904,6 +1937,15 @@
       var next = this.value === "library" ? "library" : "playlists";
       writeListenShortcutTab(next);
       setAccountMessage("Listen today shortcut preference saved.", "success");
+    });
+    ["pref-theme-system", "pref-theme-dark", "pref-theme-light"].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("change", function () {
+        if (!this.checked) return;
+        writeAppTheme(this.value);
+        setAccountMessage("Theme updated for this browser.", "success");
+      });
     });
     document.getElementById("pref-library-sub-my").addEventListener("change", function () {
       if (!this.checked) return;
@@ -2508,6 +2550,15 @@
     var adminModeCb = document.getElementById("pref-admin-mode");
     if (adminModeCb) {
       adminModeCb.checked = adminModeEnabled;
+    }
+    var theme = readAppTheme();
+    var thSys = document.getElementById("pref-theme-system");
+    var thDark = document.getElementById("pref-theme-dark");
+    var thLight = document.getElementById("pref-theme-light");
+    if (thSys && thDark && thLight) {
+      thSys.checked = theme === "system";
+      thDark.checked = theme === "dark";
+      thLight.checked = theme === "light";
     }
   }
 
