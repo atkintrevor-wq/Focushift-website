@@ -29,6 +29,12 @@
   --app-shadow-dock: 0 -10px 36px rgba(0, 0, 0, 0.42);
   --app-tab-active-bg: rgba(37, 99, 235, 0.32);
   --app-tab-active-border: rgba(96, 165, 250, 0.85);
+  --app-tab-active-fg: #f8fafc;
+  --home-listen-row-border: rgba(255, 255, 255, 0.22);
+  --home-listen-row-bg: rgba(255, 255, 255, 0.07);
+  --home-listen-row-ring: rgba(255, 255, 255, 0.1);
+  --home-listen-row-hover-bg: rgba(255, 255, 255, 0.12);
+  --home-listen-row-hover-border: rgba(96, 165, 250, 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -661,14 +667,16 @@
   font: inherit;
   color: inherit;
   cursor: pointer;
-  border: 1px solid rgba(255,255,255,0.16);
+  border: 1px solid var(--home-listen-row-border);
   border-radius: 14px;
-  background: rgba(255,255,255,0.06);
-  transition: background 0.12s ease, border-color 0.12s ease;
+  background: var(--home-listen-row-bg);
+  box-shadow: 0 0 0 1px var(--home-listen-row-ring, rgba(15, 23, 42, 0.08));
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 .home-listen-today-row:hover {
-  background: rgba(255,255,255,0.09);
-  border-color: rgba(96, 165, 250, 0.35);
+  background: var(--home-listen-row-hover-bg);
+  border-color: var(--home-listen-row-hover-border);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
 }
 .home-listen-today-icon {
   flex-shrink: 0;
@@ -1404,7 +1412,7 @@
 .app-tab-btn.is-active {
   background: var(--app-tab-active-bg);
   border-color: var(--app-tab-active-border);
-  color: #f8fafc;
+  color: var(--app-tab-active-fg, #f8fafc);
   box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.25);
 }
 .voice-segmented-tabs {
@@ -1453,6 +1461,7 @@
   background: transparent;
   border-color: transparent;
   box-shadow: none;
+  color: var(--app-tab-active-fg, #f8fafc);
 }
 .app-section[hidden] { display: none !important; }
 .app-tab-count {
@@ -2464,6 +2473,12 @@ html.fs-app[data-app-theme="light"] {
   --app-mini-player-bottom: rgba(241, 245, 249, 0.99);
   --app-shadow-card: 0 4px 20px rgba(15, 23, 42, 0.08);
   --app-shadow-dock: 0 -8px 28px rgba(15, 23, 42, 0.1);
+  --app-tab-active-fg: #0f172a;
+  --home-listen-row-border: rgba(15, 23, 42, 0.24);
+  --home-listen-row-bg: rgba(255, 255, 255, 0.92);
+  --home-listen-row-ring: rgba(15, 23, 42, 0.12);
+  --home-listen-row-hover-bg: rgba(37, 99, 235, 0.1);
+  --home-listen-row-hover-border: rgba(37, 99, 235, 0.42);
 }
 
 html.fs-app[data-app-theme="light"] body.fs-app-body {
@@ -2509,6 +2524,12 @@ html.fs-app[data-app-theme="light"] #library-segmented-tabs.voice-segmented-tabs
     --app-mini-player-bottom: rgba(241, 245, 249, 0.99);
     --app-shadow-card: 0 4px 20px rgba(15, 23, 42, 0.08);
     --app-shadow-dock: 0 -8px 28px rgba(15, 23, 42, 0.1);
+    --app-tab-active-fg: #0f172a;
+    --home-listen-row-border: rgba(15, 23, 42, 0.24);
+    --home-listen-row-bg: rgba(255, 255, 255, 0.92);
+    --home-listen-row-ring: rgba(15, 23, 42, 0.12);
+    --home-listen-row-hover-bg: rgba(37, 99, 235, 0.1);
+    --home-listen-row-hover-border: rgba(37, 99, 235, 0.42);
   }
 
   html.fs-app[data-app-theme="system"] body.fs-app-body {
