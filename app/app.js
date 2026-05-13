@@ -1280,16 +1280,27 @@
       '      <p class="app-muted" style="margin:0 0 0.85rem;">Last login: <strong id="account-last-login">' +
       escapeHtml(formatDateString(currentUser && currentUser.metadata && currentUser.metadata.lastSignInTime)) +
       "</strong></p>" +
-      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
-      '        <strong style="display:block;margin-bottom:0.3rem;">Subscription</strong>' +
-      '        <p class="app-muted" style="margin:0 0 0.5rem;">iOS billing uses the App Store. On the web, upgrades use <strong>Stripe</strong> Checkout (same Firebase account). In test mode use card <code style="font-size:0.85em;">4242&nbsp;4242&nbsp;4242&nbsp;4242</code>.</p>' +
-      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.35rem;">' +
-      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-starter-month" data-stripe-plan="starter-month">Starter — monthly</button>' +
-      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-starter-year" data-stripe-plan="starter-year">Starter — yearly</button>' +
-      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-creator-month" data-stripe-plan="creator-month">Creator — monthly</button>' +
-      '          <button type="button" class="app-btn app-btn-primary" id="account-stripe-checkout-creator-year" data-stripe-plan="creator-year">Creator — yearly</button>' +
+      '      <section class="account-pref-sync-summary account-subscription-section" style="margin-bottom:0.7rem;">' +
+      '        <div class="account-subscription-head">' +
+      '          <span class="account-subscription-crown" aria-hidden="true">' +
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294L11.562 3.266Z"/></svg>' +
+      "          </span>" +
+      '          <strong class="account-subscription-title">Subscription</strong>' +
       "        </div>" +
-      '        <p class="app-muted" style="margin:0;font-size:0.82rem;">Set the four <code style="font-size:0.85em;">STRIPE_PRICE_*</code> env vars on the api function to match your Stripe Price IDs.</p>' +
+      '        <p class="account-subscription-plan-line tier-free" id="account-subscription-headline">Your plan: Free</p>' +
+      '        <p class="app-muted account-subscription-desc" id="account-subscription-description">Limited features on the Free tier.</p>' +
+      '        <p class="app-muted" style="margin:0.45rem 0 0;font-size:0.82rem;line-height:1.45;">iOS uses the App Store; <strong>web</strong> upgrades use Stripe Checkout (same Firebase account). Test card <code style="font-size:0.85em;">4242&nbsp;4242&nbsp;4242&nbsp;4242</code>.</p>' +
+      '        <button type="button" class="app-btn app-btn-secondary account-view-plans-btn" id="account-btn-view-plans" aria-expanded="false" aria-controls="account-plans-panel">View plans &amp; upgrade</button>' +
+      '        <div id="account-plans-panel" class="account-plans-panel" hidden>' +
+      '          <p class="app-muted" style="margin:0 0 0.55rem;font-size:0.82rem;line-height:1.45;">Choose a billing period. You will be redirected to Stripe Checkout.</p>' +
+      '          <div class="account-plans-grid">' +
+      '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-month">Starter — monthly</button>' +
+      '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-year">Starter — yearly</button>' +
+      '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-month">Creator — monthly</button>' +
+      '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-year">Creator — yearly</button>' +
+      "          </div>" +
+      '          <p class="app-muted" style="margin:0.55rem 0 0;font-size:0.78rem;line-height:1.45;">Live checkout needs the four <code>STRIPE_PRICE_*</code> env vars on your API function.</p>' +
+      "        </div>" +
       "      </section>" +
       '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
       '        <strong style="display:block;margin-bottom:0.3rem;">Devices & Sharing</strong>' +
@@ -1792,6 +1803,14 @@
         });
       }
     })();
+    document.getElementById("account-btn-view-plans").addEventListener("click", function () {
+      var panel = document.getElementById("account-plans-panel");
+      if (!panel) return;
+      var willShow = !!panel.hidden;
+      panel.hidden = !willShow;
+      this.setAttribute("aria-expanded", willShow ? "true" : "false");
+      this.textContent = willShow ? "Hide plans" : "View plans & upgrade";
+    });
     document.getElementById("account-manage-devices").addEventListener("click", function () {
       setAccountMessage("Device management is currently available in the iOS app. Web mirrors your account counts.", "");
     });
@@ -2507,6 +2526,7 @@
   function openAccountModal() {
     var bd = document.getElementById("account-modal-backdrop");
     if (!bd) return;
+    resetAccountPlansPanel();
     syncAccountPreferencesForm();
     renderAccountInsights();
     setAccountModalTab("settings");
@@ -2518,6 +2538,7 @@
   function closeAccountModal() {
     var bd = document.getElementById("account-modal-backdrop");
     if (!bd) return;
+    resetAccountPlansPanel();
     bd.hidden = true;
     var b = document.getElementById("btn-account-menu");
     if (b) b.setAttribute("aria-expanded", "false");
@@ -4807,6 +4828,46 @@
       row("Imported audio", formatCount(importedAudioCount())) +
       row("Storage used", storageDisplay) +
       "</section>";
+    syncAccountSubscriptionHeadline();
+  }
+
+  function subscriptionTierDisplayName() {
+    var t = resolvedSubscriptionTier();
+    if (t === "starter") return "Starter";
+    if (t === "creator") return "Creator";
+    return "Free";
+  }
+
+  function subscriptionTierDescriptionWeb() {
+    var t = resolvedSubscriptionTier();
+    if (t === "starter") return "Perfect for getting started.";
+    if (t === "creator") return "For creators who need more.";
+    return "Limited features on the Free tier. Upgrade for more scripts, voices, and cloud sync.";
+  }
+
+  function subscriptionPlanHeadlineWeb() {
+    return "Your plan: " + subscriptionTierDisplayName();
+  }
+
+  function syncAccountSubscriptionHeadline() {
+    var headlineEl = document.getElementById("account-subscription-headline");
+    var descEl = document.getElementById("account-subscription-description");
+    if (!headlineEl || !descEl) return;
+    headlineEl.textContent = subscriptionPlanHeadlineWeb();
+    descEl.textContent = subscriptionTierDescriptionWeb();
+    var tier = resolvedSubscriptionTier();
+    headlineEl.classList.remove("tier-free", "tier-starter", "tier-creator");
+    headlineEl.classList.add("tier-" + tier);
+  }
+
+  function resetAccountPlansPanel() {
+    var panel = document.getElementById("account-plans-panel");
+    var btn = document.getElementById("account-btn-view-plans");
+    if (panel) panel.hidden = true;
+    if (btn) {
+      btn.setAttribute("aria-expanded", "false");
+      btn.textContent = "View plans & upgrade";
+    }
   }
 
   function setHomeFlowStep(step, displayName) {
@@ -5228,12 +5289,6 @@
       var libDetailsOpen = readHomeLibrarySectionOpen() ? " open" : "";
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
-        '  <div class="app-card app-glass-card" style="margin:0;padding:0.65rem 0.9rem;">' +
-        '    <div class="app-home-plan-row">' +
-        '      <span class="app-muted app-home-plan-label">Your plan</span>' +
-        '      <span class="app-chip">' + escapeHtml(resolvePlanLabel()) + "</span>" +
-        "    </div>" +
-        "  </div>" +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
         '    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">' +
         "      <div>" +

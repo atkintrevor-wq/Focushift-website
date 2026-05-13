@@ -212,6 +212,60 @@
 .account-modal-close-x { min-width: 40px; padding: 0.35rem 0.5rem; font-size: 1.35rem; line-height: 1; }
 .account-modal-tabs { margin: 0 0 0.85rem; flex-wrap: wrap; }
 .account-tab-panel { margin-top: 0.25rem; }
+.account-subscription-section .account-subscription-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.15rem;
+}
+.account-subscription-crown {
+  display: flex;
+  color: #fbbf24;
+  opacity: 0.95;
+  flex-shrink: 0;
+}
+.account-subscription-title {
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+.account-subscription-plan-line {
+  margin: 0.35rem 0 0.25rem;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  color: var(--text, #e8edf7);
+}
+.account-subscription-plan-line.tier-free { color: #94a3b8; }
+.account-subscription-plan-line.tier-starter { color: #93c5fd; }
+.account-subscription-plan-line.tier-creator { color: #facc15; }
+.account-subscription-desc {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.account-view-plans-btn {
+  margin-top: 0.65rem;
+  width: 100%;
+  max-width: 22rem;
+}
+.account-plans-panel {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.7rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.22);
+}
+.account-plans-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.account-plan-option {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+}
 .account-insights-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -351,17 +405,6 @@
   border-radius: 18px;
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(12px);
-}
-.app-home-plan-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-.app-home-plan-label {
-  font-size: 0.88rem;
-  font-weight: 500;
 }
 .app-stat-grid {
   display: grid;
