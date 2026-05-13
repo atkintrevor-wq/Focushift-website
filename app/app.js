@@ -1090,31 +1090,32 @@
       "</div>" +
       '<nav class="site-top app-site-top-in-shell" aria-label="Focus Shift site">' +
       '  <a class="site-top-skip" href="#admin-main-tabs">Skip to content</a>' +
-      '  <div class="site-top-inner">' +
-      '    <a class="site-top-home" href="/" aria-label="Focus Shift — marketing site home">' +
+      '  <div class="site-top-inner app-site-top-inner-split">' +
+      '    <div class="app-site-top-spacer" aria-hidden="true"></div>' +
+      '    <a class="site-top-home app-site-top-brand-center" href="/" aria-label="Focus Shift — marketing site home">' +
       '      <img class="site-top-app-brand site-top-app-brand-shell" src="../images/focus-shift-app-brand.png?v=7" alt="Focus Shift" width="1174" height="417" decoding="async" />' +
       "    </a>" +
+      '    <div class="app-admin-header-actions">' +
+      '      <div id="app-playlist-timer-wrap" class="app-playlist-timer-wrap" hidden title="Playlist sleep timer">' +
+      '        <span class="app-playlist-timer-icon" aria-hidden="true">⏱</span>' +
+      '        <span id="app-playlist-timer-label" class="app-playlist-timer-label"></span>' +
+      '        <button type="button" class="app-playlist-timer-clear" id="btn-app-playlist-timer-clear" aria-label="Clear playlist timer">×</button>' +
+      "      </div>" +
+      '      <button type="button" class="app-header-account-btn" id="btn-account-menu" aria-label="Account menu" aria-haspopup="dialog" aria-expanded="false">' +
+      '        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
+      '          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>' +
+      '          <circle cx="12" cy="7" r="4"/>' +
+      "        </svg>" +
+      "      </button>" +
+      "    </div>" +
       "  </div>" +
       "</nav>" +
-      '<header class="app-admin-header">' +
+      '<header class="app-admin-header app-admin-header-welcome-only">' +
       '  <div class="app-admin-header-main">' +
       '    <p class="app-welcome-line">Welcome, <strong>' +
       escapeHtml(welcomeName) +
       "</strong></p>" +
       '    <p class="app-welcome-tagline">Where Focus Becomes Power</p>' +
-      "  </div>" +
-      '  <div class="app-admin-header-actions">' +
-      '    <div id="app-playlist-timer-wrap" class="app-playlist-timer-wrap" hidden title="Playlist sleep timer">' +
-      '      <span class="app-playlist-timer-icon" aria-hidden="true">⏱</span>' +
-      '      <span id="app-playlist-timer-label" class="app-playlist-timer-label"></span>' +
-      '      <button type="button" class="app-playlist-timer-clear" id="btn-app-playlist-timer-clear" aria-label="Clear playlist timer">×</button>' +
-      "    </div>" +
-      '    <button type="button" class="app-header-account-btn" id="btn-account-menu" aria-label="Account menu" aria-haspopup="dialog" aria-expanded="false">' +
-      '      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
-      '        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>' +
-      '        <circle cx="12" cy="7" r="4"/>' +
-      "      </svg>" +
-      "    </button>" +
       "  </div>" +
       "</header></div>" +
       '<div class="app-admin-tab-box">' +
@@ -5227,14 +5228,9 @@
       var libDetailsOpen = readHomeLibrarySectionOpen() ? " open" : "";
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
-        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
-        '    <div class="app-home-hero">' +
-        '      <div>' +
-        '        <p class="app-home-hero-title">Welcome' +
-        (displayName ? ", <strong>" + escapeHtml(displayName) + "</strong>" : "") +
-        ".</p>" +
-        '        <p class="app-home-hero-subtitle">Where Focus Becomes Power.</p>' +
-        "      </div>" +
+        '  <div class="app-card app-glass-card" style="margin:0;padding:0.65rem 0.9rem;">' +
+        '    <div class="app-home-plan-row">' +
+        '      <span class="app-muted app-home-plan-label">Your plan</span>' +
         '      <span class="app-chip">' + escapeHtml(resolvePlanLabel()) + "</span>" +
         "    </div>" +
         "  </div>" +
