@@ -30,11 +30,6 @@
   --app-tab-active-bg: rgba(37, 99, 235, 0.32);
   --app-tab-active-border: rgba(96, 165, 250, 0.85);
   --app-tab-active-fg: #f8fafc;
-  --home-listen-row-border: rgba(255, 255, 255, 0.22);
-  --home-listen-row-bg: rgba(255, 255, 255, 0.07);
-  --home-listen-row-ring: rgba(255, 255, 255, 0.1);
-  --home-listen-row-hover-bg: rgba(255, 255, 255, 0.12);
-  --home-listen-row-hover-border: rgba(96, 165, 250, 0.5);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -667,16 +662,19 @@
   font: inherit;
   color: inherit;
   cursor: pointer;
-  border: 1px solid var(--home-listen-row-border);
+  /* Match .app-glass-card (Create Personalized Mental Script panel) */
+  border: 1px solid var(--app-surface-card-border);
   border-radius: 14px;
-  background: var(--home-listen-row-bg);
-  box-shadow: 0 0 0 1px var(--home-listen-row-ring, rgba(15, 23, 42, 0.08));
-  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  background: linear-gradient(180deg, var(--app-surface-glass-top), var(--app-surface-glass-bottom));
+  box-shadow: var(--app-surface-card-shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
 .home-listen-today-row:hover {
-  background: var(--home-listen-row-hover-bg);
-  border-color: var(--home-listen-row-hover-border);
-  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.12);
+  border-color: rgba(96, 165, 250, 0.55);
+  box-shadow: var(--app-surface-card-shadow), 0 0 0 1px rgba(59, 130, 246, 0.22);
+  filter: brightness(1.06);
 }
 .home-listen-today-icon {
   flex-shrink: 0;
@@ -1225,35 +1223,45 @@
 }
 .library-dual-btn {
   display: inline-flex;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid rgba(37, 99, 235, 0.9);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
+  /* Match .app-glass-card — same shell as Create Personalized Mental Script */
+  border: 1px solid var(--app-surface-card-border);
+  box-shadow: var(--app-surface-card-shadow);
+  background: linear-gradient(180deg, var(--app-surface-glass-top), var(--app-surface-glass-bottom));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 .library-dual-btn-main {
   border: none;
-  background: #2563eb;
-  color: #fff;
+  background: transparent;
+  color: inherit;
   padding: 0 0.62rem;
   min-height: 32px;
   font-weight: 600;
   font-size: 0.82rem;
   cursor: pointer;
   letter-spacing: 0.01em;
+  transition: background-color var(--app-transition);
 }
-.library-dual-btn-main:hover { filter: brightness(1.06); }
+.library-dual-btn-main:hover {
+  background: var(--app-surface-muted);
+}
 .library-dual-btn-menu {
   border: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.35);
-  background: #2563eb;
-  color: #fff;
+  border-left: 1px solid var(--app-surface-card-border);
+  background: transparent;
+  color: inherit;
   width: 38px;
   min-height: 32px;
   cursor: pointer;
   font-size: 0.75rem;
   line-height: 1;
+  transition: background-color var(--app-transition);
 }
-.library-dual-btn-menu:hover { filter: brightness(1.06); }
+.library-dual-btn-menu:hover {
+  background: var(--app-surface-muted);
+}
 .library-create-dropdown {
   position: absolute;
   top: calc(100% + 4px);
@@ -2474,11 +2482,6 @@ html.fs-app[data-app-theme="light"] {
   --app-shadow-card: 0 4px 20px rgba(15, 23, 42, 0.08);
   --app-shadow-dock: 0 -8px 28px rgba(15, 23, 42, 0.1);
   --app-tab-active-fg: #0f172a;
-  --home-listen-row-border: rgba(15, 23, 42, 0.24);
-  --home-listen-row-bg: rgba(255, 255, 255, 0.92);
-  --home-listen-row-ring: rgba(15, 23, 42, 0.12);
-  --home-listen-row-hover-bg: rgba(37, 99, 235, 0.1);
-  --home-listen-row-hover-border: rgba(37, 99, 235, 0.42);
 }
 
 html.fs-app[data-app-theme="light"] body.fs-app-body {
@@ -2525,11 +2528,6 @@ html.fs-app[data-app-theme="light"] #library-segmented-tabs.voice-segmented-tabs
     --app-shadow-card: 0 4px 20px rgba(15, 23, 42, 0.08);
     --app-shadow-dock: 0 -8px 28px rgba(15, 23, 42, 0.1);
     --app-tab-active-fg: #0f172a;
-    --home-listen-row-border: rgba(15, 23, 42, 0.24);
-    --home-listen-row-bg: rgba(255, 255, 255, 0.92);
-    --home-listen-row-ring: rgba(15, 23, 42, 0.12);
-    --home-listen-row-hover-bg: rgba(37, 99, 235, 0.1);
-    --home-listen-row-hover-border: rgba(37, 99, 235, 0.42);
   }
 
   html.fs-app[data-app-theme="system"] body.fs-app-body {
