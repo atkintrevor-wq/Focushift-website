@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../styles.css?v=8" />
-  <link rel="stylesheet" href="auth.css?v=1" />
+  <link rel="stylesheet" href="auth.css?v=2" />
 </head>
 <body>
   <main class="auth-page">
@@ -24,7 +24,10 @@
       <div class="auth-banner auth-banner--setup" id="setup-banner" role="alert"></div>
       <div class="auth-banner auth-banner--error" id="error-banner" role="alert"></div>
 
-      <button type="button" class="auth-btn auth-btn-google" id="btn-google" disabled>Continue with Google</button>
+      <button type="button" class="auth-btn auth-btn-google" id="btn-google" disabled>
+        <span class="auth-spinner" aria-hidden="true"></span>
+        <span class="auth-btn-text">Continue with Google</span>
+      </button>
 
       <p style="text-align:center;margin:0.75rem 0;color:var(--muted,#8b9bb4);font-size:0.85rem;">or</p>
 
@@ -49,10 +52,22 @@
           <label for="password2">Confirm password</label>
           <input id="password2" name="password2" type="password" autocomplete="new-password" />
         </div>
+        <div class="auth-field auth-remember-field">
+          <label class="auth-remember-label">
+            <input type="checkbox" id="remember-me" checked />
+            <span>Keep me signed in on this device</span>
+          </label>
+          <p class="auth-remember-hint">
+            We never store your password on this site. Your browser or password manager can fill it safely next time.
+          </p>
+        </div>
         <div class="auth-row-actions sign-in-only">
           <button type="button" class="auth-link-btn" id="btn-forgot">Forgot password?</button>
         </div>
-        <button type="submit" class="auth-btn auth-btn-primary" id="btn-email-submit" disabled>Sign in</button>
+        <button type="submit" class="auth-btn auth-btn-primary" id="btn-email-submit" disabled>
+          <span class="auth-spinner" aria-hidden="true"></span>
+          <span class="auth-btn-text">Sign in</span>
+        </button>
       </form>
 
       <div class="auth-toggle">
@@ -68,6 +83,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="auth.js?v=1"></script>
+  <script src="auth.js?v=2"></script>
 </body>
 </html>
