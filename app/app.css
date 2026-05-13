@@ -145,16 +145,16 @@
   font-size: clamp(1.05rem, 2.4vw, 1.2rem);
   font-weight: 500;
   line-height: 1.35;
-  color: var(--text, #e8edf7);
+  color: #f8fafc;
   letter-spacing: -0.01em;
 }
-.app-welcome-line strong { font-weight: 700; }
+.app-welcome-line strong { font-weight: 700; color: #ffffff; }
 .app-welcome-tagline {
   margin: 0.28rem 0 0;
   font-size: 0.92rem;
   line-height: 1.45;
   font-weight: 600;
-  color: var(--accent, #60a5fa);
+  color: #93c5fd;
   letter-spacing: 0.01em;
 }
 .app-admin-header-actions {
@@ -551,8 +551,9 @@
   border-color: rgba(96,165,250,0.8);
 }
 .app-btn-secondary {
-  background: rgba(255,255,255,0.03);
-  border-color: rgba(255,255,255,0.22);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: inherit;
 }
 .app-btn-ghost {
   background: transparent;
@@ -2523,6 +2524,111 @@ html.fs-app[data-app-theme="light"] #library-segmented-tabs.voice-segmented-tabs
 
   html.fs-app[data-app-theme="system"] #library-segmented-tabs.voice-segmented-tabs {
     background: rgba(255, 255, 255, 0.75);
+    border-color: rgba(15, 23, 42, 0.12);
+  }
+}
+
+/* ----- Light / system-light: visible outlines (cards, modals) + shell header controls ----- */
+html.fs-app[data-app-theme="light"] .app-site-top-in-shell .app-header-account-btn {
+  border-color: rgba(15, 23, 42, 0.28);
+  background: rgba(255, 255, 255, 0.95);
+  color: #1e293b;
+}
+html.fs-app[data-app-theme="light"] .app-site-top-in-shell .app-header-account-btn svg {
+  color: inherit;
+}
+html.fs-app[data-app-theme="light"] .app-site-top-in-shell .app-header-account-btn:hover {
+  border-color: #2563eb;
+  background: #ffffff;
+  color: #0f172a;
+}
+html.fs-app[data-app-theme="light"] .app-site-top-in-shell .app-playlist-timer-wrap {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(255, 255, 255, 0.9);
+  color: #1e3a8a;
+}
+html.fs-app[data-app-theme="light"] .app-site-top-in-shell .app-playlist-timer-label {
+  color: #1e3a8a;
+}
+html.fs-app[data-app-theme="light"] .app-site-top-in-shell .app-playlist-timer-clear {
+  background: rgba(15, 23, 42, 0.06);
+  color: #334155;
+}
+html.fs-app[data-app-theme="light"] .app-btn-secondary,
+html.fs-app[data-app-theme="light"] .app-modal .app-btn:not(.app-btn-primary):not(.app-btn-danger) {
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  background: rgba(15, 23, 42, 0.05);
+  color: var(--text, #0f172a);
+}
+html.fs-app[data-app-theme="light"] .app-btn-secondary:hover,
+html.fs-app[data-app-theme="light"] .app-modal .app-btn:not(.app-btn-primary):not(.app-btn-danger):hover {
+  border-color: rgba(37, 99, 235, 0.55);
+  background: rgba(37, 99, 235, 0.1);
+  color: var(--text, #0f172a);
+}
+html.fs-app[data-app-theme="light"] .account-subscription-plan-line.tier-free {
+  color: #475569;
+}
+html.fs-app[data-app-theme="light"] .account-subscription-plan-line.tier-starter {
+  color: #1d4ed8;
+}
+html.fs-app[data-app-theme="light"] .account-subscription-plan-line.tier-creator {
+  color: #b45309;
+}
+html.fs-app[data-app-theme="light"] .account-plans-panel {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+@media (prefers-color-scheme: light) {
+  html.fs-app[data-app-theme="system"] .app-site-top-in-shell .app-header-account-btn {
+    border-color: rgba(15, 23, 42, 0.28);
+    background: rgba(255, 255, 255, 0.95);
+    color: #1e293b;
+  }
+  html.fs-app[data-app-theme="system"] .app-site-top-in-shell .app-header-account-btn svg {
+    color: inherit;
+  }
+  html.fs-app[data-app-theme="system"] .app-site-top-in-shell .app-header-account-btn:hover {
+    border-color: #2563eb;
+    background: #ffffff;
+    color: #0f172a;
+  }
+  html.fs-app[data-app-theme="system"] .app-site-top-in-shell .app-playlist-timer-wrap {
+    border-color: rgba(37, 99, 235, 0.35);
+    background: rgba(255, 255, 255, 0.9);
+    color: #1e3a8a;
+  }
+  html.fs-app[data-app-theme="system"] .app-site-top-in-shell .app-playlist-timer-label {
+    color: #1e3a8a;
+  }
+  html.fs-app[data-app-theme="system"] .app-site-top-in-shell .app-playlist-timer-clear {
+    background: rgba(15, 23, 42, 0.06);
+    color: #334155;
+  }
+  html.fs-app[data-app-theme="system"] .app-btn-secondary,
+  html.fs-app[data-app-theme="system"] .app-modal .app-btn:not(.app-btn-primary):not(.app-btn-danger) {
+    border: 1px solid rgba(15, 23, 42, 0.2);
+    background: rgba(15, 23, 42, 0.05);
+    color: var(--text, #0f172a);
+  }
+  html.fs-app[data-app-theme="system"] .app-btn-secondary:hover,
+  html.fs-app[data-app-theme="system"] .app-modal .app-btn:not(.app-btn-primary):not(.app-btn-danger):hover {
+    border-color: rgba(37, 99, 235, 0.55);
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--text, #0f172a);
+  }
+  html.fs-app[data-app-theme="system"] .account-subscription-plan-line.tier-free {
+    color: #475569;
+  }
+  html.fs-app[data-app-theme="system"] .account-subscription-plan-line.tier-starter {
+    color: #1d4ed8;
+  }
+  html.fs-app[data-app-theme="system"] .account-subscription-plan-line.tier-creator {
+    color: #b45309;
+  }
+  html.fs-app[data-app-theme="system"] .account-plans-panel {
+    background: rgba(15, 23, 42, 0.05);
     border-color: rgba(15, 23, 42, 0.12);
   }
 }
