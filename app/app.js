@@ -1273,20 +1273,30 @@
       '      <button type="button" class="app-tab-btn" data-account-tab="preferences">Preferences</button>' +
       '      <button type="button" class="app-tab-btn" data-account-tab="privacy">Privacy & Support</button>' +
       "    </nav>" +
-      '    <div id="account-tab-settings" class="account-tab-panel">' +
-      '      <p class="app-muted" style="margin:0 0 0.65rem;">Signed in as <strong>' +
+      '    <div id="account-tab-settings" class="account-tab-panel account-tab-stack">' +
+      '      <section class="account-section-card" aria-labelledby="account-card-heading-identity">' +
+      '        <h4 class="account-section-card__title" id="account-card-heading-identity">Account</h4>' +
+      '        <p class="app-muted account-section-card__lede">Signed in as <strong>' +
       escapeHtml(email || "") +
       "</strong></p>" +
-      '      <p class="app-muted" style="margin:0 0 0.85rem;">Last login: <strong id="account-last-login">' +
+      '        <p class="app-muted account-section-card__lede">Last login: <strong id="account-last-login">' +
       escapeHtml(formatDateString(currentUser && currentUser.metadata && currentUser.metadata.lastSignInTime)) +
       "</strong></p>" +
-      '      <section class="account-pref-sync-summary account-subscription-section" style="margin-bottom:0.7rem;">' +
-      '        <div class="account-subscription-head">' +
+      '        <form id="account-form" class="app-form account-section-card__form">' +
+      '          <label for="account-display-name">Display name</label>' +
+      '          <input id="account-display-name" type="text" maxlength="80" value="' +
+      escapeHtml(displayName || "") +
+      '">' +
+      '          <button type="submit" class="app-btn app-btn-primary">Save display name</button>' +
+      "        </form>" +
+      "      </section>" +
+      '      <section class="account-section-card account-subscription-section">' +
+      '        <h4 class="account-section-card__title account-subscription-heading">' +
       '          <span class="account-subscription-crown" aria-hidden="true">' +
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294L11.562 3.266Z"/></svg>' +
       "          </span>" +
-      '          <strong class="account-subscription-title">Subscription</strong>' +
-      "        </div>" +
+      '          <span>Subscription</span>' +
+      "        </h4>" +
       '        <p class="account-subscription-plan-line tier-free" id="account-subscription-headline">Your plan: Free</p>' +
       '        <p class="app-muted account-subscription-desc" id="account-subscription-description">Limited features on the Free tier.</p>' +
       '        <p class="app-muted" style="margin:0.45rem 0 0;font-size:0.82rem;line-height:1.45;">iOS uses the App Store; <strong>web</strong> upgrades use Stripe Checkout (same Firebase account). Test card <code style="font-size:0.85em;">4242&nbsp;4242&nbsp;4242&nbsp;4242</code>.</p>' +
@@ -1302,44 +1312,44 @@
       '          <p class="app-muted" style="margin:0.55rem 0 0;font-size:0.78rem;line-height:1.45;">Live checkout needs the four <code>STRIPE_PRICE_*</code> env vars on your API function.</p>' +
       "        </div>" +
       "      </section>" +
-      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
-      '        <strong style="display:block;margin-bottom:0.3rem;">Devices & Sharing</strong>' +
-      '        <p class="app-muted" style="margin:0 0 0.5rem;">Device and sharing controls are available in iOS today. This web section mirrors your account counts.</p>' +
+      '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Devices &amp; sharing</h4>' +
+      '        <p class="app-muted account-section-card__text">Device and sharing controls are available in iOS today. This web section mirrors your account counts.</p>' +
       '        <button type="button" class="app-btn app-btn-secondary" id="account-manage-devices">Manage devices (iOS)</button>' +
       "      </section>" +
-      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
-      '        <strong style="display:block;margin-bottom:0.3rem;">Library & Storage</strong>' +
-      '        <p class="app-muted" style="margin:0 0 0.5rem;">Library counts below are account-linked. Refresh to re-read profile and script stats.</p>' +
-      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">' +
+      '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Library &amp; storage</h4>' +
+      '        <p class="app-muted account-section-card__text">Library counts below are account-linked. Refresh to re-read profile and script stats.</p>' +
+      '        <div class="account-section-card__btn-row">' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-library-stats">Refresh library stats</button>' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-sync-cloud">Sync status</button>' +
       "        </div>" +
       "      </section>" +
-      '      <section id="account-admin-tools-section" class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
-      '        <strong style="display:block;margin-bottom:0.3rem;">Admin tools</strong>' +
-      '        <p class="app-muted" style="margin:0 0 0.45rem;">Same idea as the iOS app: turn on only when publishing or editing App Library catalog data in Firestore. This browser remembers your choice.</p>' +
+      '      <section id="account-admin-tools-section" class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Admin tools</h4>' +
+      '        <p class="app-muted account-section-card__text">Same idea as the iOS app: turn on only when publishing or editing App Library catalog data in Firestore. This browser remembers your choice.</p>' +
       '        <label class="account-pref-row"><input type="checkbox" id="pref-admin-mode" /> Admin mode (catalog publish &amp; edit)</label>' +
       "      </section>" +
-      '      <div id="account-insights" class="account-insights-grid"></div>' +
-      '      <form id="account-form" class="app-form" style="margin-top:0.65rem;">' +
-      '        <label for="account-display-name">Display name</label>' +
-      '        <input id="account-display-name" type="text" maxlength="80" value="' +
-      escapeHtml(displayName || "") +
-      '">' +
-      '        <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">' +
-      '          <button type="submit" class="app-btn">Save display name</button>' +
+      '      <section class="account-section-card account-section-card--insights">' +
+      '        <h4 class="account-section-card__title">Usage &amp; statistics</h4>' +
+      '        <div id="account-insights" class="account-insights-grid"></div>' +
+      "      </section>" +
+      '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Session &amp; sign out</h4>' +
+      '        <p class="app-muted account-section-card__text">Password reset, refresh your login session, or sign out in this browser.</p>' +
+      '        <div class="account-section-card__btn-row">' +
       '          <button type="button" class="app-btn" id="account-password-reset">Send password reset email</button>' +
       '          <button type="button" class="app-btn" id="account-refresh-token">Refresh session</button>' +
       '          <button type="button" class="app-btn app-btn-danger" id="account-signout">Sign out</button>' +
       "        </div>" +
-      "      </form>" +
+      "      </section>" +
       '      <div id="account-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "    </div>" +
-      '    <div id="account-tab-preferences" class="account-tab-panel" hidden>' +
-      '      <p class="app-muted" style="margin:0 0 0.75rem;">These options apply in this browser only.</p>' +
-      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
-      '        <strong style="display:block;margin-bottom:0.3rem;">App Preferences</strong>' +
-      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
+      '    <div id="account-tab-preferences" class="account-tab-panel account-tab-stack" hidden>' +
+      '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">App preferences</h4>' +
+      '        <p class="app-muted account-section-card__text">These options apply in this browser only.</p>' +
+      '        <div class="account-section-card__btn-row">' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-voices">Default Voice</button>' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-backgrounds">Default Background</button>' +
       "        </div>" +
@@ -1350,41 +1360,44 @@
       '          <option value="library">Library tab</option>' +
       "        </select>" +
       "      </section>" +
-      '      <label class="account-pref-row"><input type="checkbox" id="pref-resume-last-screen" /> Remember my last workspace screen after sign-in</label>' +
-      '      <fieldset class="account-pref-fieldset">' +
-      '        <legend class="account-pref-legend">When you open Library, show</legend>' +
-      '        <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-my" value="my-library" /> My Library</label>' +
-      '        <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-app" value="app-library" /> App Library</label>' +
-      "      </fieldset>" +
+      '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Workspace</h4>' +
+      '        <label class="account-pref-row"><input type="checkbox" id="pref-resume-last-screen" /> Remember my last workspace screen after sign-in</label>' +
+      '        <fieldset class="account-pref-fieldset account-pref-fieldset--in-card">' +
+      '          <legend class="account-pref-legend">When you open Library, show</legend>' +
+      '          <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-my" value="my-library" /> My Library</label>' +
+      '          <label class="account-pref-row"><input type="radio" name="pref-library-sub" id="pref-library-sub-app" value="app-library" /> App Library</label>' +
+      "        </fieldset>" +
+      "      </section>" +
       "    </div>" +
-      '    <div id="account-tab-privacy" class="account-tab-panel" hidden>' +
+      '    <div id="account-tab-privacy" class="account-tab-panel account-tab-stack" hidden>' +
       '      <div id="account-privacy-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
-      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
-      '        <strong style="display:block;margin-bottom:0.3rem;">Security</strong>' +
-      '        <p class="app-muted" style="margin:0 0 0.5rem;">Web sign-in uses your email/password or Google. Biometric unlock is iOS-only today.</p>' +
-      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">' +
+      '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Security</h4>' +
+      '        <p class="app-muted account-section-card__text">Web sign-in uses your email/password or Google. Biometric unlock is iOS-only today.</p>' +
+      '        <div class="account-section-card__btn-row">' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-password-reset">Send password reset email</button>' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-refresh-session">Refresh session</button>' +
       "        </div>" +
       "      </section>" +
-      '      <section class="account-pref-sync-summary" style="margin-bottom:0.7rem;">' +
-      '        <strong style="display:block;margin-bottom:0.3rem;">Privacy & Data</strong>' +
-      '        <p class="app-muted" style="margin:0 0 0.5rem;">Your scripts, playlists, and generated audio live in your Firebase account. This browser may also store lightweight UI preferences locally.</p>' +
-      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;margin-bottom:0.45rem;">' +
+      '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Privacy &amp; data</h4>' +
+      '        <p class="app-muted account-section-card__text">Your scripts, playlists, and generated audio live in your Firebase account. This browser may also store lightweight UI preferences locally.</p>' +
+      '        <div class="account-section-card__btn-row">' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-export-json">Export my data (JSON)</button>' +
       '          <button type="button" class="app-btn app-btn-danger" id="account-privacy-delete-account">Delete account…</button>' +
       "        </div>" +
-      '        <p class="app-muted" style="margin:0 0 0.45rem;">You can delete your account from the web (server-side, same cloud cleanup as iOS). Local data on phones or tablets is cleared the next time that app syncs or you remove the app.</p>' +
-      '        <p style="margin:0;display:flex;gap:0.5rem;flex-wrap:wrap;">' +
+      '        <p class="app-muted account-section-card__text" style="margin-top:0.55rem;">You can delete your account from the web (server-side, same cloud cleanup as iOS). Local data on phones or tablets is cleared the next time that app syncs or you remove the app.</p>' +
+      '        <div class="account-section-card__btn-row">' +
       '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>' +
       '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>' +
-      "        </p>" +
+      "        </div>" +
       "      </section>" +
-      '      <section class="account-pref-sync-summary" style="margin-bottom:0.2rem;">' +
-      '        <strong style="display:block;margin-bottom:0.3rem;">About & Support</strong>' +
-      '        <p class="app-muted" style="margin:0 0 0.45rem;">Web workspace build. For app store reviews and device-specific help, use the iOS app.</p>' +
-      '        <p class="app-muted" style="margin:0 0 0.45rem;"><strong>Firebase JS:</strong> <span id="account-privacy-firebase-sdk">-</span></p>' +
-      '        <div style="display:flex;gap:0.45rem;flex-wrap:wrap;">' +
+      '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">About &amp; support</h4>' +
+      '        <p class="app-muted account-section-card__text">Web workspace build. For app store reviews and device-specific help, use the iOS app.</p>' +
+      '        <p class="app-muted account-section-card__text"><strong>Firebase JS:</strong> <span id="account-privacy-firebase-sdk">-</span></p>' +
+      '        <div class="account-section-card__btn-row">' +
       '          <a class="app-btn app-btn-secondary" href="mailto:support@focusshift.app">Contact support</a>' +
       "        </div>" +
       "      </section>" +

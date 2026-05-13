@@ -212,21 +212,72 @@
 .account-modal-close-x { min-width: 40px; padding: 0.35rem 0.5rem; font-size: 1.35rem; line-height: 1; }
 .account-modal-tabs { margin: 0 0 0.85rem; flex-wrap: wrap; }
 .account-tab-panel { margin-top: 0.25rem; }
-.account-subscription-section .account-subscription-head {
+.account-tab-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.account-section-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
+  padding: 0.88rem 0.95rem;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.22);
+}
+.account-section-card__title {
+  margin: 0 0 0.55rem;
+  font-size: 0.94rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #f1f5f9;
+}
+.account-section-card__text,
+.account-section-card__lede {
+  margin: 0 0 0.45rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.account-section-card__lede:last-of-type {
+  margin-bottom: 0.5rem;
+}
+.account-section-card .app-form.account-section-card__form {
+  margin: 0;
+  margin-top: 0.2rem;
+}
+.account-section-card .app-form.account-section-card__form input[type="text"] {
+  margin-bottom: 0.65rem;
+}
+.account-section-card__btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+.account-section-card .account-pref-row:first-of-type {
+  margin-top: 0.35rem;
+}
+.account-pref-fieldset--in-card {
+  margin-top: 0.65rem;
+  margin-bottom: 0;
+}
+.account-section-card--insights .account-insights-grid {
+  margin: 0;
+}
+.account-subscription-heading.account-section-card__title {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  margin-bottom: 0.15rem;
+  margin-bottom: 0.35rem;
+}
+.account-subscription-heading .account-subscription-crown {
+  flex-shrink: 0;
 }
 .account-subscription-crown {
   display: flex;
   color: #fbbf24;
   opacity: 0.95;
   flex-shrink: 0;
-}
-.account-subscription-title {
-  font-size: 0.95rem;
-  letter-spacing: 0.01em;
 }
 .account-subscription-plan-line {
   margin: 0.35rem 0 0.25rem;
