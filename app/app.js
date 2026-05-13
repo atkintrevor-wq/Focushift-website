@@ -1082,6 +1082,7 @@
   }
 
   function renderAdminShell(email, displayName) {
+    var welcomeName = resolvedWelcomeNickname(email);
     root.innerHTML =
       '<div class="app-admin-sticky-head">' +
       '<div id="admin-mode-banner" class="admin-mode-banner" role="status" hidden>' +
@@ -1091,23 +1092,16 @@
       '  <a class="site-top-skip" href="#admin-main-tabs">Skip to content</a>' +
       '  <div class="site-top-inner">' +
       '    <a class="site-top-home" href="/" aria-label="Focus Shift — marketing site home">' +
-      '      <img class="site-top-app-brand" src="../images/focus-shift-app-brand.png?v=7" alt="Focus Shift" width="1174" height="417" decoding="async" />' +
+      '      <img class="site-top-app-brand site-top-app-brand-shell" src="../images/focus-shift-app-brand.png?v=7" alt="Focus Shift" width="1174" height="417" decoding="async" />' +
       "    </a>" +
-      '    <div class="site-top-links">' +
-      '      <a href="/">Website</a>' +
-      '      <a href="/#why">Why it works</a>' +
-      '      <a href="/terms">Terms</a>' +
-      '      <a href="/privacy">Privacy</a>' +
-      "    </div>" +
       "  </div>" +
       "</nav>" +
       '<header class="app-admin-header">' +
       '  <div class="app-admin-header-main">' +
-      '    <p class="app-muted app-admin-tagline">Signed in as <strong>' +
-      escapeHtml(email || "") +
-      "</strong> · " +
-      escapeHtml(displayName || "no display name") +
-      "</p>" +
+      '    <p class="app-welcome-line">Welcome, <strong>' +
+      escapeHtml(welcomeName) +
+      "</strong></p>" +
+      '    <p class="app-welcome-tagline">Where Focus Becomes Power</p>' +
       "  </div>" +
       '  <div class="app-admin-header-actions">' +
       '    <div id="app-playlist-timer-wrap" class="app-playlist-timer-wrap" hidden title="Playlist sleep timer">' +
@@ -1123,7 +1117,6 @@
       "    </button>" +
       "  </div>" +
       "</header></div>" +
-      '<p class="app-muted app-admin-intro">Home, Library, Playlists, Voices, and Backgrounds — use the account button (top right) for settings and sign out.</p>' +
       '<div class="app-admin-tab-box">' +
       '  <nav id="admin-main-tabs" class="app-tabs app-admin-tab-box-nav" aria-label="Admin sections">' +
       '    <div class="app-admin-tab-lead">' +
@@ -4842,6 +4835,18 @@
     }
     if (currentUser && currentUser.displayName) return String(currentUser.displayName).trim();
     return "";
+  }
+
+  function resolvedWelcomeNickname(email) {
+    var n = resolveDisplayNameForScript("");
+    if (n) return n;
+    var e = (email || "").trim();
+    var at = e.indexOf("@");
+    if (at > 0) {
+      var local = e.slice(0, at).trim();
+      if (local) return local;
+    }
+    return e || "there";
   }
 
   function firstClarifyingQuestionLine(content) {
