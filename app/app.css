@@ -366,6 +366,119 @@
   cursor: pointer;
 }
 .account-pref-row input { width: 1rem; height: 1rem; accent-color: #2563eb; flex-shrink: 0; }
+
+/* Account modal only: iOS-style neutral gray grouped cards vs blue app shell */
+.app-modal.app-modal-account {
+  background: linear-gradient(180deg, #141922 0%, #0f131a 100%);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+.app-modal.app-modal-account .account-modal-head h3 {
+  color: #f8fafc;
+}
+.app-modal.app-modal-account .account-modal-tabs .app-tab-btn {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.88);
+  background: rgba(0, 0, 0, 0.15);
+}
+.app-modal.app-modal-account .account-modal-tabs .app-tab-btn:hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.app-modal.app-modal-account .account-modal-tabs .app-tab-btn.is-active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+}
+.app-modal.app-modal-account .account-section-card {
+  background: linear-gradient(180deg, #6f7680 0%, #5c626c 55%, #525860 100%);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.12) inset,
+    0 8px 24px rgba(0, 0, 0, 0.28);
+}
+.app-modal.app-modal-account .account-section-card__title {
+  color: #ffffff;
+}
+.app-modal.app-modal-account .account-section-card__text,
+.app-modal.app-modal-account .account-section-card__lede,
+.app-modal.app-modal-account .account-section-card .app-muted {
+  color: rgba(255, 255, 255, 0.9);
+}
+.app-modal.app-modal-account .account-section-card .app-muted strong {
+  color: #ffffff;
+}
+.app-modal.app-modal-account .account-section-card .account-pref-row {
+  color: rgba(255, 255, 255, 0.95);
+}
+.app-modal.app-modal-account .account-section-card .app-form.account-section-card__form label {
+  color: rgba(255, 255, 255, 0.78);
+}
+.app-modal.app-modal-account .account-section-card .app-form.account-section-card__form input[type="text"] {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.22);
+  box-shadow: none;
+}
+.app-modal.app-modal-account .account-section-card .app-form.account-section-card__form input[type="text"]:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25);
+}
+.app-modal.app-modal-account .account-section-card select.app-btn {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: rgba(15, 23, 42, 0.22) !important;
+}
+.app-modal.app-modal-account .account-pref-fieldset,
+.app-modal.app-modal-account .account-pref-fieldset--in-card {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.12);
+}
+.app-modal.app-modal-account .account-pref-legend {
+  color: #fff;
+}
+.app-modal.app-modal-account .account-plans-panel {
+  background: rgba(0, 0, 0, 0.2);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.app-modal.app-modal-account .account-subscription-plan-line {
+  color: #f8fafc;
+}
+.app-modal.app-modal-account .account-subscription-plan-line.tier-free {
+  color: #e2e8f0;
+}
+.app-modal.app-modal-account .account-subscription-plan-line.tier-starter {
+  color: #bfdbfe;
+}
+.app-modal.app-modal-account .account-subscription-plan-line.tier-creator {
+  color: #fef08a;
+}
+.app-modal.app-modal-account .account-subscription-desc {
+  color: rgba(255, 255, 255, 0.88);
+}
+.app-modal.app-modal-account .account-insight-card {
+  background: rgba(0, 0, 0, 0.18);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.app-modal.app-modal-account .account-insight-card h4 {
+  color: rgba(255, 255, 255, 0.95);
+}
+.app-modal.app-modal-account .account-kv-label {
+  color: rgba(255, 255, 255, 0.72);
+}
+.app-modal.app-modal-account .account-kv-value {
+  color: #ffffff;
+}
+.app-modal.app-modal-account #account-message.app-inline-msg {
+  border-radius: 12px;
+  padding: 0.55rem 0.65rem;
+}
+.app-modal.app-modal-account .account-modal-close-x {
+  color: rgba(255, 255, 255, 0.85);
+}
+.app-modal.app-modal-account .account-modal-close-x:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+}
 .playlist-timer-row {
   display: flex;
   flex-wrap: wrap;
