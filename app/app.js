@@ -50,6 +50,10 @@
   /** 0–1, applies to script / playlist / voice-adjust preview playback in this browser. */
   var PREF_PLAYBACK_VOLUME_KEY = "focusshiftWebPlaybackVolume";
   var adminModeEnabled = false;
+  /** Matches iOS `SubscriptionConfig.creatorOutgoingShareCap` (active outgoing share links). */
+  var CREATOR_OUTGOING_SHARE_CAP = 50;
+  /** Universal link base for share invites (`ShareLinkConstants` on iOS). */
+  var SHARE_UNIVERSAL_LINK_ORIGIN = "https://focusshift.app/s/";
 
   function readAppTheme() {
     try {
@@ -4948,6 +4952,125 @@
     return "free";
   }
 
+  function isWebCreatorTier() {
+    return resolvedSubscriptionTier() === "creator";
+  }
+
+  function makeShareInviteToken() {
+    var bytes = new Uint8Array(16);
+    var c = window.crypto || window.msCrypto;
+    if (!c || !c.getRandomValues) {
+      throw new Error("Secure random is not available in this browser.");
+    }
+    c.getRandomValues(bytes);
+    var bin = "";
+    for (var i = 0; i < bytes.length; i += 1) {
+      bin += String.fromCharCode(bytes[i]);
+    }
+    return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  }
+
+  /**
+   * Creator-only: writes `shareInvites/{token}` + `users/{uid}/outgoingShares/{token}` like iOS `AudioShareService`.
+   * Recipients open `https://focusshift.app/s/{token}` in the app (or web when claim UI exists).
+   */
+  function shareAudioFromScript(script) {
+    if (!currentUser || !currentUser.uid) {
+      setMessage("Sign in to share.", "error");
+      return;
+    }
+    if (!isWebCreatorTier()) {
+      setMessage("Sharing is available on the Creator plan.", "info");
+      return;
+    }
+    var uid = currentUser.uid;
+    var outgoingCol = db.collection("users").doc(uid).collection("outgoingShares");
+    outgoingCol
+      .get()
+      .then(function (snap) {
+        if (snap.size >= CREATOR_OUTGOING_SHARE_CAP) {
+          setMessage(
+            "You’ve reached the maximum number of active shares. Remove an old share in the iOS app (or deactivate one) and try again.",
+            "error"
+          );
+          return;
+        }
+        var shareAudio = (script.audioURL && String(script.audioURL).trim()) || "";
+        function proceedWithAudio(url) {
+          var u = (url || "").trim();
+          if (!u || u.toLowerCase().indexOf("http") !== 0) {
+            setMessage(
+              "No https audio link on this script yet. Generate audio (or wait for cloud sync), then try again — sharing uses the hosted URL listeners can play.",
+              "error"
+            );
+            return;
+          }
+          var token;
+          try {
+            token = makeShareInviteToken();
+          } catch (e) {
+            setMessage((e && e.message) || "Could not create share link.", "error");
+            return;
+          }
+          var creatorName = resolveDisplayNameForScript("") || "Someone";
+          var batch = db.batch();
+          var inviteRef = db.collection("shareInvites").doc(token);
+          var outRef = outgoingCol.doc(token);
+          batch.set(inviteRef, {
+            creatorUid: uid,
+            creatorDisplayName: creatorName,
+            scriptId: script.id,
+            title: script.title || "Shared audio",
+            text: script.text || "",
+            audioURL: u,
+            voiceID: script.voiceID || "",
+            backgroundID: script.backgroundID || "",
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            active: true,
+          });
+          batch.set(outRef, {
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            title: script.title || "",
+            scriptId: script.id,
+          });
+          batch
+            .commit()
+            .then(function () {
+              var link = SHARE_UNIVERSAL_LINK_ORIGIN + token;
+              if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+                return navigator.clipboard.writeText(link).then(function () {
+                  setMessage("Share link copied. Anyone with the link can add it in the Focus Shift app while signed in.", "success");
+                });
+              }
+              window.prompt("Copy this share link:", link);
+              setMessage("Share link created.", "success");
+              return Promise.resolve();
+            })
+            .catch(function (e) {
+              setMessage((e && e.message) || "Could not create share link.", "error");
+            });
+        }
+        if (shareAudio && shareAudio.toLowerCase().indexOf("http") === 0) {
+          proceedWithAudio(shareAudio);
+        } else {
+          scriptCollection(uid)
+            .doc(script.id)
+            .get()
+            .then(function (docSnap) {
+              var d = (docSnap.exists && docSnap.data()) || {};
+              var remote = (d.audioURL && String(d.audioURL).trim()) || "";
+              proceedWithAudio(remote || shareAudio);
+            })
+            .catch(function (e) {
+              setMessage((e && e.message) || "Could not read script audio.", "error");
+            });
+        }
+      })
+      .catch(function (e) {
+        setMessage((e && e.message) || "Could not check existing shares.", "error");
+      });
+  }
+
   function maxClarifyForWebTier(tier) {
     if (tier === "starter" || tier === "creator") return 3;
     return 0;
@@ -6121,6 +6244,7 @@
     }
     var genDisabled = isBusy || !genEnabled;
     var chevChar = controlsExpanded ? "▲" : "▼";
+    var showShareLink = controlsExpanded && hasAudio && isWebCreatorTier();
     var audioSection = controlsExpanded
       ? '<div class="script-card-audio-section">' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
@@ -6165,6 +6289,11 @@
         '"' +
         (!currentPlaylists.length ? " disabled" : "") +
         ">Add to Playlist</button>" +
+        (showShareLink
+          ? '  <button type="button" class="app-btn app-btn-secondary" data-action="share-audio" data-script-id="' +
+            escapeHtml(script.id) +
+            '" title="Creator: copy a link others can use in the Focus Shift app">Share link</button>'
+          : "") +
         '  <button type="button" class="app-btn app-btn-danger" data-action="delete" data-script-id="' +
         escapeHtml(script.id) +
         '">Delete</button>' +
@@ -6227,6 +6356,8 @@
           togglePlayScriptAudio(script);
         } else if (action === "add-to-playlist") {
           addScriptToPlaylistPrompt(script);
+        } else if (action === "share-audio") {
+          shareAudioFromScript(script);
         }
       });
     });
