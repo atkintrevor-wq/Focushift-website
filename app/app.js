@@ -6290,9 +6290,14 @@
         (!currentPlaylists.length ? " disabled" : "") +
         ">Add to Playlist</button>" +
         (showShareLink
-          ? '  <button type="button" class="app-btn app-btn-secondary" data-action="share-audio" data-script-id="' +
+          ? '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="share-audio" data-script-id="' +
             escapeHtml(script.id) +
-            '" title="Creator: copy a link others can use in the Focus Shift app">Share link</button>'
+            '" title="Creator: copy a link others can use in the Focus Shift app" aria-label="Share link">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+            '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>' +
+            '<polyline points="16 6 12 2 8 6"/>' +
+            '<line x1="12" y1="2" x2="12" y2="15"/>' +
+            "</svg></button>"
           : "") +
         '  <button type="button" class="app-btn app-btn-danger" data-action="delete" data-script-id="' +
         escapeHtml(script.id) +

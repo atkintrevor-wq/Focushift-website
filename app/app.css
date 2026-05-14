@@ -807,6 +807,13 @@
 }
 .app-card-text { white-space: pre-wrap; margin: 0; line-height: 1.52; }
 .app-card-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+.library-script-share-btn {
+  padding: 0.42rem 0.55rem;
+  line-height: 0;
+}
+.library-script-share-btn svg {
+  display: block;
+}
 .playlist-card-tappable:focus-visible {
   outline: 2px solid rgba(96, 165, 250, 0.85);
   outline-offset: 2px;
