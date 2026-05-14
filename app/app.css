@@ -814,6 +814,29 @@
 .library-script-share-btn svg {
   display: block;
 }
+.script-card-regen-hint {
+  margin: 0.5rem 0 0;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text, #e8edf7);
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 10px;
+}
+html.fs-app[data-app-theme="light"] .script-card-regen-hint {
+  color: #78350f;
+  background: rgba(254, 243, 199, 0.65);
+  border-color: rgba(217, 119, 6, 0.35);
+}
+
+@media (prefers-color-scheme: light) {
+  html.fs-app[data-app-theme="system"] .script-card-regen-hint {
+    color: #78350f;
+    background: rgba(254, 243, 199, 0.65);
+    border-color: rgba(217, 119, 6, 0.35);
+  }
+}
 .playlist-card-tappable:focus-visible {
   outline: 2px solid rgba(96, 165, 250, 0.85);
   outline-offset: 2px;

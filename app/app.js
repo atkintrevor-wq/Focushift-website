@@ -5908,6 +5908,14 @@
     }
   }
 
+  /** Hash of text|voice|background last used when audio was produced (Firestore), else localStorage fallback. */
+  function getEffectiveStoredContentHash(script) {
+    if (!script || !script.id) return "";
+    var fromDoc = (script.audioContentHash && String(script.audioContentHash).trim()) || "";
+    if (fromDoc) return fromDoc;
+    return getStoredGeneratedHash(script.id);
+  }
+
   function setStoredGeneratedHash(scriptId, hex) {
     try {
       if (!scriptId || !hex) return;
@@ -5918,9 +5926,16 @@
   function shouldEnableGenerateFromHash(script, contentHashHex) {
     var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
     if (!hasAudio) return true;
-    var stored = getStoredGeneratedHash(script.id);
+    var stored = getEffectiveStoredContentHash(script);
     if (!stored) return true;
     return stored !== contentHashHex;
+  }
+
+  /** True when existing audio was generated for a different text/voice/background than now selected. */
+  function scriptAudioSettingsDrifted(script, contentHashHex) {
+    if (!script || !(script.audioURL && String(script.audioURL).trim())) return false;
+    var stored = getEffectiveStoredContentHash(script);
+    return !!stored && stored !== contentHashHex;
   }
 
   function getStoredGeneratedHashPremade(premadeId) {
@@ -6245,6 +6260,19 @@
     var genDisabled = isBusy || !genEnabled;
     var chevChar = controlsExpanded ? "▲" : "▼";
     var showShareLink = controlsExpanded && hasAudio && isWebCreatorTier();
+    var drift = scriptAudioSettingsDrifted(script, contentHashHex);
+    var genTitle = "";
+    if (!isBusy) {
+      if (!genEnabled && hasAudio) {
+        genTitle = "Audio already matches this script text, voice, and background.";
+      } else if (genEnabled && hasAudio && getEffectiveStoredContentHash(script)) {
+        genTitle =
+          "Script text, voice, or background changed since this audio was generated. Tap to regenerate with your current settings.";
+      }
+    }
+    var regenHintHtml = drift
+      ? '<div class="script-card-regen-hint" role="status">Your script text, voice, or background changed since this audio was generated. Open audio controls and tap <strong>Regenerate</strong> to refresh the file.</div>'
+      : "";
     var audioSection = controlsExpanded
       ? '<div class="script-card-audio-section">' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
@@ -6271,6 +6299,7 @@
         escapeHtml(script.id) +
         '"' +
         (genDisabled ? " disabled" : "") +
+        (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
         ">" +
         genLabel +
         "</button>" +
@@ -6329,6 +6358,7 @@
       "</div>" +
       '<span class="app-chip">My Library</span>' +
       "</div>" +
+      regenHintHtml +
       (isExpanded ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>" : "") +
       audioSection +
       "</article>"
@@ -6392,7 +6422,21 @@
         { merge: true }
       )
       .then(function () {
-        setMessage("Script audio settings updated.", "success");
+        var hadAudio = false;
+        if (scriptId && currentScripts && currentScripts.length) {
+          var sc = currentScripts.find(function (x) {
+            return x.id === scriptId;
+          });
+          hadAudio = !!(sc && sc.audioURL && String(sc.audioURL).trim());
+        }
+        if (hadAudio && (patch.voiceID || patch.backgroundID)) {
+          setMessage(
+            "Voice or background updated. Expand the card and tap Regenerate when you want new audio for this script.",
+            "success"
+          );
+        } else {
+          setMessage("Script audio settings updated.", "success");
+        }
       })
       .catch(function (e) {
         setMessage(e.message || "Could not update script settings.", "error");
@@ -7129,6 +7173,7 @@
                   updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                   voiceID: vId,
                   backgroundID: bId,
+                  audioContentHash: digest,
                 },
                 { merge: true }
               )
@@ -7189,6 +7234,8 @@
             backgroundID: bId,
           }).then(function (digest) {
             setStoredGeneratedHash(docRef.id, digest);
+            return docRef.set({ audioContentHash: digest }, { merge: true });
+          }).then(function () {
             setMessage('Imported "' + newScript.title + '" to My Library.', "success");
             closeLibraryCreateMenu();
           });
@@ -8359,7 +8406,21 @@
         categoryID: premade.categoryID || "",
       })
       .then(function () {
-        setPremadeMessage('Saved "' + title + '" to My Library.', "success");
+        var audio = (premade.audioURL || "").trim();
+        if (!audio) {
+          setPremadeMessage('Saved "' + title + '" to My Library.', "success");
+          return;
+        }
+        return scriptContentSha256Hex({
+          text: premade.scriptText || "",
+          voiceID: voiceID,
+          backgroundID: backgroundID,
+        }).then(function (digest) {
+          setStoredGeneratedHash(docRef.id, digest);
+          return scriptCollection(currentUser.uid).doc(docRef.id).set({ audioContentHash: digest }, { merge: true });
+        }).then(function () {
+          setPremadeMessage('Saved "' + title + '" to My Library.', "success");
+        });
       })
       .catch(function (e) {
         setPremadeMessage(e.message || "Could not save premade script.", "error");
@@ -8390,19 +8451,36 @@
         categoryID: premade.categoryID || "",
       })
       .then(function () {
-        var savedScript = {
-          id: docRef.id,
-          title: tempTitle,
-          text: s.text,
-          audioURL: s.audioURL || "",
+        var audioUrl = (s.audioURL || "").trim();
+        function openPickerForSaved() {
+          var savedScript = {
+            id: docRef.id,
+            title: tempTitle,
+            text: s.text,
+            audioURL: s.audioURL || "",
+            voiceID: voiceID,
+            backgroundID: backgroundID,
+          };
+          openPlaylistPicker(savedScript, function (playlist) {
+            setPremadeMessage(
+              'Saved "' + tempTitle + '" and added to "' + playlist.name + '".',
+              "success"
+            );
+          });
+        }
+        if (!audioUrl) {
+          openPickerForSaved();
+          return;
+        }
+        return scriptContentSha256Hex({
+          text: s.text || "",
           voiceID: voiceID,
           backgroundID: backgroundID,
-        };
-        openPlaylistPicker(savedScript, function (playlist) {
-          setPremadeMessage(
-            'Saved "' + tempTitle + '" and added to "' + playlist.name + '".',
-            "success"
-          );
+        }).then(function (digest) {
+          setStoredGeneratedHash(docRef.id, digest);
+          return scriptCollection(currentUser.uid).doc(docRef.id).set({ audioContentHash: digest }, { merge: true });
+        }).then(function () {
+          openPickerForSaved();
         });
       })
       .catch(function (e) {
@@ -8696,7 +8774,13 @@
               categoryID: data.categoryID || "",
               createdAt: data.createdAt || null,
               updatedAt: data.updatedAt || null,
+              audioContentHash: (data.audioContentHash && String(data.audioContentHash).trim()) || "",
             };
+          });
+          scripts.forEach(function (s) {
+            if (s.audioContentHash && getStoredGeneratedHash(s.id) !== s.audioContentHash) {
+              setStoredGeneratedHash(s.id, s.audioContentHash);
+            }
           });
           currentScripts = scripts;
           updateTabCounts();
