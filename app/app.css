@@ -279,6 +279,40 @@
   align-items: center;
   margin-top: 0.25rem;
 }
+.account-default-picker-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 0.55rem;
+  padding: 0.55rem 0.62rem;
+  border-radius: 12px;
+  border: 1px solid var(--app-surface-card-border);
+  background: var(--app-modal-row-bg, rgba(255, 255, 255, 0.04));
+}
+.account-default-picker-row:first-of-type {
+  margin-top: 0.35rem;
+}
+.account-default-picker-meta {
+  flex: 1;
+  min-width: 160px;
+}
+.account-default-picker-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #94a3b8);
+  margin-bottom: 0.22rem;
+}
+.account-default-picker-value {
+  font-size: 0.92rem;
+  line-height: 1.38;
+  font-weight: 600;
+  color: var(--text, #f1f5f9);
+  word-break: break-word;
+}
 .account-section-card .account-pref-row:first-of-type {
   margin-top: 0.35rem;
 }

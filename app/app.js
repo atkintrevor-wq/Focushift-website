@@ -1619,12 +1619,26 @@
       "    </div>" +
       '    <div id="account-tab-preferences" class="account-tab-panel account-tab-stack" hidden>' +
       '      <section class="account-section-card">' +
+      '        <h4 class="account-section-card__title">Listening defaults</h4>' +
+      '        <p class="app-muted account-section-card__text">Used for new scripts and when a script has no voice or background selected. Saved to your account (same idea as iOS).</p>' +
+      '        <div class="account-default-picker-row">' +
+      '          <div class="account-default-picker-meta">' +
+      '            <div class="account-default-picker-label">Default voice</div>' +
+      '            <div id="account-pref-default-voice-display" class="account-default-picker-value">\u2014</div>' +
+      "          </div>" +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-pick-default-voice">Choose\u2026</button>' +
+      "        </div>" +
+      '        <div class="account-default-picker-row">' +
+      '          <div class="account-default-picker-meta">' +
+      '            <div class="account-default-picker-label">Default background audio</div>' +
+      '            <div id="account-pref-default-background-display" class="account-default-picker-value">\u2014</div>' +
+      "          </div>" +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-pick-default-background">Choose\u2026</button>' +
+      "        </div>" +
+      "      </section>" +
+      '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">App preferences</h4>' +
       '        <p class="app-muted account-section-card__text">These options apply in this browser only.</p>' +
-      '        <div class="account-section-card__btn-row">' +
-      '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-voices">Default Voice</button>' +
-      '          <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-backgrounds">Default Background</button>' +
-      "        </div>" +
       '        <label class="account-pref-row"><input type="checkbox" id="pref-auto-play-next" /> Auto-Play Next</label>' +
       '        <label class="account-pref-row" for="pref-listen-shortcut">Listen today shortcut</label>' +
       '        <select id="pref-listen-shortcut" class="app-btn" style="width:100%;text-align:left;margin-top:0.15rem;">' +
@@ -2226,24 +2240,18 @@
         renderLibrarySubtab();
       }
     });
+    document.getElementById("account-pref-pick-default-voice").addEventListener("click", function () {
+      openMediaPicker({ kind: "account-default", field: "voice" });
+    });
+    document.getElementById("account-pref-pick-default-background").addEventListener("click", function () {
+      openMediaPicker({ kind: "account-default", field: "background" });
+    });
     var prefAdminMode = document.getElementById("pref-admin-mode");
     if (prefAdminMode) {
       prefAdminMode.addEventListener("change", function () {
         writeAdminModeEnabled(!!prefAdminMode.checked);
       });
     }
-    document.getElementById("account-pref-open-voices").addEventListener("click", function () {
-      closeAccountModal();
-      setAdminTab("voices");
-      setVoicesMessage("Set your default voice here. This syncs across devices.", "");
-      renderVoices();
-    });
-    document.getElementById("account-pref-open-backgrounds").addEventListener("click", function () {
-      closeAccountModal();
-      setAdminTab("audio");
-      setBackgroundsMessage("Set your default background here. Imports are stored only on this device; the default choice syncs.", "");
-      renderBackgrounds();
-    });
     document.getElementById("btn-app-playlist-timer-clear").addEventListener("click", function () {
       clearPlaylistTimer();
       setPlaylistsMessage("Playlist timer cleared.", "success");
@@ -2848,6 +2856,14 @@
       thDark.checked = theme === "dark";
       thLight.checked = theme === "light";
     }
+    syncAccountDefaultMediaLabels();
+  }
+
+  function syncAccountDefaultMediaLabels() {
+    var vEl = document.getElementById("account-pref-default-voice-display");
+    var bEl = document.getElementById("account-pref-default-background-display");
+    if (vEl) vEl.textContent = voiceNameById(selectedVoiceId);
+    if (bEl) bEl.textContent = backgroundNameById(selectedBackgroundId);
   }
 
   function setAccountModalTab(tab) {
@@ -2860,6 +2876,7 @@
     document.querySelectorAll("[data-account-tab]").forEach(function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-account-tab") === chosen);
     });
+    if (chosen === "preferences") syncAccountDefaultMediaLabels();
   }
 
   function readPrefAutoPlay() {
@@ -7408,7 +7425,7 @@
         : (script.backgroundID || "").trim() || selectedBackgroundId;
       title.textContent = isVoice ? "Select Voice" : "Select Background";
       subtitle.textContent = script.title || "Script";
-    } else {
+    } else if (mediaPickerTarget.kind === "premade") {
       var premade = currentPremade.find(function (p) {
         return p.id === mediaPickerTarget.id;
       });
@@ -7418,6 +7435,13 @@
         : premadeBackgroundOverrideById[premade.id] || selectedBackgroundId;
       title.textContent = isVoice ? "Select Voice Override" : "Select Background Override";
       subtitle.textContent = premade.title || "Premade";
+    } else if (mediaPickerTarget.kind === "account-default") {
+      currentValue = isVoice ? selectedVoiceId : selectedBackgroundId;
+      title.textContent = isVoice ? "Default Voice" : "Default Background";
+      subtitle.textContent =
+        "Saved to your account — used for new scripts and when a script has no voice or background set.";
+    } else {
+      return;
     }
 
   function recommendedOptionIDs(kind, categoryID, voiceOptions) {
@@ -7452,7 +7476,7 @@
         return s.id === mediaPickerTarget.id;
       });
       activeCategoryID = categoryScript && categoryScript.categoryID ? categoryScript.categoryID : null;
-    } else {
+    } else if (mediaPickerTarget.kind === "premade") {
       var categoryPremade = currentPremade.find(function (p) {
         return p.id === mediaPickerTarget.id;
       });
@@ -7566,12 +7590,37 @@
         btn.addEventListener("click", function () {
           var selectedID = btn.getAttribute("data-media-option");
           if (!selectedID || !mediaPickerTarget) return;
+          if (mediaPickerTarget.kind === "account-default") {
+            var accField = mediaPickerTarget.field;
+            if (accField === "voice") {
+              selectedVoiceId = selectedID;
+            } else {
+              selectedBackgroundId = selectedID;
+            }
+            saveUserDefaults()
+              .then(function () {
+                syncAccountDefaultMediaLabels();
+                renderVoices();
+                renderAudioPage();
+                renderScripts(currentScripts);
+                setAccountMessage(
+                  accField === "voice" ? "Default voice saved." : "Default background saved.",
+                  "success"
+                );
+              })
+              .catch(function (e) {
+                setAccountMessage(e.message || "Could not save defaults.", "error");
+              });
+            closeMediaPicker();
+            return;
+          }
           if (mediaPickerTarget.kind === "script") {
             var patch = mediaPickerTarget.field === "voice" ? { voiceID: selectedID } : { backgroundID: selectedID };
             updateScriptMediaSettings(mediaPickerTarget.id, patch);
             closeMediaPicker();
             return;
           }
+          if (mediaPickerTarget.kind !== "premade") return;
           if (mediaPickerTarget.field === "voice") {
             premadeVoiceOverrideById[mediaPickerTarget.id] = selectedID;
           } else {
