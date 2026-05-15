@@ -837,6 +837,120 @@ html.fs-app[data-app-theme="light"] .script-card-regen-hint {
     border-color: rgba(217, 119, 6, 0.35);
   }
 }
+
+/* My Library: generation progress (non-blocking; matches iOS inline overlay idea) */
+.audio-generation-overlay {
+  position: fixed;
+  bottom: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12000;
+  max-width: min(22rem, calc(100vw - 2rem));
+  pointer-events: auto;
+}
+.audio-generation-overlay[hidden] {
+  display: none !important;
+}
+.audio-generation-overlay-card {
+  padding: 0.85rem 1rem 0.95rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.94);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  color: #e8edf7;
+}
+html.fs-app[data-app-theme="light"] .audio-generation-overlay-card {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: #0f172a;
+  box-shadow: 0 12px 36px rgba(15, 23, 42, 0.12);
+}
+.audio-generation-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.audio-generation-overlay-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.audio-generation-overlay-dismiss {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.audio-generation-overlay-dismiss:hover {
+  opacity: 1;
+}
+.audio-generation-overlay-detail {
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  opacity: 0.92;
+}
+.audio-generation-overlay-script {
+  margin: 0 0 0.25rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  opacity: 0.95;
+}
+.audio-generation-overlay-elapsed {
+  margin: 0;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(148, 196, 255, 0.95);
+}
+html.fs-app[data-app-theme="light"] .audio-generation-overlay-elapsed {
+  color: #0369a1;
+}
+
+.script-card-sync-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+}
+.script-card-sync-refresh {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  color: inherit;
+  border-radius: 8px;
+  width: 1.85rem;
+  height: 1.85rem;
+  padding: 0;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.script-card-sync-refresh:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(100, 116, 139, 0.45);
+}
+.script-card-sync-ok {
+  color: #4ade80;
+  font-weight: 600;
+}
+.script-card-sync-busy {
+  color: #fbbf24;
+  font-weight: 600;
+}
+.script-card-sync-muted {
+  color: var(--muted, #8b9bb4);
+}
+
 .playlist-card-tappable:focus-visible {
   outline: 2px solid rgba(96, 165, 250, 0.85);
   outline-offset: 2px;

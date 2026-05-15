@@ -20,6 +20,9 @@
   var isEditing = false;
   var editingScriptId = null;
   var generatingAudioByScriptId = {};
+  /** 1s timer for bottom generation overlay (My Library + premade). */
+  var generationOverlayTimerId = null;
+  var generationOverlayStartedAt = 0;
   var activeAudio = null;
   var activeAudioScriptId = null;
   var activeAudioTitle = "";
@@ -1185,6 +1188,17 @@
       '  <input id="script-import-audio-input" type="file" accept="audio/*" style="display:none" />' +
       '  <div id="library-sub-my">' +
       '<div id="scripts-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '<div id="audio-generation-overlay" class="audio-generation-overlay" hidden aria-hidden="true">' +
+      '  <div class="audio-generation-overlay-card" role="status">' +
+      '    <div class="audio-generation-overlay-header">' +
+      '      <span class="audio-generation-overlay-title">Generating audio</span>' +
+      '      <button type="button" class="audio-generation-overlay-dismiss" id="audio-generation-overlay-dismiss" aria-label="Hide panel (generation continues)">\u00d7</button>' +
+      "    </div>" +
+      '    <p class="audio-generation-overlay-detail">This can take up to 3 minutes. You can keep using the app while we work.</p>' +
+      '    <p id="audio-generation-overlay-script" class="audio-generation-overlay-script"></p>' +
+      '    <p id="audio-generation-overlay-elapsed" class="audio-generation-overlay-elapsed">Elapsed: 0:00</p>' +
+      "  </div>" +
+      "</div>" +
       '<div id="premade-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '<div id="script-editor"></div>' +
       '<section aria-label="My Library scripts">' +
@@ -1760,6 +1774,16 @@
       ev.target.value = "";
       if (f) importScriptAudioFromFile(f);
     });
+    var genOverlayDismiss = document.getElementById("audio-generation-overlay-dismiss");
+    if (genOverlayDismiss) {
+      genOverlayDismiss.addEventListener("click", function () {
+        var overlay = document.getElementById("audio-generation-overlay");
+        if (overlay) {
+          overlay.hidden = true;
+          overlay.setAttribute("aria-hidden", "true");
+        }
+      });
+    }
     document.getElementById("library-expand-all-toggle").addEventListener("click", function () {
       if (activeLibraryTab !== "my-library") return;
       toggleExpandAllLibraryAudioControls();
@@ -6236,6 +6260,92 @@
     return generatingAudioByScriptId[premadeBusyKey(premadeId)] === true;
   }
 
+  function formatGenerationElapsed(totalSeconds) {
+    var m = Math.floor(totalSeconds / 60);
+    var s = totalSeconds % 60;
+    return m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  function updateGenerationOverlayElapsed() {
+    var el = document.getElementById("audio-generation-overlay-elapsed");
+    if (!el || !generationOverlayStartedAt) return;
+    var secs = Math.max(0, Math.floor((Date.now() - generationOverlayStartedAt) / 1000));
+    el.textContent = "Elapsed: " + formatGenerationElapsed(secs);
+  }
+
+  function showAudioGenerationOverlay(displayTitle) {
+    generationOverlayStartedAt = Date.now();
+    var overlay = document.getElementById("audio-generation-overlay");
+    var titleEl = document.getElementById("audio-generation-overlay-script");
+    if (titleEl) {
+      var t = (displayTitle && String(displayTitle).trim()) || "";
+      titleEl.textContent = t ? "\u201c" + t + "\u201d" : "";
+    }
+    if (overlay) {
+      overlay.hidden = false;
+      overlay.setAttribute("aria-hidden", "false");
+    }
+    updateGenerationOverlayElapsed();
+    if (generationOverlayTimerId) clearInterval(generationOverlayTimerId);
+    generationOverlayTimerId = setInterval(updateGenerationOverlayElapsed, 1000);
+  }
+
+  function stopAudioGenerationOverlay() {
+    if (generationOverlayTimerId) {
+      clearInterval(generationOverlayTimerId);
+      generationOverlayTimerId = null;
+    }
+    generationOverlayStartedAt = 0;
+    var overlay = document.getElementById("audio-generation-overlay");
+    if (overlay) {
+      overlay.hidden = true;
+      overlay.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function refreshOneScriptFromCloud(scriptId) {
+    if (!currentUser || !scriptId) return;
+    scriptCollection(currentUser.uid)
+      .doc(scriptId)
+      .get()
+      .then(function (snap) {
+        if (!snap.exists) {
+          setMessage("Script not found in the cloud.", "error");
+          return;
+        }
+        var data = snap.data() || {};
+        var idx = currentScripts.findIndex(function (s) {
+          return s.id === scriptId;
+        });
+        if (idx < 0) return;
+        var cur = currentScripts[idx];
+        currentScripts[idx] = {
+          id: cur.id,
+          title: data.title != null ? data.title : cur.title,
+          text: data.text != null ? data.text : cur.text,
+          audioURL: data.audioURL != null ? data.audioURL : cur.audioURL || "",
+          voiceID: data.voiceID != null ? data.voiceID : cur.voiceID || "",
+          backgroundID: data.backgroundID != null ? data.backgroundID : cur.backgroundID || "",
+          categoryID: data.categoryID != null ? data.categoryID : cur.categoryID || "",
+          createdAt: data.createdAt != null ? data.createdAt : cur.createdAt,
+          updatedAt: data.updatedAt != null ? data.updatedAt : cur.updatedAt,
+          audioContentHash:
+            data.audioContentHash != null && String(data.audioContentHash).trim()
+              ? String(data.audioContentHash).trim()
+              : cur.audioContentHash || "",
+          audioCreatedAt: data.audioCreatedAt != null ? data.audioCreatedAt : cur.audioCreatedAt || null,
+        };
+        if (currentScripts[idx].audioContentHash && getStoredGeneratedHash(scriptId) !== currentScripts[idx].audioContentHash) {
+          setStoredGeneratedHash(scriptId, currentScripts[idx].audioContentHash);
+        }
+        renderScripts(currentScripts);
+        setMessage("Script refreshed from the cloud.", "");
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Could not refresh script.", "error");
+      });
+  }
+
   function scriptCardHtml(script, contentHashHex) {
     var plainText = script.text && script.text.trim() ? script.text : "(No text yet)";
     var isExpanded = expandedScriptTextById[script.id] === true;
@@ -6246,7 +6356,7 @@
     var scriptBackgroundID = effectiveBackgroundIdForScript(script);
     var controlsExpanded = controlsExpandedForScript(script.id);
     var genEnabled = shouldEnableGenerateFromHash(script, contentHashHex);
-    var genLabel = isBusy ? "Generating audio..." : hasAudio ? "Regenerate" : "Generate";
+    var genLabel = isBusy ? "Generating audio..." : "Generate";
     var genClasses = "app-btn";
     if (isBusy) {
       genClasses += " app-btn-secondary";
@@ -6267,12 +6377,27 @@
         genTitle = "Audio already matches this script text, voice, and background.";
       } else if (genEnabled && hasAudio && getEffectiveStoredContentHash(script)) {
         genTitle =
-          "Script text, voice, or background changed since this audio was generated. Tap to regenerate with your current settings.";
+          "Script text, voice, or background changed since this audio was generated. Tap Generate to refresh the file with your current settings.";
       }
     }
     var regenHintHtml = drift
-      ? '<div class="script-card-regen-hint" role="status">Your script text, voice, or background changed since this audio was generated. Open audio controls and tap <strong>Regenerate</strong> to refresh the file.</div>'
+      ? '<div class="script-card-regen-hint" role="status">Your script text, voice, or background changed since this audio was generated. Open audio controls and tap <strong>Generate</strong> to refresh the file.</div>'
       : "";
+    var audioUrlStr = script.audioURL && String(script.audioURL).trim();
+    var hostedAudio = !!(audioUrlStr && /^https?:\/\//i.test(audioUrlStr));
+    var syncStatusHtml =
+      '<div class="script-card-sync-row">' +
+      '  <button type="button" class="script-card-sync-refresh" data-action="refresh-script" data-script-id="' +
+      escapeHtml(script.id) +
+      '" title="Reload this script from the cloud" aria-label="Refresh from cloud">\u21bb</button>' +
+      (isBusy
+        ? '<span class="script-card-sync-busy">Generating\u2026</span>'
+        : hasAudio && hostedAudio
+          ? '<span class="script-card-sync-ok"><span aria-hidden="true">\u2713</span> Synced with cloud</span>'
+          : hasAudio
+            ? '<span class="script-card-sync-muted">Audio on this device only</span>'
+            : '<span class="script-card-sync-muted">No audio yet</span>') +
+      "</div>";
     var audioSection = controlsExpanded
       ? '<div class="script-card-audio-section">' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
@@ -6358,6 +6483,7 @@
       "</div>" +
       '<span class="app-chip">My Library</span>' +
       "</div>" +
+      syncStatusHtml +
       regenHintHtml +
       (isExpanded ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>" : "") +
       audioSection +
@@ -6393,6 +6519,8 @@
           addScriptToPlaylistPrompt(script);
         } else if (action === "share-audio") {
           shareAudioFromScript(script);
+        } else if (action === "refresh-script") {
+          refreshOneScriptFromCloud(script.id);
         }
       });
     });
@@ -6431,7 +6559,7 @@
         }
         if (hadAudio && (patch.voiceID || patch.backgroundID)) {
           setMessage(
-            "Voice or background updated. Expand the card and tap Regenerate when you want new audio for this script.",
+            "Voice or background updated. Expand the card and tap Generate when you want new audio for this script.",
             "success"
           );
         } else {
@@ -7129,7 +7257,8 @@
         return;
       }
       setScriptBusy(script.id, true);
-      setMessage('Submitting audio job for "' + script.title + '"...', "");
+      showAudioGenerationOverlay(script.title || "Untitled Script");
+      setMessage("", "");
 
       currentUser
         .getIdToken(true)
@@ -7188,6 +7317,7 @@
         })
         .finally(function () {
           setScriptBusy(script.id, false);
+          stopAudioGenerationOverlay();
         });
     }).catch(function (e) {
       setMessage((e && e.message) || "Could not verify script state.", "error");
@@ -7268,7 +7398,8 @@
         return;
       }
       setPremadeBusy(premade.id, true);
-      setPremadeMessage('Submitting audio job for "' + (premade.title || "Premade") + '"...', "");
+      showAudioGenerationOverlay(premade.title || "App Library");
+      setPremadeMessage("", "");
 
       currentUser
         .getIdToken(true)
@@ -7330,6 +7461,7 @@
         })
         .finally(function () {
           setPremadeBusy(premade.id, false);
+          stopAudioGenerationOverlay();
         });
     }).catch(function (e) {
       setPremadeMessage((e && e.message) || "Could not verify premade state.", "error");
@@ -8497,7 +8629,7 @@
     var isBusy = isPremadeBusy(p.id);
     var canGen = !!(p.scriptText && String(p.scriptText).trim());
     var genEnabled = canGen && shouldEnableGeneratePremadeFromHash(p, contentHashHex);
-    var genLabel = isBusy ? "Generating audio..." : hasAudio ? "Regenerate" : "Generate";
+    var genLabel = isBusy ? "Generating audio..." : "Generate";
     var genClasses = "app-btn";
     if (isBusy) {
       genClasses += " app-btn-secondary";
@@ -8774,6 +8906,7 @@
               categoryID: data.categoryID || "",
               createdAt: data.createdAt || null,
               updatedAt: data.updatedAt || null,
+              audioCreatedAt: data.audioCreatedAt || null,
               audioContentHash: (data.audioContentHash && String(data.audioContentHash).trim()) || "",
             };
           });
