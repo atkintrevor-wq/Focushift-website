@@ -1185,6 +1185,9 @@
       "      </div>" +
       '      <button type="button" class="library-chevron-btn" id="library-expand-all-toggle" aria-label="Expand or collapse audio controls on all cards">▼</button>' +
       "    </div>" +
+      '    <div class="library-toolbar-actions" id="library-app-only-toolbar" style="display:none">' +
+      '      <button type="button" class="library-chevron-btn" id="premade-expand-all-audio" aria-label="Expand or collapse audio controls on all premade cards">▼</button>' +
+      "    </div>" +
       "  </div>" +
       '  <input id="script-import-audio-input" type="file" accept="audio/*" style="display:none" />' +
       '  <div id="library-sub-my">' +
@@ -1212,7 +1215,6 @@
       '  <div class="app-section-title-row premade-app-toolbar">' +
       "    <h2>App Library</h2>" +
       '    <div class="premade-app-toolbar-actions">' +
-      '      <button type="button" class="library-chevron-btn" id="premade-expand-all-audio" aria-label="Expand or collapse audio controls on all premade cards">▼</button>' +
       '      <button type="button" class="app-btn" id="btn-open-publish-premade">Publish from My Library</button>' +
       "    </div>" +
       "  </div>" +
@@ -2145,11 +2147,24 @@
         renderVoices();
       });
     });
+    if (window.ResizeObserver) {
+      var adminHead = document.querySelector(".app-admin-sticky-head");
+      if (adminHead) {
+        var headRo = new ResizeObserver(function () {
+          syncLibraryToolbarStickyOffset();
+        });
+        headRo.observe(adminHead);
+      }
+    }
     window.onresize = function () {
       syncVoiceSegmentedPill();
       syncLibrarySegmentedPill();
       updatePremadeExpandAllToggleUi();
+      syncLibraryToolbarStickyOffset();
     };
+    requestAnimationFrame(function () {
+      requestAnimationFrame(syncLibraryToolbarStickyOffset);
+    });
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
       setVoicesMessage("Choose a clear voice audio file to upload.", "");
       beginVoiceUploadFlow("clone");
@@ -2668,6 +2683,11 @@
     if (activeAdminTab === "playlists") {
       updatePlaylistSectionVisibility();
     }
+    if (activeAdminTab === "library") {
+      requestAnimationFrame(function () {
+        syncLibraryToolbarStickyOffset();
+      });
+    }
   }
 
   function closeLibraryCreateMenu() {
@@ -2686,21 +2706,34 @@
     trig.setAttribute("aria-expanded", willOpen ? "true" : "false");
   }
 
+  function syncLibraryToolbarStickyOffset() {
+    var head = document.querySelector(".app-admin-sticky-head");
+    if (!head) return;
+    var h = head.getBoundingClientRect().height;
+    if (!isFinite(h) || h <= 0) return;
+    document.documentElement.style.setProperty("--app-library-toolbar-top", Math.ceil(h) + "px");
+  }
+
   function renderLibrarySubtab() {
     var myBtn = document.getElementById("library-tab-my");
     var appBtn = document.getElementById("library-tab-app");
     var mySection = document.getElementById("library-sub-my");
     var appSection = document.getElementById("library-sub-app");
     var myTools = document.getElementById("library-my-only-toolbar");
+    var appTools = document.getElementById("library-app-only-toolbar");
     if (myBtn) myBtn.classList.toggle("is-active", activeLibraryTab === "my-library");
     if (appBtn) appBtn.classList.toggle("is-active", activeLibraryTab === "app-library");
     if (mySection) mySection.hidden = activeLibraryTab !== "my-library";
     if (appSection) appSection.hidden = activeLibraryTab !== "app-library";
     if (myTools) myTools.style.display = activeLibraryTab === "my-library" ? "" : "none";
+    if (appTools) appTools.style.display = activeLibraryTab === "app-library" ? "" : "none";
     if (activeLibraryTab !== "my-library") closeLibraryCreateMenu();
     syncLibrarySegmentedPill();
     if (activeLibraryTab === "my-library") updateLibraryExpandAllToggleUi();
     if (activeLibraryTab === "app-library") updatePremadeExpandAllToggleUi();
+    requestAnimationFrame(function () {
+      syncLibraryToolbarStickyOffset();
+    });
   }
 
   function syncLibrarySegmentedPill() {

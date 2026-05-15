@@ -7,6 +7,7 @@
   --app-radius: 16px;
   --app-radius-sm: 12px;
   --app-transition: 0.18s ease;
+  --app-library-toolbar-top: 200px;
   /* Softer iOS-like surfaces (shared with account modal) */
   --app-surface-card: rgba(255, 255, 255, 0.045);
   --app-surface-card-border: rgba(255, 255, 255, 0.09);
@@ -1628,8 +1629,30 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
   display: flex;
   align-items: flex-start;
   gap: 0.55rem;
-  margin: 0.2rem 0 0.85rem;
+  margin: 0.15rem -0.1rem 0.85rem;
+  padding: 0.42rem 0.1rem 0.52rem;
   flex-wrap: wrap;
+  position: sticky;
+  top: var(--app-library-toolbar-top, 200px);
+  z-index: 930;
+  background: linear-gradient(
+    180deg,
+    rgba(11, 18, 32, 0.98) 0%,
+    rgba(11, 18, 32, 0.96) 70%,
+    rgba(11, 18, 32, 0.88) 100%
+  );
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+html.fs-app[data-app-theme="light"] .library-toolbar-row {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.97) 0%,
+    rgba(248, 250, 252, 0.94) 72%,
+    rgba(232, 237, 244, 0.92) 100%
+  );
+  border-bottom-color: rgba(15, 23, 42, 0.12);
 }
 #library-segmented-tabs {
   flex: 1 1 200px;
@@ -3018,6 +3041,16 @@ html.fs-app[data-app-theme="light"] #library-segmented-tabs.voice-segmented-tabs
   html.fs-app[data-app-theme="system"] #library-segmented-tabs.voice-segmented-tabs {
     background: rgba(255, 255, 255, 0.75);
     border-color: rgba(15, 23, 42, 0.12);
+  }
+
+  html.fs-app[data-app-theme="system"] .library-toolbar-row {
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.97) 0%,
+      rgba(248, 250, 252, 0.94) 72%,
+      rgba(232, 237, 244, 0.92) 100%
+    );
+    border-bottom-color: rgba(15, 23, 42, 0.12);
   }
 }
 
