@@ -1815,6 +1815,7 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
 }
 .app-modal-row-name {
   font-size: 0.92rem;
+  color: var(--text, #e8edf7);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1836,6 +1837,7 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
   font-weight: 600;
   list-style: none;
   user-select: none;
+  color: var(--text, #e8edf7);
 }
 .app-bg-category-summary::-webkit-details-marker {
   display: none;
@@ -1882,9 +1884,9 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
 }
 .app-picker-option {
   width: 100%;
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.02);
-  color: #fff;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: var(--app-surface-muted, rgba(255, 255, 255, 0.02));
+  color: var(--text, #e8edf7);
   border-radius: 12px;
   min-height: 38px;
   padding: 0.45rem 0.62rem;
@@ -1896,16 +1898,16 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
   cursor: pointer;
 }
 .app-picker-option:hover {
-  border-color: rgba(147,197,253,0.56);
-  background: rgba(59,130,246,0.08);
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(59, 130, 246, 0.1);
 }
 .app-picker-option.is-selected {
-  border-color: rgba(147,197,253,0.86);
-  background: rgba(59,130,246,0.12);
+  border-color: rgba(96, 165, 250, 0.75);
+  background: rgba(59, 130, 246, 0.14);
 }
 .app-picker-check {
   font-size: 0.88rem;
-  color: #bfdbfe;
+  color: var(--accent, #60a5fa);
   font-weight: 700;
   margin-left: 0.4rem;
   min-width: 0.9rem;
@@ -1923,14 +1925,19 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
   width: 100%;
   box-sizing: border-box;
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(0, 0, 0, 0.2);
-  color: #fff;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.15));
+  background: var(--app-surface-muted, rgba(0, 0, 0, 0.2));
+  color: var(--text, #e8edf7);
   padding: 0.62rem 0.75rem;
   font-family: inherit;
   font-size: 0.92rem;
   margin-top: 0.3rem;
   margin-bottom: 0.6rem;
+}
+.app-modal input::placeholder,
+.app-modal textarea::placeholder {
+  color: var(--muted, #94a3b8);
+  opacity: 1;
 }
 /* Keep checkbox/radio controls inline inside account preferences rows. */
 .app-modal input[type="checkbox"],
