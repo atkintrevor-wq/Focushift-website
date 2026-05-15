@@ -3253,15 +3253,43 @@
     );
   }
 
+  /** Same triangle / bars SVG pair as library script cards (`script-card-play-btn`). */
+  function libraryTransportPlayPauseIconSvg(isPlaying) {
+    if (!isPlaying) {
+      return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>'
+      );
+    }
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'
+    );
+  }
+
   function previewBackgroundById(backgroundId, onError) {
     var entry = backgroundEntryById(backgroundId);
     if (!entry || entry.id === "bg-none") return Promise.resolve(false);
     var canPrev = !!(entry.file && String(entry.file).trim()) || !!entry.userUpload || isUserBackgroundId(entry.id);
     if (!canPrev) return Promise.resolve(false);
-    if (isBackgroundPreviewing(entry.id)) {
-      stopBackgroundPreview();
-      return Promise.resolve(false);
+
+    if (backgroundPreviewAudio && backgroundPreviewId === entry.id) {
+      if (backgroundPreviewAudio.paused) {
+        return backgroundPreviewAudio
+          .play()
+          .then(function () {
+            return true;
+          })
+          .catch(function () {
+            stopBackgroundPreview();
+            var msg =
+              "Could not play preview. Check the file exists under audio/backgrounds/ or re-import your custom track.";
+            if (typeof onError === "function") onError(msg);
+            return false;
+          });
+      }
+      backgroundPreviewAudio.pause();
+      return Promise.resolve(true);
     }
+
     stopBackgroundPreview();
     function playFromUrl(url) {
       var a = new Audio(url);
@@ -4817,7 +4845,7 @@
   function audioBuiltinRowMarkup(b, options) {
     options = options || {};
     var isSelected = b.id === selectedBackgroundId;
-    var isPreview = isBackgroundPreviewing(b.id);
+    var isAudible = isBackgroundPreviewing(b.id);
     var canPrev = backgroundRowCanPreview(b);
     var trailing = "";
     if (options.showPinToMy) {
@@ -4829,6 +4857,28 @@
           '">Add to My Audio</button>';
       }
     }
+    var transportHtml = "";
+    if (canPrev) {
+      if (options.playPauseTransport) {
+        transportHtml =
+          '  <button type="button" class="script-card-play-btn" data-background-preview="' +
+          escapeHtml(b.id) +
+          '" title="' +
+          (isAudible ? "Pause" : "Play") +
+          '" aria-label="' +
+          (isAudible ? "Pause" : "Play") +
+          '">' +
+          libraryTransportPlayPauseIconSvg(isAudible) +
+          "</button>";
+      } else {
+        transportHtml =
+          '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
+          escapeHtml(b.id) +
+          '">' +
+          (isAudible ? "Pause" : "Play") +
+          "</button>";
+      }
+    }
     return (
       '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
       '  <div style="flex:1;min-width:140px;">' +
@@ -4836,13 +4886,7 @@
       escapeHtml(b.name) +
       "</div>" +
       "  </div>" +
-      (canPrev
-        ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
-          escapeHtml(b.id) +
-          '">' +
-          (isPreview ? "Stop" : "Preview") +
-          "</button>"
-        : "") +
+      transportHtml +
       trailing +
       '  <button type="button" class="app-btn ' +
       (isSelected ? "app-btn-primary" : "app-btn-secondary") +
@@ -4858,7 +4902,7 @@
   function audioSavedShortcutRowMarkup(builtinEntry) {
     var b = builtinEntry;
     var isSelected = b.id === selectedBackgroundId;
-    var isPreview = isBackgroundPreviewing(b.id);
+    var isAudible = isBackgroundPreviewing(b.id);
     var canPrev = backgroundRowCanPreview(b);
     return (
       '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
@@ -4871,7 +4915,7 @@
         ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
           escapeHtml(b.id) +
           '">' +
-          (isPreview ? "Stop" : "Preview") +
+          (isAudible ? "Pause" : "Play") +
           "</button>"
         : "") +
       '<button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.78rem;" data-remove-saved-bg="' +
@@ -4896,7 +4940,7 @@
       userUpload: true,
     };
     var isSelected = b.id === selectedBackgroundId;
-    var isPreview = isBackgroundPreviewing(b.id);
+    var isAudible = isBackgroundPreviewing(b.id);
     return (
       '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
       '  <div style="flex:1;min-width:140px;">' +
@@ -4907,7 +4951,7 @@
       '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
       escapeHtml(b.id) +
       '">' +
-      (isPreview ? "Stop" : "Preview") +
+      (isAudible ? "Pause" : "Play") +
       "</button>" +
       '<button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.78rem;color:#fca5a5;" data-user-bg-delete="' +
       escapeHtml(b.id) +
@@ -4965,7 +5009,7 @@
           '<div class="app-bg-category-list">' +
           items
             .map(function (b) {
-              return audioBuiltinRowMarkup(b, { showPinToMy: true });
+              return audioBuiltinRowMarkup(b, { showPinToMy: true, playPauseTransport: true });
             })
             .join("") +
           "</div>" +
@@ -7027,14 +7071,7 @@
             ? '<span class="script-card-sync-muted">Audio on this device only</span>'
             : '<span class="script-card-sync-muted">No audio yet</span>') +
       "</div>";
-    var playPauseIcon;
-    if (!playingThis) {
-      playPauseIcon =
-        '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
-    } else {
-      playPauseIcon =
-        '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
-    }
+    var playPauseIcon = libraryTransportPlayPauseIconSvg(playingThis);
     var docIconSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
     var playlistIconSvg =
@@ -7443,8 +7480,10 @@
           mainBtn +
           '<button type="button" class="app-btn app-btn-ghost app-picker-preview-btn" data-preview-background="' +
           escapeHtml(opt.id) +
-          '" aria-label="Preview background">' +
-          (isBgPreview ? "Stop" : "Preview") +
+          '" aria-label="' +
+          (isBgPreview ? "Pause background audio" : "Play background audio") +
+          '">' +
+          (isBgPreview ? "Pause" : "Play") +
           "</button>" +
           "</div>"
         );
