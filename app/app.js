@@ -296,6 +296,220 @@
         return id || "Other";
     }
   }
+
+  /** User-imported background audio (this browser). iOS uses Documents/BackgroundSamples + UserDefaults. */
+  var USER_BG_IDB_NAME = "focusshiftWebUserBackgroundBlobs";
+  var USER_BG_IDB_STORE = "blobs";
+  var USER_BG_META_KEY = "focusshiftWebUserBgMeta_v1";
+  var SAVED_APP_BG_IDS_KEY = "focusshiftWebSavedAppBgIds_v1";
+  var USER_BG_IMPORT_MAX_BYTES = 40 * 1024 * 1024;
+  var userBgObjectUrlCache = {};
+  var activeAudioPageTab = "my-audio";
+  var PREF_AUDIO_PAGE_SUB_KEY = "focusshiftWebPrefAudioPageSub";
+
+  try {
+    var __apSaved = localStorage.getItem(PREF_AUDIO_PAGE_SUB_KEY);
+    if (__apSaved === "app-audio" || __apSaved === "my-audio") activeAudioPageTab = __apSaved;
+  } catch (_eAudioPref) {}
+
+  function isUserBackgroundId(backgroundID) {
+    var s = (backgroundID && String(backgroundID).trim()) || "";
+    return s.indexOf("user-bg-") === 0;
+  }
+
+  function newUserBackgroundId() {
+    if (window.crypto && typeof crypto.randomUUID === "function") return "user-bg-" + crypto.randomUUID();
+    return "user-bg-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+  }
+
+  function revokeCachedUserBgObjectUrl(backgroundId) {
+    var id = (backgroundId && String(backgroundId).trim()) || "";
+    if (!id || !userBgObjectUrlCache[id]) return;
+    try {
+      URL.revokeObjectURL(userBgObjectUrlCache[id]);
+    } catch (_r) {}
+    delete userBgObjectUrlCache[id];
+  }
+
+  function loadUserBackgroundMetaList() {
+    try {
+      var raw = localStorage.getItem(USER_BG_META_KEY);
+      if (!raw) return [];
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function saveUserBackgroundMetaList(list) {
+    try {
+      localStorage.setItem(USER_BG_META_KEY, JSON.stringify(list || []));
+    } catch (_e2) {}
+  }
+
+  function loadSavedAppBackgroundIdSet() {
+    try {
+      var raw = localStorage.getItem(SAVED_APP_BG_IDS_KEY);
+      if (!raw) return {};
+      var arr = JSON.parse(raw);
+      var m = {};
+      if (Array.isArray(arr)) {
+        arr.forEach(function (id) {
+          if (id) m[String(id)] = true;
+        });
+      }
+      return m;
+    } catch (_e) {
+      return {};
+    }
+  }
+
+  function saveSavedAppBackgroundIdSet(map) {
+    var ids = [];
+    Object.keys(map || {}).forEach(function (k) {
+      if (map[k]) ids.push(k);
+    });
+    try {
+      localStorage.setItem(SAVED_APP_BG_IDS_KEY, JSON.stringify(ids));
+    } catch (_e2) {}
+  }
+
+  function addSavedAppBackgroundId(backgroundId) {
+    var bid = (backgroundId && String(backgroundId).trim()) || "";
+    if (!bid || bid === "bg-none") return;
+    var m = loadSavedAppBackgroundIdSet();
+    m[bid] = true;
+    saveSavedAppBackgroundIdSet(m);
+  }
+
+  function removeSavedAppBackgroundId(backgroundId) {
+    var bid = (backgroundId && String(backgroundId).trim()) || "";
+    if (!bid) return;
+    var m = loadSavedAppBackgroundIdSet();
+    delete m[bid];
+    saveSavedAppBackgroundIdSet(m);
+  }
+
+  function openUserBgIdb() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(USER_BG_IDB_NAME, 1);
+      req.onerror = function () {
+        reject(req.error || new Error("IndexedDB failed"));
+      };
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(USER_BG_IDB_STORE)) {
+          db.createObjectStore(USER_BG_IDB_STORE);
+        }
+      };
+      req.onsuccess = function () {
+        resolve(req.result);
+      };
+    });
+  }
+
+  function getUserBackgroundBlob(id) {
+    return openUserBgIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(USER_BG_IDB_STORE, "readonly");
+        var rq = tx.objectStore(USER_BG_IDB_STORE).get(id);
+        rq.onsuccess = function () {
+          resolve(rq.result != null ? rq.result : null);
+        };
+        rq.onerror = function () {
+          reject(rq.error);
+        };
+      });
+    });
+  }
+
+  function putUserBackgroundBlob(id, blob) {
+    return openUserBgIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(USER_BG_IDB_STORE, "readwrite");
+        tx.objectStore(USER_BG_IDB_STORE).put(blob, id);
+        tx.oncomplete = function () {
+          resolve();
+        };
+        tx.onerror = function () {
+          reject(tx.error);
+        };
+      });
+    });
+  }
+
+  function deleteUserBackgroundBlob(id) {
+    return openUserBgIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(USER_BG_IDB_STORE, "readwrite");
+        tx.objectStore(USER_BG_IDB_STORE).delete(id);
+        tx.oncomplete = function () {
+          resolve();
+        };
+        tx.onerror = function () {
+          reject(tx.error);
+        };
+      });
+    });
+  }
+
+  function allBackgroundTracksForPicker() {
+    var out = availableBackgrounds.slice();
+    loadUserBackgroundMetaList().forEach(function (m) {
+      if (!m || !m.id) return;
+      out.push({
+        id: m.id,
+        name: m.name || "Imported audio",
+        categoryID: "my-upload",
+        file: "",
+        userUpload: true,
+      });
+    });
+    return out;
+  }
+
+  function handleUserBackgroundImportSelected(ev) {
+    var input = ev && ev.target;
+    var file = input && input.files && input.files[0] ? input.files[0] : null;
+    if (input)
+      try {
+        input.value = "";
+      } catch (_eClr) {}
+    if (!file) return;
+    if (typeof file.size === "number" && file.size > USER_BG_IMPORT_MAX_BYTES) {
+      setBackgroundsMessage(
+        "That file is too large. Maximum size is about " +
+          Math.floor(USER_BG_IMPORT_MAX_BYTES / (1024 * 1024)) +
+          " MB.",
+        "error"
+      );
+      return;
+    }
+    var displayName = (file.name || "").trim() || "Imported audio";
+    var id = newUserBackgroundId();
+    setBackgroundsMessage('Importing "' + displayName + '"...', "");
+    putUserBackgroundBlob(id, file)
+      .then(function () {
+        var next = loadUserBackgroundMetaList().filter(function (m) {
+          return !(m && m.id === id);
+        });
+        next.unshift({ id: id, name: displayName });
+        saveUserBackgroundMetaList(next);
+        setBackgroundsMessage('Imported "' + displayName + '". It appears under My Audio.', "success");
+        renderAudioPage();
+      })
+      .catch(function (_eImp) {
+        setBackgroundsMessage("Could not import that file.", "error");
+      });
+  }
+
+  function backgroundRowCanPreview(b) {
+    if (!b) return false;
+    if (b.id === "bg-none") return false;
+    return !!(b.file && String(b.file).trim()) || !!b.userUpload || !!isUserBackgroundId(b.id);
+  }
+
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
   /** Set while asking Stripe-style follow-ups before final script (see iOS SurveyViewModel). */
@@ -1157,7 +1371,7 @@
       '    <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" id="count-library">0</span></button>' +
       '    <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
       '    <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
-      '    <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
+      '    <button type="button" class="app-tab-btn" data-admin-tab="audio">Audio</button>' +
       "  </nav>" +
       "</div>" +
       "</div>" +
@@ -1298,11 +1512,25 @@
       '  <input id="voice-upload-input" type="file" accept="audio/*" style="display:none;" />' +
       "</section>" +
       "</section>" +
-      '<section id="section-backgrounds" class="app-section">' +
-      '<section class="app-card" aria-label="Background settings">' +
-      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Backgrounds</h2>' +
-      '  <p class="app-muted" style="margin-top:0;">Set your default background for new scripts and audio generation.</p>' +
-      '  <div id="backgrounds-list"></div>' +
+      '<section id="section-audio" class="app-section">' +
+      '<section class="app-card" aria-label="Background audio">' +
+      '  <div class="library-toolbar-row audio-toolbar-row">' +
+      '    <div class="app-tabs voice-segmented-tabs" id="audio-segmented-tabs">' +
+      '      <button type="button" class="app-tab-btn" id="audio-tab-my" data-audio-page-tab="my-audio">My Audio</button>' +
+      '      <button type="button" class="app-tab-btn" id="audio-tab-app" data-audio-page-tab="app-audio">App Audio</button>' +
+      "    </div>" +
+      '    <div class="library-toolbar-actions" id="audio-my-only-toolbar">' +
+      '      <button type="button" class="app-btn app-btn-secondary" id="btn-audio-import">Import audio</button>' +
+      "    </div>" +
+      "  </div>" +
+      '  <input id="audio-import-input" type="file" accept="audio/*" style="display:none" />' +
+      '  <p class="app-muted" style="margin-top:0.05rem;margin-bottom:0.5rem;">Set default background audio for new scripts and generation. Custom imports stay only in this browser.</p>' +
+      '  <div id="audio-sub-my">' +
+      '    <div id="audio-my-list"></div>' +
+      "  </div>" +
+      '  <div id="audio-sub-app" hidden>' +
+      '    <div id="audio-app-list"></div>' +
+      "  </div>" +
       '  <div id="backgrounds-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
       "</section>" +
@@ -2012,8 +2240,8 @@
     });
     document.getElementById("account-pref-open-backgrounds").addEventListener("click", function () {
       closeAccountModal();
-      setAdminTab("backgrounds");
-      setBackgroundsMessage("Set your default background here. This syncs across devices.", "");
+      setAdminTab("audio");
+      setBackgroundsMessage("Set your default background here. Imports are stored only on this device; the default choice syncs.", "");
       renderBackgrounds();
     });
     document.getElementById("btn-app-playlist-timer-clear").addEventListener("click", function () {
@@ -2147,6 +2375,21 @@
         renderVoices();
       });
     });
+    root.querySelectorAll("[data-audio-page-tab]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        activeAudioPageTab = btn.getAttribute("data-audio-page-tab") || "my-audio";
+        renderAudioPage();
+      });
+    });
+    var audioImportBtn = document.getElementById("btn-audio-import");
+    var audioImportInput = document.getElementById("audio-import-input");
+    if (audioImportBtn && audioImportInput) {
+      audioImportBtn.addEventListener("click", function () {
+        setBackgroundsMessage("Choose an audio file (MP3, M4A, WAV, …). Stored only in this browser.", "");
+        audioImportInput.click();
+      });
+      audioImportInput.addEventListener("change", handleUserBackgroundImportSelected);
+    }
     if (window.ResizeObserver) {
       var adminHead = document.querySelector(".app-admin-sticky-head");
       if (adminHead) {
@@ -2159,6 +2402,7 @@
     window.onresize = function () {
       syncVoiceSegmentedPill();
       syncLibrarySegmentedPill();
+      syncAudioPageSegmentedPill();
       updatePremadeExpandAllToggleUi();
       syncSubnavStickyOffset();
     };
@@ -2654,6 +2898,7 @@
 
   function setAdminTab(tabId) {
     var normalized = tabId || "home";
+    if (normalized === "backgrounds") normalized = "audio";
     if (normalized === "create") normalized = "home";
     if (normalized === "account") normalized = "home";
     if (normalized === "app-library") {
@@ -2666,7 +2911,7 @@
       library: "section-library",
       playlists: "section-playlists",
       voices: "section-voices",
-      backgrounds: "section-backgrounds",
+      audio: "section-audio",
     };
     Object.keys(sectionMap).forEach(function (key) {
       var section = document.getElementById(sectionMap[key]);
@@ -2683,9 +2928,10 @@
     if (activeAdminTab === "playlists") {
       updatePlaylistSectionVisibility();
     }
-    if (activeAdminTab === "library" || activeAdminTab === "voices") {
+    if (activeAdminTab === "library" || activeAdminTab === "voices" || activeAdminTab === "audio") {
       requestAnimationFrame(function () {
         syncSubnavStickyOffset();
+        if (activeAdminTab === "audio") syncAudioPageSegmentedPill();
       });
     }
   }
@@ -2776,8 +3022,16 @@
   }
 
   function backgroundNameById(backgroundID) {
+    var bid = (backgroundID && String(backgroundID).trim()) || "";
+    if (!bid) return "Background";
+    if (isUserBackgroundId(bid)) {
+      var meta = loadUserBackgroundMetaList().find(function (m) {
+        return m && m.id === bid;
+      });
+      return (meta && meta.name) || "My audio";
+    }
     var found = availableBackgrounds.find(function (b) {
-      return b.id === backgroundID;
+      return b.id === bid;
     });
     return (found && found.name) || "Background";
   }
@@ -2791,11 +3045,24 @@
   function backgroundEntryById(backgroundId) {
     var bid = (backgroundId && String(backgroundId).trim()) || "";
     if (!bid) return null;
-    return (
-      availableBackgrounds.find(function (b) {
-        return b.id === bid;
-      }) || null
-    );
+    var builtin = availableBackgrounds.find(function (b) {
+      return b.id === bid;
+    });
+    if (builtin) return builtin;
+    if (isUserBackgroundId(bid)) {
+      var meta = loadUserBackgroundMetaList().find(function (m) {
+        return m && m.id === bid;
+      });
+      if (!meta) return null;
+      return {
+        id: bid,
+        name: meta.name || "Imported audio",
+        categoryID: "",
+        file: "",
+        userUpload: true,
+      };
+    }
+    return null;
   }
 
   function backgroundTrackAssetUrl(filename) {
@@ -2988,29 +3255,47 @@
 
   function previewBackgroundById(backgroundId, onError) {
     var entry = backgroundEntryById(backgroundId);
-    if (!entry || !entry.file) return Promise.resolve(false);
+    if (!entry || entry.id === "bg-none") return Promise.resolve(false);
+    var canPrev = !!(entry.file && String(entry.file).trim()) || !!entry.userUpload || isUserBackgroundId(entry.id);
+    if (!canPrev) return Promise.resolve(false);
     if (isBackgroundPreviewing(entry.id)) {
       stopBackgroundPreview();
       return Promise.resolve(false);
     }
-    stopBackgroundPreview(); // switch to a different background preview
-    var url = backgroundTrackAssetUrl(entry.file);
-    var a = new Audio(url);
-    a.loop = true;
-    backgroundPreviewId = entry.id;
-    backgroundPreviewAudio = a;
-    return a
-      .play()
-      .then(function () {
-        return true;
-      })
-      .catch(function () {
-        stopBackgroundPreview();
-        var msg =
-          "Could not play background preview. Add the MP3s to the site under audio/backgrounds/ (see that folder’s README), deploy, and hard-refresh.";
-        if (typeof onError === "function") onError(msg);
-        return false;
+    stopBackgroundPreview();
+    function playFromUrl(url) {
+      var a = new Audio(url);
+      a.loop = true;
+      backgroundPreviewId = entry.id;
+      backgroundPreviewAudio = a;
+      return a
+        .play()
+        .then(function () {
+          return true;
+        })
+        .catch(function () {
+          stopBackgroundPreview();
+          var msg =
+            "Could not play preview. Check the file exists under audio/backgrounds/ or re-import your custom track.";
+          if (typeof onError === "function") onError(msg);
+          return false;
+        });
+    }
+    if (entry.userUpload || isUserBackgroundId(entry.id)) {
+      revokeCachedUserBgObjectUrl(entry.id);
+      return getUserBackgroundBlob(entry.id).then(function (blob) {
+        if (!blob) {
+          stopBackgroundPreview();
+          if (typeof onError === "function") onError("Imported background file is missing from this browser.");
+          return false;
+        }
+        var objUrl = URL.createObjectURL(blob);
+        userBgObjectUrlCache[entry.id] = objUrl;
+        return playFromUrl(objUrl);
       });
+    }
+    var url = backgroundTrackAssetUrl(entry.file);
+    return playFromUrl(url);
   }
 
   function resampleFloat32Linear(src, srcRate, dstRate, dstLen) {
@@ -3073,21 +3358,38 @@
 
   function mixTtsWithBackgroundToWavBlob(ttsArrayBuffer, backgroundId) {
     return new Promise(function (resolve, reject) {
-      var entry = backgroundEntryById(backgroundId);
-      if (!entry || !entry.file) {
+      var bgIdRaw = (backgroundId && String(backgroundId).trim()) || "";
+      if (!bgIdRaw || bgIdRaw === "bg-none") {
         reject(new Error("Unknown background for mixing."));
         return;
       }
-      var bgUrl = backgroundTrackAssetUrl(entry.file);
+      var entry = backgroundEntryById(bgIdRaw);
+      if (!entry && !isUserBackgroundId(bgIdRaw)) {
+        reject(new Error("Unknown background for mixing."));
+        return;
+      }
+      if (!entry || (!entry.file && !(entry.userUpload || isUserBackgroundId(bgIdRaw)))) {
+        reject(new Error("Unknown background for mixing."));
+        return;
+      }
       var ACtx = window.AudioContext || window.webkitAudioContext;
       if (!ACtx) {
         reject(new Error("Web Audio is not available in this browser."));
         return;
       }
       var ctx = new ACtx();
-      Promise.all([
-        ctx.decodeAudioData(ttsArrayBuffer.slice(0)),
-        fetch(bgUrl).then(function (r) {
+      var decodeBgPromise;
+      if (entry.userUpload || isUserBackgroundId(bgIdRaw)) {
+        decodeBgPromise = getUserBackgroundBlob(bgIdRaw).then(function (blob) {
+          if (!blob) {
+            throw new Error("Imported background audio is missing in this browser. Re-import the file.");
+          }
+          return blob.arrayBuffer().then(function (buf) {
+            return ctx.decodeAudioData(buf.slice(0));
+          });
+        });
+      } else {
+        decodeBgPromise = fetch(backgroundTrackAssetUrl(entry.file)).then(function (r) {
           if (!r.ok) {
             throw new Error(
               "Background file not found (" +
@@ -3098,8 +3400,9 @@
           return r.arrayBuffer();
         }).then(function (bgAb) {
           return ctx.decodeAudioData(bgAb.slice(0));
-        }),
-      ])
+        });
+      }
+      Promise.all([ctx.decodeAudioData(ttsArrayBuffer.slice(0)), decodeBgPromise])
         .then(function (buffers) {
           var voiceBuf = buffers[0];
           var bgBuf = buffers[1];
@@ -4414,8 +4717,214 @@
       });
   }
 
-  function renderBackgrounds() {
-    var list = document.getElementById("backgrounds-list");
+  function bindAudioTrackRowHandlers(scopeRoot) {
+    if (!scopeRoot) return;
+    scopeRoot.querySelectorAll("[data-background-preview]").forEach(function (pbtn) {
+      pbtn.addEventListener("click", function () {
+        var pid = pbtn.getAttribute("data-background-preview");
+        previewBackgroundById(pid, function (msg) {
+          setBackgroundsMessage(msg, "error");
+        }).then(function () {
+          renderAudioPage();
+        });
+      });
+    });
+    scopeRoot.querySelectorAll("[data-background-id]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var backgroundID = btn.getAttribute("data-background-id");
+        if (!backgroundID || backgroundID === selectedBackgroundId) return;
+        selectedBackgroundId = backgroundID;
+        setBackgroundsMessage("Saving default background...", "");
+        saveUserDefaults()
+          .then(function () {
+            renderAudioPage();
+            setBackgroundsMessage("Default background saved.", "success");
+          })
+          .catch(function (e) {
+            setBackgroundsMessage(e.message || "Could not save default background.", "error");
+          });
+      });
+    });
+    scopeRoot.querySelectorAll("[data-bg-category]").forEach(function (sec) {
+      sec.addEventListener("toggle", function () {
+        var cid = sec.getAttribute("data-bg-category");
+        if (!cid) return;
+        backgroundCategoryOpenById[cid] = !!sec.open;
+      });
+    });
+    scopeRoot.querySelectorAll("[data-user-bg-delete]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var bid = btn.getAttribute("data-user-bg-delete");
+        if (!bid) return;
+        deleteUserBackgroundEntry(bid).then(function () {
+          if (selectedBackgroundId === bid) {
+            selectedBackgroundId = "bg-none";
+            saveUserDefaults()
+              .then(function () {
+                renderAudioPage();
+                setBackgroundsMessage("Imported track removed. Default reset to No Background.", "success");
+              })
+              .catch(function (_e2) {
+                renderAudioPage();
+              });
+          } else {
+            renderAudioPage();
+            setBackgroundsMessage("Imported track removed.", "success");
+          }
+        });
+      });
+    });
+    scopeRoot.querySelectorAll("[data-remove-saved-bg]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var bid = btn.getAttribute("data-remove-saved-bg");
+        if (!bid) return;
+        removeSavedAppBackgroundId(bid);
+        if (selectedBackgroundId === bid) {
+          selectedBackgroundId = "bg-none";
+          saveUserDefaults()
+            .finally(function () {
+              renderAudioPage();
+              setBackgroundsMessage("Removed from My Audio shortcuts.", "");
+            });
+        } else {
+          renderAudioPage();
+          setBackgroundsMessage("Removed from My Audio shortcuts.", "");
+        }
+      });
+    });
+    scopeRoot.querySelectorAll("[data-add-saved-bg]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var bid = btn.getAttribute("data-add-saved-bg");
+        if (!bid) return;
+        addSavedAppBackgroundId(bid);
+        renderAudioPage();
+        setBackgroundsMessage("Added to My Audio.", "success");
+      });
+    });
+  }
+
+  function deleteUserBackgroundEntry(backgroundId) {
+    var bid = (backgroundId && String(backgroundId).trim()) || "";
+    if (!bid || !isUserBackgroundId(bid)) return Promise.resolve();
+    revokeCachedUserBgObjectUrl(bid);
+    var next = loadUserBackgroundMetaList().filter(function (m) {
+      return !m || m.id !== bid;
+    });
+    saveUserBackgroundMetaList(next);
+    return deleteUserBackgroundBlob(bid).catch(function () {});
+  }
+
+  function audioBuiltinRowMarkup(b, options) {
+    options = options || {};
+    var isSelected = b.id === selectedBackgroundId;
+    var isPreview = isBackgroundPreviewing(b.id);
+    var canPrev = backgroundRowCanPreview(b);
+    var trailing = "";
+    if (options.showPinToMy) {
+      var savedNow = !!loadSavedAppBackgroundIdSet()[b.id];
+      if (!savedNow) {
+        trailing +=
+          '<button type="button" class="app-btn app-btn-secondary" style="padding:0.32rem 0.55rem;font-size:0.78rem;" data-add-saved-bg="' +
+          escapeHtml(b.id) +
+          '">Add to My Audio</button>';
+      }
+    }
+    return (
+      '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
+      '  <div style="flex:1;min-width:140px;">' +
+      '    <div class="app-modal-row-name">' +
+      escapeHtml(b.name) +
+      "</div>" +
+      "  </div>" +
+      (canPrev
+        ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
+          escapeHtml(b.id) +
+          '">' +
+          (isPreview ? "Stop" : "Preview") +
+          "</button>"
+        : "") +
+      trailing +
+      '  <button type="button" class="app-btn ' +
+      (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+      '" data-background-id="' +
+      escapeHtml(b.id) +
+      '">' +
+      (isSelected ? "Default" : "Set Default") +
+      "</button>" +
+      "</div>"
+    );
+  }
+
+  function audioSavedShortcutRowMarkup(builtinEntry) {
+    var b = builtinEntry;
+    var isSelected = b.id === selectedBackgroundId;
+    var isPreview = isBackgroundPreviewing(b.id);
+    var canPrev = backgroundRowCanPreview(b);
+    return (
+      '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
+      '  <div style="flex:1;min-width:140px;">' +
+      '    <div class="app-modal-row-name">' +
+      escapeHtml(b.name) +
+      ' <span class="app-muted" style="font-weight:400;">(App)</span></div>' +
+      "  </div>" +
+      (canPrev
+        ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
+          escapeHtml(b.id) +
+          '">' +
+          (isPreview ? "Stop" : "Preview") +
+          "</button>"
+        : "") +
+      '<button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.78rem;" data-remove-saved-bg="' +
+      escapeHtml(b.id) +
+      '">Remove from My</button>' +
+      '  <button type="button" class="app-btn ' +
+      (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+      '" data-background-id="' +
+      escapeHtml(b.id) +
+      '">' +
+      (isSelected ? "Default" : "Set Default") +
+      "</button>" +
+      "</div>"
+    );
+  }
+
+  function audioUserImportRowMarkup(meta) {
+    var b = {
+      id: meta.id,
+      name: meta.name || "Imported audio",
+      file: "",
+      userUpload: true,
+    };
+    var isSelected = b.id === selectedBackgroundId;
+    var isPreview = isBackgroundPreviewing(b.id);
+    return (
+      '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
+      '  <div style="flex:1;min-width:140px;">' +
+      '    <div class="app-modal-row-name">' +
+      escapeHtml(b.name) +
+      "</div>" +
+      "  </div>" +
+      '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
+      escapeHtml(b.id) +
+      '">' +
+      (isPreview ? "Stop" : "Preview") +
+      "</button>" +
+      '<button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.78rem;color:#fca5a5;" data-user-bg-delete="' +
+      escapeHtml(b.id) +
+      '">Delete</button>' +
+      '  <button type="button" class="app-btn ' +
+      (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+      '" data-background-id="' +
+      escapeHtml(b.id) +
+      '">' +
+      (isSelected ? "Default" : "Set Default") +
+      "</button>" +
+      "</div>"
+    );
+  }
+
+  function renderAudioAppList() {
+    var list = document.getElementById("audio-app-list");
     if (!list) return;
     var grouped = {};
     backgroundCategoryOrder.forEach(function (cid) {
@@ -4430,39 +4939,15 @@
     var none = availableBackgrounds.find(function (b) {
       return b.id === "bg-none";
     });
-    function rowHtml(b) {
-      var isSelected = b.id === selectedBackgroundId;
-      var isPreview = isBackgroundPreviewing(b.id);
-      return (
-        '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
-        '  <div style="flex:1;min-width:140px;">' +
-        '    <div class="app-modal-row-name">' +
-        escapeHtml(b.name) +
-        "</div>" +
-        "  </div>" +
-        (b.file
-          ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
-            escapeHtml(b.id) +
-            '">' +
-            (isPreview ? "Stop" : "Preview") +
-            "</button>"
-          : "") +
-        '  <button type="button" class="app-btn ' +
-        (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-        '" data-background-id="' +
-        escapeHtml(b.id) +
-        '">' +
-        (isSelected ? "Default" : "Set Default") +
-        "</button>" +
-        "</div>"
-      );
-    }
     var sections = backgroundCategoryOrder
       .map(function (cid) {
         var items = grouped[cid] || [];
         if (!items.length) return "";
         if (backgroundCategoryOpenById[cid] == null) {
-          var containsSelected = selectedBackgroundId !== "bg-none" && items.some(function (b) { return b.id === selectedBackgroundId; });
+          var containsSelected =
+            selectedBackgroundId !== "bg-none" && items.some(function (b) {
+              return b.id === selectedBackgroundId;
+            });
           backgroundCategoryOpenById[cid] = cid === "general" || containsSelected;
         }
         var open = backgroundCategoryOpenById[cid] === true;
@@ -4480,7 +4965,7 @@
           '<div class="app-bg-category-list">' +
           items
             .map(function (b) {
-              return rowHtml(b);
+              return audioBuiltinRowMarkup(b, { showPinToMy: true });
             })
             .join("") +
           "</div>" +
@@ -4489,42 +4974,101 @@
       })
       .join("");
     list.innerHTML =
-      (none
-        ? '<div class="app-bg-none-row">' + rowHtml(none) + "</div>"
-        : "") + sections;
-    list.querySelectorAll("[data-background-preview]").forEach(function (pbtn) {
-      pbtn.addEventListener("click", function () {
-        var pid = pbtn.getAttribute("data-background-preview");
-        previewBackgroundById(pid, function (msg) {
-          setBackgroundsMessage(msg, "error");
-        }).then(function () {
-          renderBackgrounds();
-        });
-      });
+      '<p class="app-muted audio-app-lede">' +
+      "Premade background tracks for generation and mixing — same catalog as App Audio on iOS. Pin tracks to My Audio for quick access." +
+      "</p>" +
+      (none ? '<div class="app-bg-none-row">' + audioBuiltinRowMarkup(none, { showPinToMy: false }) + "</div>" : "") +
+      sections;
+    bindAudioTrackRowHandlers(list);
+  }
+
+  function renderAudioMyList() {
+    var list = document.getElementById("audio-my-list");
+    if (!list) return;
+    var none = availableBackgrounds.find(function (b) {
+      return b.id === "bg-none";
     });
-    list.querySelectorAll("[data-bg-category]").forEach(function (sec) {
-      sec.addEventListener("toggle", function () {
-        var cid = sec.getAttribute("data-bg-category");
-        if (!cid) return;
-        backgroundCategoryOpenById[cid] = !!sec.open;
-      });
+    var users = loadUserBackgroundMetaList();
+    var savedMap = loadSavedAppBackgroundIdSet();
+    var pinned = availableBackgrounds.filter(function (b) {
+      return b.id !== "bg-none" && savedMap[b.id];
     });
-    list.querySelectorAll("[data-background-id]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        var backgroundID = btn.getAttribute("data-background-id");
-        if (!backgroundID || backgroundID === selectedBackgroundId) return;
-        selectedBackgroundId = backgroundID;
-        setBackgroundsMessage("Saving default background...", "");
-        saveUserDefaults()
-          .then(function () {
-            renderBackgrounds();
-            setBackgroundsMessage("Default background saved.", "success");
-          })
-          .catch(function (e) {
-            setBackgroundsMessage(e.message || "Could not save default background.", "error");
-          });
+    var parts = [];
+    parts.push("<p class=\"app-muted audio-my-lede\">");
+    parts.push(
+      "Imports are stored only in this browser (like offline files on iOS). Use them as background when generating mixed audio."
+    );
+    parts.push("</p>");
+    if (none) {
+      parts.push('<div class="app-bg-none-row">' + audioBuiltinRowMarkup(none, { showPinToMy: false }) + "</div>");
+    }
+    if (users.length) {
+      parts.push('<p class="app-muted audio-my-subhdr" style="margin:0.65rem 0 0.35rem;font-weight:600;">Your imports</p>');
+      users.forEach(function (m) {
+        if (!m || !m.id) return;
+        parts.push(audioUserImportRowMarkup(m));
       });
+    }
+    if (pinned.length) {
+      parts.push(
+        '<p class="app-muted audio-my-subhdr" style="margin:0.75rem 0 0.35rem;font-weight:600;">Shortcuts from App Audio</p>'
+      );
+      pinned.forEach(function (b) {
+        parts.push(audioSavedShortcutRowMarkup(b));
+      });
+    }
+    if (!users.length && !pinned.length) {
+      parts.push(
+        '<div class="app-empty-hint" style="margin-top:0.5rem;">Use <strong>Import audio</strong> above, or open <strong>App Audio</strong> and tap <strong>Add to My Audio</strong> on a track.</div>'
+      );
+    }
+    list.innerHTML = parts.join("");
+    bindAudioTrackRowHandlers(list);
+  }
+
+  function syncAudioPageSegmentedPill() {
+    var wrap = document.getElementById("audio-segmented-tabs");
+    if (!wrap) return;
+    var activeBtn =
+      wrap.querySelector('.app-tab-btn[data-audio-page-tab="' + activeAudioPageTab + '"]') ||
+      wrap.querySelector(".app-tab-btn.is-active");
+    if (!activeBtn) return;
+    wrap.style.setProperty("--voice-pill-x", activeBtn.offsetLeft + "px");
+    wrap.style.setProperty("--voice-pill-w", activeBtn.offsetWidth + "px");
+    wrap.classList.add("is-ready");
+    wrap.classList.remove("is-pulsing");
+    void wrap.offsetWidth;
+    wrap.classList.add("is-pulsing");
+  }
+
+  function renderAudioPageSubtab() {
+    var myBtn = document.getElementById("audio-tab-my");
+    var appBtn = document.getElementById("audio-tab-app");
+    var myPanel = document.getElementById("audio-sub-my");
+    var appPanel = document.getElementById("audio-sub-app");
+    if (myBtn) myBtn.classList.toggle("is-active", activeAudioPageTab === "my-audio");
+    if (appBtn) appBtn.classList.toggle("is-active", activeAudioPageTab === "app-audio");
+    if (myPanel) myPanel.hidden = activeAudioPageTab !== "my-audio";
+    if (appPanel) appPanel.hidden = activeAudioPageTab !== "app-audio";
+    var myTools = document.getElementById("audio-my-only-toolbar");
+    if (myTools) myTools.style.display = activeAudioPageTab === "my-audio" ? "" : "none";
+    try {
+      localStorage.setItem(PREF_AUDIO_PAGE_SUB_KEY, activeAudioPageTab);
+    } catch (_e) {}
+    syncAudioPageSegmentedPill();
+    requestAnimationFrame(function () {
+      syncSubnavStickyOffset();
     });
+  }
+
+  function renderAudioPage() {
+    renderAudioMyList();
+    renderAudioAppList();
+    renderAudioPageSubtab();
+  }
+
+  function renderBackgrounds() {
+    renderAudioPage();
   }
 
   function setAccountMessage(text, kind) {
@@ -6815,7 +7359,7 @@
     if (!backdrop || !title || !subtitle || !list || !searchInput || !mediaPickerTarget) return;
 
     var isVoice = mediaPickerTarget.field === "voice";
-    var options = isVoice ? allVoiceOptionsForSelection() : availableBackgrounds;
+    var options = isVoice ? allVoiceOptionsForSelection() : allBackgroundTracksForPicker();
     var currentValue = "";
     if (mediaPickerTarget.kind === "script") {
       var script = currentScripts.find(function (s) {
@@ -6893,7 +7437,7 @@
         (selected ? "✓" : "") +
         "</span>" +
         "</button>";
-      if (includeBgPreview && opt.file) {
+      if (includeBgPreview && backgroundRowCanPreview(opt)) {
         return (
           '<div class="app-picker-option-row">' +
           mainBtn +
@@ -9205,6 +9749,11 @@
             activeLibraryTab = "app-library";
           } else if (savedTab === "account") {
             activeAdminTab = "home";
+          } else if (savedTab === "backgrounds") {
+            activeAdminTab = "audio";
+            try {
+              localStorage.setItem(ADMIN_TAB_STORAGE_KEY, "audio");
+            } catch (_eTabm) {}
           } else if (savedTab) {
             activeAdminTab = savedTab;
           }
@@ -9225,13 +9774,19 @@
           selectedVoiceId = profileVoiceID;
         }
         var profileBackgroundID = (currentUserProfile.defaultBackgroundID || "").trim();
-        if (
-          profileBackgroundID &&
-          availableBackgrounds.some(function (b) {
-            return b.id === profileBackgroundID;
-          })
-        ) {
-          selectedBackgroundId = profileBackgroundID;
+        if (profileBackgroundID) {
+          if (
+            availableBackgrounds.some(function (b) {
+              return b.id === profileBackgroundID;
+            })
+          ) {
+            selectedBackgroundId = profileBackgroundID;
+          } else if (isUserBackgroundId(profileBackgroundID)) {
+            var hasLocalBg = loadUserBackgroundMetaList().some(function (m) {
+              return m && m.id === profileBackgroundID;
+            });
+            if (hasLocalBg) selectedBackgroundId = profileBackgroundID;
+          }
         }
         var isAdmin = snap.exists && snap.data().isAdmin === true;
         if (isAdmin) {
