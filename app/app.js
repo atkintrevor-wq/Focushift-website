@@ -117,7 +117,7 @@
   var publishTextDirty = false;
   var publishTitleDirty = false;
   var editingPremadeId = null;
-  var expandedScriptTextById = {};
+  var inlineScriptEditorOpenById = {};
   var expandedScriptAudioControlsById = {};
   var scriptsRenderGeneration = 0;
   var CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebCardAudioControls_";
@@ -5897,6 +5897,55 @@
     };
   }
 
+  /** Aligns with iOS `AudioTagUtils` for Eleven v3-style tags. */
+  var WEB_SHOW_AUDIO_TAGS_STORAGE_KEY = "focusshiftWebShowAudioTagsInScript";
+
+  function readShowAudioTagsFormattingPreference() {
+    try {
+      return localStorage.getItem(WEB_SHOW_AUDIO_TAGS_STORAGE_KEY) === "1";
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function stripAudioTagsForDisplay(text) {
+    if (text == null || text === "") return "";
+    var result = String(text);
+    result = result.replace(/\[emphasized\]([\s\S]*?)\[\/emphasized\]/g, "$1");
+    ["[short pause]", "[long pause]", "[pause]"].forEach(function (tag) {
+      result = result.split(tag).join(" ");
+    });
+    var standaloneTags = [
+      "[deliberate]",
+      "[/deliberate]",
+      "[shouts]",
+      "[/shouts]",
+      "[whispers]",
+      "[/whispers]",
+      "[rushed]",
+      "[/rushed]",
+      "[slows down]",
+      "[stress on next word]",
+      "[understated]",
+    ];
+    standaloneTags.forEach(function (tag) {
+      result = result.split(tag).join("");
+    });
+    result = result.replace(/\[\/?[a-zA-Z\s]+\]/g, "");
+    while (result.indexOf("  ") >= 0) {
+      result = result.replace(/  /g, " ");
+    }
+    return result.trim();
+  }
+
+  function containsAudioTagsForScript(text) {
+    if (!text) return false;
+    if (/\[short pause\]|\[long pause\]|\[pause\]|\[emphasized\]/.test(text)) return true;
+    return /\[[^\]]+\]/.test(text);
+  }
+
+
+
   function fallbackHashHex(raw) {
     var h = 5381;
     for (var i = 0; i < raw.length; i++) {
@@ -6348,8 +6397,8 @@
   }
 
   function scriptCardHtml(script, contentHashHex) {
-    var plainText = script.text && script.text.trim() ? script.text : "(No text yet)";
-    var isExpanded = expandedScriptTextById[script.id] === true;
+    var editorOpen = inlineScriptEditorOpenById[script.id] === true;
+    var showFmtPref = readShowAudioTagsFormattingPreference();
     var isBusy = isScriptBusy(script.id);
     var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
     var playingThis = activeAudioScriptId === script.id && activeAudio && !activeAudio.paused;
@@ -6382,10 +6431,12 @@
       }
     }
     var regenHintHtml = drift
-      ? '<div class="script-card-regen-hint" role="status">Your script text, voice, or background changed since this audio was generated. Open audio controls and tap <strong>Generate</strong> to refresh the file.</div>'
+      ? '<div class="script-card-regen-hint" role="status">Your script text, voice, or background changed since this audio was generated. Expand audio controls and tap <strong>Generate</strong> to refresh the file.</div>'
       : "";
     var audioUrlStr = script.audioURL && String(script.audioURL).trim();
     var hostedAudio = !!(audioUrlStr && /^https?:\/\//i.test(audioUrlStr));
+    var rawScriptText = (script.text && String(script.text)) || "";
+    var hasAudioTagsInScript = containsAudioTagsForScript(rawScriptText);
     var syncStatusHtml =
       '<div class="script-card-sync-row">' +
       '  <button type="button" class="script-card-sync-refresh" data-action="refresh-script" data-script-id="' +
@@ -6399,26 +6450,79 @@
             ? '<span class="script-card-sync-muted">Audio on this device only</span>'
             : '<span class="script-card-sync-muted">No audio yet</span>') +
       "</div>";
+    var playPauseIcon;
+    if (!playingThis) {
+      playPauseIcon =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+    } else {
+      playPauseIcon =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>';
+    }
+    var docIconSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
+    var playlistIconSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>';
+
+    var inlineEditorHtml = "";
+    if (editorOpen) {
+      var bodyHtml;
+      if (hasAudioTagsInScript && !showFmtPref) {
+        bodyHtml =
+          '<p class="script-inline-help app-muted" style="margin:0 0 0.4rem;line-height:1.45;">Turn on <strong>Show formatting</strong> to edit TTS tags (pauses, emphasis, etc.).</p>' +
+          '<div class="script-inline-preview-scroll"><pre class="script-inline-preview app-card-text">' +
+          escapeHtml(stripAudioTagsForDisplay(rawScriptText) || "(No text)") +
+          "</pre></div>";
+      } else {
+        bodyHtml =
+          '<textarea class="script-inline-textarea" rows="10" maxlength="50000">' +
+          escapeHtml(rawScriptText) +
+          "</textarea>";
+      }
+      var formatToggleHtml = "";
+      if (hasAudioTagsInScript) {
+        formatToggleHtml =
+          '<label class="script-inline-show-format">' +
+          '<input type="checkbox" data-role="script-formatting-toggle"' +
+          (showFmtPref ? " checked" : "") +
+          '> Show formatting <span class="app-muted">(TTS tags)</span></label>';
+      }
+      inlineEditorHtml =
+        '<div class="script-inline-editor">' +
+        '<label class="script-inline-field-label">Title</label>' +
+        '<input type="text" class="script-inline-title-input" maxlength="120" value="' +
+        escapeHtml(script.title || "") +
+        '" data-script-inline-field="title">' +
+        '<div class="script-inline-toolbar">' +
+        formatToggleHtml +
+        "</div>" +
+        '<label class="script-inline-field-label">Script</label>' +
+        bodyHtml +
+        '<div class="script-inline-save-row">' +
+        '<button type="button" class="app-btn app-btn-primary" data-action="save-inline-script" data-script-id="' +
+        escapeHtml(script.id) +
+        '">Save</button>' +
+        '<button type="button" class="app-btn app-btn-secondary" data-action="cancel-inline-script" data-script-id="' +
+        escapeHtml(script.id) +
+        '">Cancel</button>' +
+        "</div>" +
+        "</div>";
+    }
+
     var audioSection = controlsExpanded
       ? '<div class="script-card-audio-section">' +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
+        '<div class="script-card-voice-bg-grid">' +
         '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
         escapeHtml(script.id) +
-        '" data-script-media-field="voice" style="text-align:left;">Voice: ' +
+        '" data-script-media-field="voice">Voice: ' +
         escapeHtml(voiceNameById(scriptVoiceID)) +
         "</button>" +
         '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
         escapeHtml(script.id) +
-        '" data-script-media-field="background" style="text-align:left;">Background: ' +
+        '" data-script-media-field="background">Background: ' +
         escapeHtml(backgroundNameById(scriptBackgroundID)) +
         "</button>" +
         "</div>" +
-        '<div class="app-card-actions">' +
-        '  <button type="button" class="app-btn app-btn-secondary" data-action="toggle-text" data-script-id="' +
-        escapeHtml(script.id) +
-        '">' +
-        (isExpanded ? "Hide Text" : "Show Text") +
-        "</button>" +
+        '<div class="app-card-actions script-card-actions-bar">' +
         '  <button type="button" class="' +
         genClasses +
         '" data-action="generate-audio" data-script-id="' +
@@ -6429,46 +6533,58 @@
         ">" +
         genLabel +
         "</button>" +
-        '  <button type="button" class="app-btn app-btn-secondary" data-action="play-audio" data-script-id="' +
+        '  <button type="button" class="app-btn app-btn-secondary script-card-icon-action" data-action="add-to-playlist" data-script-id="' +
         escapeHtml(script.id) +
-        '"' +
-        (!hasAudio || isBusy ? " disabled" : "") +
-        ">" +
-        (playingThis ? "Pause" : "Play") +
-        "</button>" +
-        '  <button type="button" class="app-btn app-btn-secondary" data-action="edit" data-script-id="' +
-        escapeHtml(script.id) +
-        '">Edit</button>' +
-        '  <button type="button" class="app-btn app-btn-ghost" data-action="add-to-playlist" data-script-id="' +
-        escapeHtml(script.id) +
-        '"' +
+        '" title="Add to playlist"' +
         (!currentPlaylists.length ? " disabled" : "") +
-        ">Add to Playlist</button>" +
+        ' aria-label="Add to playlist">' +
+        playlistIconSvg +
+        "</button>" +
         (showShareLink
           ? '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="share-audio" data-script-id="' +
             escapeHtml(script.id) +
-            '" title="Creator: copy a link others can use in the Focus Shift app" aria-label="Share link">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-            '<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>' +
-            '<polyline points="16 6 12 2 8 6"/>' +
-            '<line x1="12" y1="2" x2="12" y2="15"/>' +
-            "</svg></button>"
+            '" title="Creator: share listen link">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>'
           : "") +
-        '  <button type="button" class="app-btn app-btn-danger" data-action="delete" data-script-id="' +
-        escapeHtml(script.id) +
-        '">Delete</button>' +
         "</div>" +
         "</div>"
       : "";
     return (
-      '<article class="app-card" data-script-id="' +
+      '<article class="app-card library-script-card" data-script-id="' +
       escapeHtml(script.id) +
       '">' +
-      '<div class="app-card-header-row">' +
-      "<h3>" +
+      '<div class="script-card-title-row">' +
+      '  <div class="script-card-title-main">' +
+      "    <h3>" +
       escapeHtml(script.title || "Untitled Script") +
       "</h3>" +
-      '  <button type="button" class="library-card-chevron" data-action="toggle-controls" data-script-id="' +
+      '    <button type="button" class="script-card-play-btn"' +
+      ' data-action="play-audio" data-script-id="' +
+      escapeHtml(script.id) +
+      '"' +
+      (!hasAudio || isBusy ? " disabled" : "") +
+      ' title="' +
+      (playingThis ? "Pause" : "Play") +
+      '" aria-label="' +
+      (playingThis ? "Pause" : "Play") +
+      '">' +
+      playPauseIcon +
+      "</button>" +
+      "  </div>" +
+      '  <div class="script-card-title-trail">' +
+      '    <button type="button" class="script-card-icon-btn script-card-icon-btn-editor' +
+      (editorOpen ? " is-active" : "") +
+      '" data-action="toggle-inline-script" data-script-id="' +
+      escapeHtml(script.id) +
+      '" title="' +
+      (editorOpen ? "Hide script editor" : "Show and edit script") +
+      '" aria-label="Script">' +
+      docIconSvg +
+      "</button>" +
+      '    <button type="button" class="script-card-icon-btn script-card-icon-btn-delete" data-action="delete" data-script-id="' +
+      escapeHtml(script.id) +
+      '" title="Delete script" aria-label="Delete">\u2715</button>' +
+      '    <button type="button" class="library-card-chevron" data-action="toggle-controls" data-script-id="' +
       escapeHtml(script.id) +
       '" aria-expanded="' +
       (controlsExpanded ? "true" : "false") +
@@ -6477,6 +6593,7 @@
       '">' +
       chevChar +
       "</button>" +
+      "  </div>" +
       "</div>" +
       '<div class="app-card-meta-row">' +
       '<div class="app-card-meta">Created: ' +
@@ -6484,12 +6601,91 @@
       "</div>" +
       '<span class="app-chip">My Library</span>' +
       "</div>" +
-      syncStatusHtml +
       regenHintHtml +
-      (isExpanded ? '<p class="app-card-text">' + escapeHtml(plainText) + "</p>" : "") +
+      inlineEditorHtml +
       audioSection +
+      '<div class="script-card-footer">' +
+      syncStatusHtml +
+      "</div>" +
       "</article>"
     );
+  }
+
+  function bindScriptListFormattingToggle() {
+    var list = document.getElementById("scripts-list");
+    if (!list || list.dataset.scriptFormatToggleBound === "1") return;
+    list.dataset.scriptFormatToggleBound = "1";
+    list.addEventListener("change", function (ev) {
+      var tgt = ev.target;
+      if (!tgt || tgt.getAttribute("data-role") !== "script-formatting-toggle") return;
+      try {
+        localStorage.setItem(WEB_SHOW_AUDIO_TAGS_STORAGE_KEY, tgt.checked ? "1" : "0");
+      } catch (_e) {}
+      renderScripts(currentScripts);
+    });
+  }
+
+  function saveInlineScript(script) {
+    if (!currentUser || !script || !script.id) return;
+    var list = document.getElementById("scripts-list");
+    if (!list) return;
+    var card = null;
+    var cards = list.querySelectorAll(".library-script-card");
+    for (var ci = 0; ci < cards.length; ci++) {
+      if (cards[ci].getAttribute("data-script-id") === script.id) {
+        card = cards[ci];
+        break;
+      }
+    }
+    if (!card) return;
+    var titleEl = card.querySelector(".script-inline-title-input");
+    var ta = card.querySelector(".script-inline-textarea");
+    var title = (titleEl && titleEl.value ? titleEl.value : "").trim();
+    var text;
+    if (ta) {
+      text = (ta.value ? ta.value : "").trim();
+    } else {
+      text = ((script.text && String(script.text)) || "").trim();
+    }
+    if (!title) {
+      setMessage("Title is required.", "error");
+      return;
+    }
+    if (!text) {
+      setMessage(
+        "Script text is required. Turn on Show formatting to edit tags and spoken text.",
+        "error"
+      );
+      return;
+    }
+
+    setMessage("Saving…", "");
+    var uid = currentUser.uid;
+    scriptCollection(uid)
+      .doc(script.id)
+      .set(
+        {
+          title: title,
+          text: text,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      .then(function () {
+        var ix = currentScripts.findIndex(function (s) {
+          return s.id === script.id;
+        });
+        if (ix >= 0) {
+          currentScripts[ix].title = title;
+          currentScripts[ix].text = text;
+        }
+        delete inlineScriptEditorOpenById[script.id];
+        setMessage("Script updated.", "success");
+        renderScripts(currentScripts);
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Could not update script.", "error");
+      });
   }
 
   function bindScriptCardActions(scripts) {
@@ -6503,13 +6699,17 @@
           return s.id === scriptId;
         });
         if (!script) return;
-        if (action === "toggle-text") {
-          expandedScriptTextById[script.id] = expandedScriptTextById[script.id] !== true;
+        if (action === "toggle-inline-script") {
+          var opening = inlineScriptEditorOpenById[script.id] !== true;
+          inlineScriptEditorOpenById[script.id] = opening;
+          renderScripts(currentScripts, opening ? script.id : null);
+        } else if (action === "cancel-inline-script") {
+          delete inlineScriptEditorOpenById[script.id];
           renderScripts(currentScripts);
+        } else if (action === "save-inline-script") {
+          saveInlineScript(script);
         } else if (action === "toggle-controls") {
           toggleScriptControlsExpanded(script.id);
-        } else if (action === "edit") {
-          openEditor(script);
         } else if (action === "delete") {
           deleteScript(script);
         } else if (action === "generate-audio") {
@@ -6789,9 +6989,10 @@
     setMediaPickerMessage("", "");
   }
 
-  function renderScripts(scripts) {
+  function renderScripts(scripts, scrollScriptIdIntoView) {
     var list = document.getElementById("scripts-list");
     if (!list) return;
+    bindScriptListFormattingToggle();
     if (!scripts.length) {
       list.innerHTML =
         '<div class="app-empty-hint">No scripts yet. Use <strong>New</strong> or <strong>Import Audio</strong> in the toolbar, or use the <strong>Home</strong> tab flow to generate a personalized mental script and auto-save it here.</div>';
@@ -6801,9 +7002,9 @@
     var gen = ++scriptsRenderGeneration;
     var nextExpanded = {};
     scripts.forEach(function (s) {
-      if (expandedScriptTextById[s.id] === true) nextExpanded[s.id] = true;
+      if (inlineScriptEditorOpenById[s.id] === true) nextExpanded[s.id] = true;
     });
-    expandedScriptTextById = nextExpanded;
+    inlineScriptEditorOpenById = nextExpanded;
     Promise.all(
       scripts.map(function (s) {
         return scriptContentSha256Hex(scriptDigestSourceFromScript(s));
@@ -6817,6 +7018,26 @@
         .join("");
       bindScriptCardActions(scripts);
       updateLibraryExpandAllToggleUi();
+      if (scrollScriptIdIntoView) {
+        var sid = scrollScriptIdIntoView;
+        requestAnimationFrame(function () {
+          var found = null;
+          var nc = list.querySelectorAll(".library-script-card");
+          for (var j = 0; j < nc.length; j++) {
+            if (nc[j].getAttribute("data-script-id") === sid) {
+              found = nc[j];
+              break;
+            }
+          }
+          if (found) {
+            try {
+              found.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            } catch (_e) {
+              found.scrollIntoView({ block: "nearest" });
+            }
+          }
+        });
+      }
     });
   }
 

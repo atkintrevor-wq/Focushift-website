@@ -814,6 +814,252 @@
 .library-script-share-btn svg {
   display: block;
 }
+
+/* My Library script cards — title row, inline editor, footer sync */
+.library-script-card {
+  display: flex;
+  flex-direction: column;
+}
+.library-script-card .app-card-meta-row {
+  margin-bottom: 0.45rem;
+}
+.script-card-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.script-card-title-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.script-card-title-main h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 1.08rem;
+  line-height: 1.28;
+}
+.script-card-play-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text, #e8edf7);
+  cursor: pointer;
+  transition: border-color var(--app-transition), background-color var(--app-transition);
+}
+.script-card-play-btn:hover:not(:disabled) {
+  border-color: rgba(96, 165, 250, 0.65);
+  background: rgba(255, 255, 255, 0.12);
+}
+.script-card-play-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-dim, rgba(59, 130, 246, 0.35));
+}
+.script-card-play-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.script-card-title-trail {
+  display: flex;
+  align-items: center;
+  gap: 0.28rem;
+  flex-shrink: 0;
+}
+.script-card-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 34px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted, #94a3b8);
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    border-color var(--app-transition),
+    background-color var(--app-transition),
+    color var(--app-transition);
+}
+.script-card-icon-btn:hover {
+  border-color: rgba(96, 165, 250, 0.55);
+  color: #93c5fd;
+  background: rgba(255, 255, 255, 0.1);
+}
+.script-card-icon-btn.is-active {
+  border-color: rgba(96, 165, 250, 0.7);
+  color: #bfdbfe;
+  background: rgba(37, 99, 235, 0.2);
+}
+.script-card-icon-btn svg {
+  display: block;
+}
+.script-card-icon-btn-delete {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1;
+}
+.script-card-title-trail .library-card-chevron {
+  width: 34px;
+  height: 34px;
+}
+.script-inline-editor {
+  margin: 0.5rem 0 0;
+  padding: 0.65rem 0.75rem 0.75rem;
+  border-radius: var(--app-radius-sm, 12px);
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(0, 0, 0, 0.12);
+}
+html.fs-app[data-app-theme="light"] .script-inline-editor {
+  border-color: rgba(100, 116, 139, 0.35);
+  background: rgba(15, 23, 42, 0.04);
+}
+.script-inline-field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted, #8b9bb4);
+  margin: 0.35rem 0 0.2rem;
+}
+.script-inline-editor .script-inline-field-label:first-child {
+  margin-top: 0;
+}
+.script-inline-title-input {
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  padding: 0.42rem 0.55rem;
+  font-size: 0.95rem;
+}
+html.fs-app[data-app-theme="light"] .script-inline-title-input {
+  background: rgba(255, 255, 255, 0.85);
+}
+.script-inline-toolbar {
+  margin: 0.4rem 0 0;
+}
+.script-inline-show-format {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  color: var(--muted, #9bb0ca);
+}
+.script-inline-show-format input {
+  width: auto;
+}
+.script-inline-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.35rem;
+  min-height: 9rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.92rem;
+  line-height: 1.52;
+  font-family: inherit;
+  resize: vertical;
+}
+html.fs-app[data-app-theme="light"] .script-inline-textarea {
+  background: rgba(255, 255, 255, 0.88);
+}
+.script-inline-preview-scroll {
+  margin-top: 0.35rem;
+  max-height: min(14rem, 38vh);
+  overflow: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  padding: 0.45rem 0.55rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+.script-inline-preview {
+  white-space: pre-wrap;
+  margin: 0;
+  font: inherit;
+  line-height: 1.52;
+}
+.script-inline-save-row {
+  margin-top: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+.script-card-audio-section {
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.script-card-voice-bg-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin-bottom: 0.5rem;
+}
+@media (max-width: 520px) {
+  .script-card-voice-bg-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.script-card-voice-bg-grid .app-btn {
+  font-size: 0.82rem;
+  padding: 0.45rem 0.55rem;
+  text-align: left;
+}
+.script-card-actions-bar {
+  margin-top: 0.35rem;
+  align-items: center;
+}
+.script-card-icon-action {
+  padding: 0.42rem 0.52rem !important;
+  line-height: 0 !important;
+  min-width: 2.65rem;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center !important;
+  border: 1px solid rgba(255, 255, 255, 0.28) !important;
+}
+.script-card-icon-action svg {
+  display: block;
+}
+.script-card-footer {
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.script-card-footer .script-card-sync-row {
+  margin: 0;
+}
+html.fs-app[data-app-theme="light"] .script-card-audio-section {
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+html.fs-app[data-app-theme="light"] .script-card-footer {
+  border-top-color: rgba(15, 23, 42, 0.08);
+}
+
 .script-card-regen-hint {
   margin: 0.5rem 0 0;
   padding: 0.45rem 0.55rem;
@@ -916,7 +1162,7 @@ html.fs-app[data-app-theme="light"] .audio-generation-overlay-elapsed {
   align-items: center;
   gap: 0.45rem;
   flex-wrap: wrap;
-  margin: 0 0 0.5rem;
+  margin: 0;
   font-size: 0.78rem;
 }
 .script-card-sync-refresh {
