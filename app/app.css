@@ -2265,12 +2265,68 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
     background: linear-gradient(180deg, rgba(8, 14, 28, 0.97) 0%, rgba(8, 14, 28, 0.88) 85%, rgba(8, 14, 28, 0) 100%);
     backdrop-filter: blur(8px);
   }
+  /* Light theme: frosted light bar so tab labels stay dark and readable */
+  html.fs-app[data-app-theme="light"] .app-admin-tab-box {
+    background: linear-gradient(180deg, rgba(248, 250, 252, 0.97) 0%, rgba(248, 250, 252, 0.92) 88%, rgba(248, 250, 252, 0) 100%);
+    border-color: rgba(15, 23, 42, 0.1);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 8px 24px rgba(15, 23, 42, 0.06);
+  }
+  @media (prefers-color-scheme: light) {
+    html.fs-app[data-app-theme="system"] .app-admin-tab-box {
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0.97) 0%, rgba(248, 250, 252, 0.92) 88%, rgba(248, 250, 252, 0) 100%);
+      border-color: rgba(15, 23, 42, 0.1);
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.9) inset, 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+  }
   .app-admin-tab-box .app-admin-tab-box-nav.app-tabs {
     position: static;
     margin: 0;
     padding: 0;
     background: none;
     backdrop-filter: none;
+  }
+  /* Dark / default mobile: light text on inactive main-nav tabs (was color:inherit → dark text on dark bar) */
+  .app-admin-tab-box .app-tab-btn:not(.is-active) {
+    color: rgba(248, 250, 252, 0.94);
+    border-color: rgba(148, 163, 184, 0.35);
+    background: rgba(255, 255, 255, 0.07);
+  }
+  .app-admin-tab-box .app-tab-btn:not(.is-active):hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(186, 230, 253, 0.45);
+    color: #fff;
+  }
+  .app-admin-tab-box .app-tab-btn:not(.is-active) .app-tab-count {
+    color: rgba(226, 232, 240, 0.88);
+  }
+  /* Light theme mobile: dark text on inactive tabs */
+  html.fs-app[data-app-theme="light"] .app-admin-tab-box .app-tab-btn:not(.is-active) {
+    color: var(--text, #0f172a);
+    border-color: rgba(15, 23, 42, 0.14);
+    background: rgba(255, 255, 255, 0.75);
+  }
+  html.fs-app[data-app-theme="light"] .app-admin-tab-box .app-tab-btn:not(.is-active):hover {
+    background: rgba(255, 255, 255, 0.95);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: var(--text, #0f172a);
+  }
+  html.fs-app[data-app-theme="light"] .app-admin-tab-box .app-tab-btn:not(.is-active) .app-tab-count {
+    color: var(--muted, #64748b);
+  }
+  @media (prefers-color-scheme: light) {
+    html.fs-app[data-app-theme="system"] .app-admin-tab-box .app-tab-btn:not(.is-active) {
+      color: var(--text, #0f172a);
+      border-color: rgba(15, 23, 42, 0.14);
+      background: rgba(255, 255, 255, 0.75);
+    }
+    html.fs-app[data-app-theme="system"] .app-admin-tab-box .app-tab-btn:not(.is-active):hover {
+      background: rgba(255, 255, 255, 0.95);
+      border-color: rgba(59, 130, 246, 0.4);
+      color: var(--text, #0f172a);
+    }
+    html.fs-app[data-app-theme="system"] .app-admin-tab-box .app-tab-btn:not(.is-active) .app-tab-count {
+      color: var(--muted, #64748b);
+    }
   }
   .library-toolbar-row {
     flex-direction: column;
@@ -2291,15 +2347,6 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
   .app-btn {
     padding: 0.55rem 0.75rem;
     font-size: 0.9rem;
-  }
-  .app-tabs {
-    position: sticky;
-    top: 0;
-    z-index: 1200;
-    padding: 0.4rem 0;
-    margin-top: 0.6rem;
-    background: linear-gradient(to bottom, rgba(8,14,28,0.98), rgba(8,14,28,0.9));
-    backdrop-filter: blur(6px);
   }
   .app-card {
     padding: 0.9rem;
