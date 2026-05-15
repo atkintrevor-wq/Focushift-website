@@ -7,7 +7,7 @@
   --app-radius: 16px;
   --app-radius-sm: 12px;
   --app-transition: 0.18s ease;
-  --app-library-toolbar-top: 200px;
+  --app-subnav-sticky-top: 200px;
   /* Softer iOS-like surfaces (shared with account modal) */
   --app-surface-card: rgba(255, 255, 255, 0.045);
   --app-surface-card-border: rgba(255, 255, 255, 0.09);
@@ -1625,15 +1625,12 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
   padding: 0;
 }
 .library-card-chevron:hover { border-color: rgba(96,165,250,0.55); color: #93c5fd; }
-.library-toolbar-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.55rem;
+.library-toolbar-row,
+.voices-toolbar-row {
   margin: 0.15rem -0.1rem 0.85rem;
   padding: 0.42rem 0.1rem 0.52rem;
-  flex-wrap: wrap;
   position: sticky;
-  top: var(--app-library-toolbar-top, 200px);
+  top: var(--app-subnav-sticky-top, 200px);
   z-index: 930;
   background: linear-gradient(
     180deg,
@@ -1645,7 +1642,17 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
-html.fs-app[data-app-theme="light"] .library-toolbar-row {
+.library-toolbar-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+.voices-toolbar-row {
+  display: block;
+}
+html.fs-app[data-app-theme="light"] .library-toolbar-row,
+html.fs-app[data-app-theme="light"] .voices-toolbar-row {
   background: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.97) 0%,
@@ -1657,6 +1664,10 @@ html.fs-app[data-app-theme="light"] .library-toolbar-row {
 #library-segmented-tabs {
   flex: 1 1 200px;
   min-width: 0;
+  margin-bottom: 0;
+}
+#voices-segmented-tabs.voice-segmented-tabs {
+  margin-top: 0;
   margin-bottom: 0;
 }
 .library-toolbar-actions {
@@ -2930,7 +2941,8 @@ body.fs-app-body {
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-#library-segmented-tabs.voice-segmented-tabs {
+#library-segmented-tabs.voice-segmented-tabs,
+#voices-segmented-tabs.voice-segmented-tabs {
   border-color: rgba(96, 165, 250, 0.22);
   background: rgba(15, 23, 42, 0.65);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -2992,7 +3004,8 @@ html.fs-app[data-app-theme="light"] .fs-app-body .site-top {
   border-bottom-color: var(--border);
 }
 
-html.fs-app[data-app-theme="light"] #library-segmented-tabs.voice-segmented-tabs {
+html.fs-app[data-app-theme="light"] #library-segmented-tabs.voice-segmented-tabs,
+html.fs-app[data-app-theme="light"] #voices-segmented-tabs.voice-segmented-tabs {
   background: rgba(255, 255, 255, 0.75);
   border-color: rgba(15, 23, 42, 0.12);
 }
@@ -3038,12 +3051,14 @@ html.fs-app[data-app-theme="light"] #library-segmented-tabs.voice-segmented-tabs
     border-bottom-color: var(--border);
   }
 
-  html.fs-app[data-app-theme="system"] #library-segmented-tabs.voice-segmented-tabs {
+  html.fs-app[data-app-theme="system"] #library-segmented-tabs.voice-segmented-tabs,
+  html.fs-app[data-app-theme="system"] #voices-segmented-tabs.voice-segmented-tabs {
     background: rgba(255, 255, 255, 0.75);
     border-color: rgba(15, 23, 42, 0.12);
   }
 
-  html.fs-app[data-app-theme="system"] .library-toolbar-row {
+  html.fs-app[data-app-theme="system"] .library-toolbar-row,
+  html.fs-app[data-app-theme="system"] .voices-toolbar-row {
     background: linear-gradient(
       180deg,
       rgba(255, 255, 255, 0.97) 0%,

@@ -1248,11 +1248,11 @@
       "</section>" +
       '<section id="section-voices" class="app-section">' +
       '<section class="app-card" aria-label="Voice settings">' +
-      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Voices</h2>' +
-      '  <p class="app-muted" style="margin-top:0;">Choose from App Voices or manage My Voices (saved + cloned), then set defaults.</p>' +
-      '  <div class="app-tabs voice-segmented-tabs" style="margin-top:0.5rem;">' +
-      '    <button type="button" class="app-tab-btn" id="voices-tab-my" data-voices-tab="my-voices">My Voices</button>' +
-      '    <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
+      '  <div class="voices-toolbar-row">' +
+      '    <div class="app-tabs voice-segmented-tabs" id="voices-segmented-tabs">' +
+      '      <button type="button" class="app-tab-btn" id="voices-tab-my" data-voices-tab="my-voices">My Voices</button>' +
+      '      <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
+      "    </div>" +
       "  </div>" +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Upload Voice Audio</button>' +
@@ -2151,7 +2151,7 @@
       var adminHead = document.querySelector(".app-admin-sticky-head");
       if (adminHead) {
         var headRo = new ResizeObserver(function () {
-          syncLibraryToolbarStickyOffset();
+          syncSubnavStickyOffset();
         });
         headRo.observe(adminHead);
       }
@@ -2160,10 +2160,10 @@
       syncVoiceSegmentedPill();
       syncLibrarySegmentedPill();
       updatePremadeExpandAllToggleUi();
-      syncLibraryToolbarStickyOffset();
+      syncSubnavStickyOffset();
     };
     requestAnimationFrame(function () {
-      requestAnimationFrame(syncLibraryToolbarStickyOffset);
+      requestAnimationFrame(syncSubnavStickyOffset);
     });
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
       setVoicesMessage("Choose a clear voice audio file to upload.", "");
@@ -2683,9 +2683,9 @@
     if (activeAdminTab === "playlists") {
       updatePlaylistSectionVisibility();
     }
-    if (activeAdminTab === "library") {
+    if (activeAdminTab === "library" || activeAdminTab === "voices") {
       requestAnimationFrame(function () {
-        syncLibraryToolbarStickyOffset();
+        syncSubnavStickyOffset();
       });
     }
   }
@@ -2706,12 +2706,12 @@
     trig.setAttribute("aria-expanded", willOpen ? "true" : "false");
   }
 
-  function syncLibraryToolbarStickyOffset() {
+  function syncSubnavStickyOffset() {
     var head = document.querySelector(".app-admin-sticky-head");
     if (!head) return;
     var h = head.getBoundingClientRect().height;
     if (!isFinite(h) || h <= 0) return;
-    document.documentElement.style.setProperty("--app-library-toolbar-top", Math.ceil(h) + "px");
+    document.documentElement.style.setProperty("--app-subnav-sticky-top", Math.ceil(h) + "px");
   }
 
   function renderLibrarySubtab() {
@@ -2732,7 +2732,7 @@
     if (activeLibraryTab === "my-library") updateLibraryExpandAllToggleUi();
     if (activeLibraryTab === "app-library") updatePremadeExpandAllToggleUi();
     requestAnimationFrame(function () {
-      syncLibraryToolbarStickyOffset();
+      syncSubnavStickyOffset();
     });
   }
 
@@ -3367,7 +3367,7 @@
   }
 
   function syncVoiceSegmentedPill() {
-    var wrap = document.querySelector("#section-voices .voice-segmented-tabs");
+    var wrap = document.getElementById("voices-segmented-tabs");
     if (!wrap) return;
     var activeBtn = wrap.querySelector(".app-tab-btn.is-active");
     if (!activeBtn) return;
