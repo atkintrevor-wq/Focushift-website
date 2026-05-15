@@ -1147,7 +1147,7 @@
       "</strong></p>" +
       '    <p class="app-welcome-tagline">Where Focus Becomes Power</p>' +
       "  </div>" +
-      "</header></div>" +
+      "</header>" +
       '<div class="app-admin-tab-box">' +
       '  <nav id="admin-main-tabs" class="app-tabs app-admin-tab-box-nav" aria-label="Admin sections">' +
       '    <div class="app-admin-tab-lead">' +
@@ -1159,6 +1159,7 @@
       '    <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
       '    <button type="button" class="app-tab-btn" data-admin-tab="backgrounds">Backgrounds</button>' +
       "  </nav>" +
+      "</div>" +
       "</div>" +
       '<section id="section-home" class="app-section" aria-label="Home">' +
       '<section class="app-card" aria-label="Focus Shift home">' +

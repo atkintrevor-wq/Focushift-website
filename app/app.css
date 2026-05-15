@@ -2255,10 +2255,8 @@ html.fs-app[data-app-theme="light"] .script-card-sync-refresh {
   .app-shell {
     padding: 1rem 0.7rem calc(6rem + env(safe-area-inset-bottom));
   }
+  /* Main nav: lives inside .app-admin-sticky-head so it pins with logo + welcome (no separate sticky — was scrolling away) */
   .app-admin-tab-box {
-    position: sticky;
-    top: 0;
-    z-index: 1185;
     margin-bottom: 0.65rem;
     padding-top: 0.42rem;
     padding-bottom: 0.48rem;
