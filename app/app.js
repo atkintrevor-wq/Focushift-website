@@ -44,6 +44,7 @@
   var PREF_LISTEN_SHORTCUT_KEY = "focusshiftWebPrefListenTodayShortcut";
   /** Display name when shortcut raw is playlist:<id> (same idea as iOS ListenTodayShortcut). */
   var PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY = "focusshiftWebPrefListenTodayPlaylistName";
+  var PREF_LISTEN_SHORTCUT_SCRIPT_TITLE_KEY = "focusshiftWebPrefListenTodayScriptTitle";
   /** "1" = Your library section expanded on home; "0" = collapsed. */
   var PREF_HOME_LIBRARY_OPEN_KEY = "focusshiftWebHomeLibraryOpen";
   /** Mirrors iOS @AppStorage("adminModeEnabled"); gates catalog publish/edit on web. */
@@ -850,6 +851,7 @@
       var raw = (localStorage.getItem(PREF_LISTEN_SHORTCUT_KEY) || "playlists").trim();
       if (raw === "library" || raw === "playlists") return raw;
       if (raw.indexOf("playlist:") === 0) return raw;
+      if (raw.indexOf("script:") === 0) return raw;
       return "playlists";
     } catch (_e) {
       return "playlists";
@@ -859,6 +861,14 @@
   function readListenShortcutPlaylistName() {
     try {
       return (localStorage.getItem(PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY) || "").trim();
+    } catch (_eNm) {
+      return "";
+    }
+  }
+
+  function readListenShortcutScriptTitle() {
+    try {
+      return (localStorage.getItem(PREF_LISTEN_SHORTCUT_SCRIPT_TITLE_KEY) || "").trim();
     } catch (_e2) {
       return "";
     }
@@ -869,6 +879,17 @@
     try {
       localStorage.setItem(PREF_LISTEN_SHORTCUT_KEY, "playlist:" + String(id));
       localStorage.setItem(PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY, (name && String(name)) || "Playlist");
+      localStorage.removeItem(PREF_LISTEN_SHORTCUT_SCRIPT_TITLE_KEY);
+    } catch (_e) {}
+  }
+
+  function writeListenShortcutScript(scriptId, title) {
+    var sid = (scriptId && String(scriptId).trim()) || "";
+    if (!sid) return;
+    try {
+      localStorage.setItem(PREF_LISTEN_SHORTCUT_KEY, "script:" + sid);
+      localStorage.setItem(PREF_LISTEN_SHORTCUT_SCRIPT_TITLE_KEY, (title && String(title).trim()) || "Library track");
+      localStorage.removeItem(PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY);
     } catch (_e) {}
   }
 
@@ -877,7 +898,139 @@
     try {
       localStorage.setItem(PREF_LISTEN_SHORTCUT_KEY, t);
       localStorage.removeItem(PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY);
+      localStorage.removeItem(PREF_LISTEN_SHORTCUT_SCRIPT_TITLE_KEY);
     } catch (_e) {}
+  }
+
+  function populatePrefListenPlaylistSelect(sel) {
+    if (!sel) return;
+    var raw = readListenShortcutRaw();
+    var curPid = raw.indexOf("playlist:") === 0 ? raw.slice("playlist:".length) : "";
+    sel.innerHTML =
+      '<option value="">Select a playlist\u2026</option>' +
+      currentPlaylists
+        .map(function (p) {
+          return (
+            '<option value="' +
+            escapeHtml(p.id) +
+            '">' +
+            escapeHtml(p.name || "Playlist") +
+            "</option>"
+          );
+        })
+        .join("");
+    if (
+      curPid &&
+      currentPlaylists.some(function (p) {
+        return p.id === curPid;
+      })
+    ) {
+      sel.value = curPid;
+    } else {
+      sel.value = "";
+    }
+  }
+
+  function populatePrefListenScriptSelect(sel) {
+    if (!sel) return;
+    var raw = readListenShortcutRaw();
+    var curSid = raw.indexOf("script:") === 0 ? raw.slice("script:".length) : "";
+    var playable = currentScripts.filter(function (s) {
+      return !!(s.audioURL && String(s.audioURL).trim());
+    });
+    sel.innerHTML =
+      '<option value="">Select a library track\u2026</option>' +
+      playable
+        .map(function (s) {
+          return (
+            '<option value="' +
+            escapeHtml(s.id) +
+            '">' +
+            escapeHtml(s.title || "Script") +
+            "</option>"
+          );
+        })
+        .join("");
+    if (
+      curSid &&
+      playable.some(function (s) {
+        return s.id === curSid;
+      })
+    ) {
+      sel.value = curSid;
+    } else {
+      sel.value = "";
+    }
+  }
+
+  function syncListenShortcutPreferenceUi() {
+    var modeEl = document.getElementById("pref-listen-shortcut-mode");
+    var plWrap = document.getElementById("pref-listen-shortcut-playlist-wrap");
+    var scWrap = document.getElementById("pref-listen-shortcut-script-wrap");
+    var plSel = document.getElementById("pref-listen-shortcut-playlist-id");
+    var scSel = document.getElementById("pref-listen-shortcut-script-id");
+    if (!modeEl) return;
+    var raw = readListenShortcutRaw();
+    var mode = "playlists";
+    if (raw === "library") mode = "library";
+    else if (raw.indexOf("playlist:") === 0) mode = "playlist-target";
+    else if (raw.indexOf("script:") === 0) mode = "script-target";
+    else if (raw === "playlists") mode = "playlists";
+    modeEl.value = mode;
+    populatePrefListenPlaylistSelect(plSel);
+    populatePrefListenScriptSelect(scSel);
+    if (plWrap) plWrap.hidden = mode !== "playlist-target";
+    if (scWrap) scWrap.hidden = mode !== "script-target";
+  }
+
+  function onPrefListenShortcutModeChange(mode) {
+    if (mode === "playlists" || mode === "library") {
+      writeListenShortcutTab(mode);
+      syncListenShortcutPreferenceUi();
+      setAccountMessage("Listen today home-row shortcut updated.", "success");
+      if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+      return;
+    }
+    if (mode === "playlist-target") {
+      if (!currentPlaylists.length) {
+        setAccountMessage("Create a playlist in the Playlists tab first.", "error");
+        writeListenShortcutTab("playlists");
+        syncListenShortcutPreferenceUi();
+        return;
+      }
+      var pick = currentPlaylists[0];
+      writeListenShortcutPlaylist(pick.id, pick.name || "Playlist");
+      syncListenShortcutPreferenceUi();
+      setAccountMessage(
+        'Home row plays "' +
+          (pick.name || "Playlist") +
+          '". Pick another playlist below if you prefer.',
+        "success"
+      );
+      if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+      return;
+    }
+    if (mode === "script-target") {
+      var playable = currentScripts.filter(function (s) {
+        return !!(s.audioURL && String(s.audioURL).trim());
+      });
+      if (!playable.length) {
+        setAccountMessage("Generate audio for a script in Library first.", "error");
+        writeListenShortcutTab("library");
+        syncListenShortcutPreferenceUi();
+        return;
+      }
+      var spick = playable[0];
+      writeListenShortcutScript(spick.id, spick.title || "Script");
+      syncListenShortcutPreferenceUi();
+      setAccountMessage(
+        'Home row plays "' +
+          (spick.title || "Script") +
+          '". Pick another track below if you prefer.',
+        "success"
+      );
+      if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+    }
   }
 
   function readHomeLibrarySectionOpen() {
@@ -913,6 +1066,11 @@
     if (raw.indexOf("playlist:") === 0 && plName) {
       return 'Tap to play "' + plName + '"';
     }
+    if (raw.indexOf("script:") === 0) {
+      var st = readListenShortcutScriptTitle();
+      if (st) return 'Tap to play "' + st + '"';
+      return "Tap to play your library track";
+    }
     var eff = stats ? effectiveStreakDisplayed(stats) : 0;
     if (eff > 0) {
       return "Keep your " + eff + "-day streak going.";
@@ -933,7 +1091,31 @@
         return;
       }
       setAdminTab("playlists");
-      generationMessage("That playlist is no longer in your account. Open Listen today → Shortcuts to pick another.", "error");
+      generationMessage(
+        "That playlist is no longer in your account. Pick another in Account → Preferences or Listen today.",
+        "error"
+      );
+      return;
+    }
+    if (raw.indexOf("script:") === 0) {
+      var sid = raw.slice("script:".length);
+      var scr = currentScripts.find(function (s) {
+        return s.id === sid;
+      });
+      if (scr && scr.audioURL && String(scr.audioURL).trim()) {
+        setAdminTab("library");
+        activeLibraryTab = "my-library";
+        renderLibrarySubtab();
+        togglePlayScriptAudio(scr);
+        return;
+      }
+      setAdminTab("library");
+      activeLibraryTab = "my-library";
+      renderLibrarySubtab();
+      generationMessage(
+        "That library track is unavailable. Pick another in Account → Preferences or Listen today.",
+        "error"
+      );
       return;
     }
     if (raw === "library") {
@@ -974,15 +1156,22 @@
       parts.push('<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.82rem;">No scripts with audio yet — generate audio in Library.</p>');
     } else {
       parts.push(
-        '<div class="app-modal-list listen-today-script-scroll">' +
+        '<div class="listen-today-script-actions">' +
           scriptsPlayable
             .map(function (s) {
               return (
-                '<button type="button" class="app-modal-list-item listen-today-script-pick" data-listen-script-id="' +
-                escapeHtml(s.id) +
-                '">' +
+                '<div class="listen-today-script-actions-row">' +
+                '<span class="listen-today-script-actions-title">' +
                 escapeHtml(s.title || "Script") +
-                "</button>"
+                "</span>" +
+                '<span class="listen-today-script-actions-btns">' +
+                '<button type="button" class="app-btn app-btn-secondary listen-today-script-pick" data-listen-script-id="' +
+                escapeHtml(s.id) +
+                '">Play</button>' +
+                '<button type="button" class="app-btn app-btn-ghost listen-today-script-shortcut" data-listen-script-id="' +
+                escapeHtml(s.id) +
+                '">Home row</button>' +
+                "</span></div>"
               );
             })
             .join("") +
@@ -991,7 +1180,9 @@
     }
     parts.push("</div>");
     parts.push('<div class="listen-today-modal-section"><strong>Shortcut when you tap the home row</strong>');
-    parts.push('<p class="app-muted" style="margin:0.25rem 0 0.45rem;font-size:0.8rem;">Saved in this browser (Account → Preferences can reset tab-only).</p>');
+    parts.push(
+      '<p class="app-muted" style="margin:0.25rem 0 0.45rem;font-size:0.8rem;">Saved in this browser. Fine-tune in <strong>Account → Preferences</strong> (playlist or library track).</p>'
+    );
     parts.push(
       '<div style="display:flex;flex-direction:column;gap:0.35rem;">' +
         '<button type="button" class="app-btn app-btn-secondary listen-today-block-btn" id="listen-today-shortcut-library">Open <strong>Library</strong> tab</button>' +
@@ -1044,14 +1235,33 @@
         }
       });
     });
+    host.querySelectorAll(".listen-today-script-shortcut").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var sid = btn.getAttribute("data-listen-script-id");
+        var script = currentScripts.find(function (s) {
+          return s.id === sid;
+        });
+        if (!script) return;
+        writeListenShortcutScript(sid, script.title || "Script");
+        closeListenTodayModal();
+        syncListenShortcutPreferenceUi();
+        if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+        generationMessage(
+          'Home row will play "' + (script.title || "Script") + '". Use Preferences to switch targets.',
+          "success"
+        );
+      });
+    });
     document.getElementById("listen-today-shortcut-library").addEventListener("click", function () {
       writeListenShortcutTab("library");
+      syncListenShortcutPreferenceUi();
       closeListenTodayModal();
       if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
       generationMessage("Home row will open your Library tab.", "success");
     });
     document.getElementById("listen-today-shortcut-playlists").addEventListener("click", function () {
       writeListenShortcutTab("playlists");
+      syncListenShortcutPreferenceUi();
       closeListenTodayModal();
       if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
       generationMessage("Home row will open your Playlists tab.", "success");
@@ -1062,6 +1272,7 @@
         var nm = btn.getAttribute("data-playlist-name") || "Playlist";
         writeListenShortcutPlaylist(id, nm);
         closeListenTodayModal();
+        syncListenShortcutPreferenceUi();
         if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
         generationMessage('Shortcut set — tap "Listen today" on Home to play "' + nm + '".', "success");
       });
@@ -1640,11 +1851,22 @@
       '        <h4 class="account-section-card__title">App preferences</h4>' +
       '        <p class="app-muted account-section-card__text">These options apply in this browser only.</p>' +
       '        <label class="account-pref-row"><input type="checkbox" id="pref-auto-play-next" /> Auto-Play Next</label>' +
-      '        <label class="account-pref-row" for="pref-listen-shortcut">Listen today shortcut</label>' +
-      '        <select id="pref-listen-shortcut" class="app-btn" style="width:100%;text-align:left;margin-top:0.15rem;">' +
-      '          <option value="playlists">Playlists tab</option>' +
-      '          <option value="library">Library tab</option>' +
+      '        <label class="account-pref-row" for="pref-listen-shortcut-mode">Listen today — home row</label>' +
+      '        <p class="app-muted account-section-card__text" style="margin-top:0.12rem;">Choose what happens when you tap the big listening row on Home (saved in this browser).</p>' +
+      '        <select id="pref-listen-shortcut-mode" class="app-btn" style="width:100%;text-align:left;margin-top:0.35rem;">' +
+      '          <option value="playlists">Open Playlists tab</option>' +
+      '          <option value="library">Open Library tab</option>' +
+      '          <option value="playlist-target">Play a playlist</option>' +
+      '          <option value="script-target">Play a library track</option>' +
       "        </select>" +
+      '        <div id="pref-listen-shortcut-playlist-wrap" hidden style="margin-top:0.45rem;">' +
+      '          <label class="account-pref-row" for="pref-listen-shortcut-playlist-id">Playlist</label>' +
+      '          <select id="pref-listen-shortcut-playlist-id" class="app-btn" style="width:100%;text-align:left;margin-top:0.15rem;"></select>' +
+      "        </div>" +
+      '        <div id="pref-listen-shortcut-script-wrap" hidden style="margin-top:0.45rem;">' +
+      '          <label class="account-pref-row" for="pref-listen-shortcut-script-id">Library track</label>' +
+      '          <select id="pref-listen-shortcut-script-id" class="app-btn" style="width:100%;text-align:left;margin-top:0.15rem;"></select>' +
+      "        </div>" +
       "      </section>" +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Appearance</h4>' +
@@ -2206,10 +2428,28 @@
       } catch (_e) {}
       setAccountMessage("Auto-Play preference saved for this browser.", "success");
     });
-    document.getElementById("pref-listen-shortcut").addEventListener("change", function () {
-      var next = this.value === "library" ? "library" : "playlists";
-      writeListenShortcutTab(next);
-      setAccountMessage("Listen today shortcut preference saved.", "success");
+    document.getElementById("pref-listen-shortcut-mode").addEventListener("change", function () {
+      onPrefListenShortcutModeChange(this.value || "playlists");
+    });
+    document.getElementById("pref-listen-shortcut-playlist-id").addEventListener("change", function () {
+      var id = this.value;
+      if (!id) return;
+      var opt = this.options[this.selectedIndex];
+      var nm = opt ? opt.textContent.trim() : "Playlist";
+      writeListenShortcutPlaylist(id, nm);
+      syncListenShortcutPreferenceUi();
+      setAccountMessage('Home row will play playlist "' + nm + '".', "success");
+      if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+    });
+    document.getElementById("pref-listen-shortcut-script-id").addEventListener("change", function () {
+      var id = this.value;
+      if (!id) return;
+      var opt = this.options[this.selectedIndex];
+      var t = opt ? opt.textContent.trim() : "Library track";
+      writeListenShortcutScript(id, t);
+      syncListenShortcutPreferenceUi();
+      setAccountMessage('Home row will play "' + t + '".', "success");
+      if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
     });
     ["pref-theme-system", "pref-theme-dark", "pref-theme-light"].forEach(function (id) {
       var el = document.getElementById(id);
@@ -2829,8 +3069,7 @@
     if (resumeCb) resumeCb.checked = readPrefResumeAdmin();
     var autoPlayCb = document.getElementById("pref-auto-play-next");
     if (autoPlayCb) autoPlayCb.checked = readPrefAutoPlay();
-    var listenSel = document.getElementById("pref-listen-shortcut");
-    if (listenSel) listenSel.value = readPrefListenTodayShortcut();
+    syncListenShortcutPreferenceUi();
     var libMy = document.getElementById("pref-library-sub-my");
     var libApp = document.getElementById("pref-library-sub-app");
     if (libMy && libApp) {
@@ -2876,7 +3115,10 @@
     document.querySelectorAll("[data-account-tab]").forEach(function (b) {
       b.classList.toggle("is-active", b.getAttribute("data-account-tab") === chosen);
     });
-    if (chosen === "preferences") syncAccountDefaultMediaLabels();
+    if (chosen === "preferences") {
+      syncAccountDefaultMediaLabels();
+      syncListenShortcutPreferenceUi();
+    }
   }
 
   function readPrefAutoPlay() {
@@ -2885,11 +3127,6 @@
     } catch (_e) {
       return false;
     }
-  }
-
-  function readPrefListenTodayShortcut() {
-    var raw = readListenShortcutRaw();
-    return raw === "library" ? "library" : "playlists";
   }
 
   function openAccountModal() {
