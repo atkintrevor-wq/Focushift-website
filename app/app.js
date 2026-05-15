@@ -6533,12 +6533,21 @@
         ">" +
         genLabel +
         "</button>" +
-        '  <button type="button" class="app-btn app-btn-secondary script-card-icon-action" data-action="add-to-playlist" data-script-id="' +
+        '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="add-to-playlist" data-script-id="' +
         escapeHtml(script.id) +
         '" title="Add to playlist"' +
         (!currentPlaylists.length ? " disabled" : "") +
         ' aria-label="Add to playlist">' +
         playlistIconSvg +
+        "</button>" +
+        '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn script-card-actions-edit-btn' +
+        (editorOpen ? " is-active" : "") +
+        '" data-action="toggle-inline-script" data-script-id="' +
+        escapeHtml(script.id) +
+        '" title="' +
+        (editorOpen ? "Hide script editor" : "Show and edit script") +
+        '" aria-label="Edit script">' +
+        docIconSvg +
         "</button>" +
         (showShareLink
           ? '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="share-audio" data-script-id="' +
@@ -6572,18 +6581,6 @@
       "</button>" +
       "  </div>" +
       '  <div class="script-card-title-trail">' +
-      '    <button type="button" class="script-card-icon-btn script-card-icon-btn-editor' +
-      (editorOpen ? " is-active" : "") +
-      '" data-action="toggle-inline-script" data-script-id="' +
-      escapeHtml(script.id) +
-      '" title="' +
-      (editorOpen ? "Hide script editor" : "Show and edit script") +
-      '" aria-label="Script">' +
-      docIconSvg +
-      "</button>" +
-      '    <button type="button" class="script-card-icon-btn script-card-icon-btn-delete" data-action="delete" data-script-id="' +
-      escapeHtml(script.id) +
-      '" title="Delete script" aria-label="Delete">\u2715</button>' +
       '    <button type="button" class="library-card-chevron" data-action="toggle-controls" data-script-id="' +
       escapeHtml(script.id) +
       '" aria-expanded="' +
@@ -6606,6 +6603,9 @@
       audioSection +
       '<div class="script-card-footer">' +
       syncStatusHtml +
+      '  <button type="button" class="script-card-icon-btn script-card-icon-btn-delete script-card-footer-delete" data-action="delete" data-script-id="' +
+      escapeHtml(script.id) +
+      '" title="Delete script" aria-label="Delete">\u2715</button>' +
       "</div>" +
       "</article>"
     );
