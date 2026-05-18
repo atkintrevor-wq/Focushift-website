@@ -1984,6 +1984,7 @@ html.fs-app[data-app-theme="light"] .voices-toolbar-row {
 }
 .voice-segmented-tabs {
   display: inline-flex;
+  flex-wrap: nowrap;
   gap: 0.2rem;
   padding: 0.22rem;
   border-radius: 12px;
@@ -2742,14 +2743,37 @@ html.fs-app[data-app-theme="light"] .voices-toolbar-row {
     }
   }
   .library-toolbar-row {
-    flex-direction: column;
-    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.4rem;
   }
   #library-segmented-tabs,
   #audio-segmented-tabs {
-    flex: 1 1 auto;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 100%;
+  }
+  #library-segmented-tabs.voice-segmented-tabs,
+  #audio-segmented-tabs.voice-segmented-tabs {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+  #library-segmented-tabs.voice-segmented-tabs .app-tab-btn,
+  #audio-segmented-tabs.voice-segmented-tabs .app-tab-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+    padding: 0.36rem 0.48rem;
+    font-size: 0.8rem;
+  }
+  #library-segmented-tabs .app-tab-count,
+  #audio-segmented-tabs .app-tab-count {
+    font-size: 0.72rem;
   }
   .library-toolbar-actions {
+    flex-shrink: 0;
     justify-content: flex-end;
   }
   .library-create-dropdown {
@@ -2832,12 +2856,17 @@ html.fs-app[data-app-theme="light"] .voices-toolbar-row {
     flex: 1 1 calc(50% - 0.4rem);
     min-width: 0;
   }
-  .voice-segmented-tabs {
+  #voices-segmented-tabs.voice-segmented-tabs {
+    display: flex;
+    flex-wrap: nowrap;
     width: 100%;
-    justify-content: stretch;
   }
-  .voice-segmented-tabs .app-tab-btn {
-    flex: 1 1 50%;
+  #voices-segmented-tabs.voice-segmented-tabs .app-tab-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+    padding: 0.36rem 0.48rem;
+    font-size: 0.8rem;
   }
   .voice-adjust-modal .app-modal-actions {
     gap: 0.4rem;
