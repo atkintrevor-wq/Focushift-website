@@ -7963,8 +7963,20 @@
         "</div>" +
         "</div>"
       : "";
+    var footerHtml = controlsExpanded
+      ? '<div class="script-card-footer">' +
+        syncStatusHtml +
+        '  <button type="button" class="script-card-icon-btn script-card-icon-btn-delete script-card-footer-delete" data-action="delete" data-script-id="' +
+        escapeHtml(script.id) +
+        '" title="Delete script" aria-label="Delete">\u2715</button>' +
+        "</div>"
+      : "";
+    var cardClass =
+      "app-card library-script-card" + (controlsExpanded ? "" : " library-script-card--collapsed");
     return (
-      '<article class="app-card library-script-card" data-script-id="' +
+      '<article class="' +
+      cardClass +
+      '" data-script-id="' +
       escapeHtml(script.id) +
       '">' +
       '<div class="script-card-title-row">' +
@@ -8006,12 +8018,7 @@
       regenHintHtml +
       inlineEditorHtml +
       audioSection +
-      '<div class="script-card-footer">' +
-      syncStatusHtml +
-      '  <button type="button" class="script-card-icon-btn script-card-icon-btn-delete script-card-footer-delete" data-action="delete" data-script-id="' +
-      escapeHtml(script.id) +
-      '" title="Delete script" aria-label="Delete">\u2715</button>' +
-      "</div>" +
+      footerHtml +
       "</article>"
     );
   }

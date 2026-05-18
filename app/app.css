@@ -1010,6 +1010,12 @@ html.fs-app[data-app-theme="light"] .listen-today-script-actions-row {
   display: flex;
   flex-direction: column;
 }
+.library-script-card--collapsed .app-card-meta-row {
+  margin-bottom: 0;
+}
+.library-script-card--collapsed {
+  padding-bottom: 0.75rem;
+}
 .library-script-card .app-card-meta-row {
   margin-bottom: 0.45rem;
 }
