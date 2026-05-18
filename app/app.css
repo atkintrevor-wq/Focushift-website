@@ -76,9 +76,13 @@
   row-gap: 0.35rem;
   justify-content: initial;
 }
-.app-site-top-inner-split .app-site-top-spacer {
+.app-site-top-inner-split .app-admin-header-leading {
   grid-column: 1;
+  justify-self: start;
+  align-self: center;
   min-width: 0;
+  display: flex;
+  align-items: center;
 }
 .app-site-top-inner-split .app-site-top-brand-center {
   grid-column: 2;
@@ -223,7 +227,7 @@
 }
 .app-header-help-btn:hover,
 .app-header-account-btn:hover { border-color: #2563eb; color: #fff; }
-.app-header-account-btn { color: #e2e8f0; }
+.app-header-account-btn { color: #60a5fa; }
 .screen-help-modal {
   max-width: 520px;
   max-height: min(88vh, 720px);

@@ -1630,6 +1630,14 @@
     );
   }
 
+  function accountGearIconSvg() {
+    return (
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+      '<path d="M19.14 12.94c.04-.31.06-.63.06-.94 0-.31-.02-.63-.06-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.52-.4-1.08-.73-1.69-.98l-.36-2.54a.484.484 0 0 0-.48-.41h-3.8c-.24 0-.43.17-.47.41l-.36 2.54c-.61.25-1.17.59-1.69.98l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.52.4 1.08.73 1.69.98l.36 2.54c.05.24.24.41.48.41h3.8c.24 0 .44-.17.48-.41l.36-2.54c.61-.25 1.17-.59 1.69-.98l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.03-1.58zM12 15.6A3.6 3.6 0 1 1 15.6 12 3.6 3.6 0 0 1 12 15.6z"/>' +
+      "</svg>"
+    );
+  }
+
   function helpIconForSectionTitle(title) {
     var t = (title || "").toLowerCase();
     if (t.indexOf("script") >= 0 || t.indexOf("affirmation") >= 0 || t.indexOf("library") >= 0) return "📝";
@@ -1733,7 +1741,11 @@
       '<nav class="site-top app-site-top-in-shell" aria-label="Focus Shift site">' +
       '  <a class="site-top-skip" href="#admin-main-tabs">Skip to content</a>' +
       '  <div class="site-top-inner app-site-top-inner-split">' +
-      '    <div class="app-site-top-spacer" aria-hidden="true"></div>' +
+      '    <div class="app-admin-header-leading">' +
+      '      <button type="button" class="app-header-account-btn" id="btn-account-menu" aria-label="Account &amp; Settings" aria-haspopup="dialog" aria-expanded="false">' +
+      accountGearIconSvg() +
+      "</button>" +
+      "    </div>" +
       '    <a class="site-top-home app-site-top-brand-center" href="/" aria-label="Focus Shift — marketing site home">' +
       '      <img class="site-top-app-brand site-top-app-brand-shell" src="../images/focus-shift-app-brand.png?v=7" alt="Focus Shift" width="1174" height="417" decoding="async" />' +
       "    </a>" +
@@ -1746,12 +1758,6 @@
       '      <button type="button" class="app-header-help-btn" id="btn-screen-help" aria-label="Show help for this screen">' +
       screenHelpIconSvg() +
       "</button>" +
-      '      <button type="button" class="app-header-account-btn" id="btn-account-menu" aria-label="Account menu" aria-haspopup="dialog" aria-expanded="false">' +
-      '        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
-      '          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>' +
-      '          <circle cx="12" cy="7" r="4"/>' +
-      "        </svg>" +
-      "      </button>" +
       "    </div>" +
       "  </div>" +
       "</nav>" +
