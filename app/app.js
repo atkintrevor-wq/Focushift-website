@@ -1598,7 +1598,9 @@
       "</div>" +
       '<section id="section-home" class="app-section" aria-label="Home">' +
       '<section class="app-card" aria-label="Focus Shift home">' +
-      '  <h2 style="font-size:1.1rem;margin:0 0 0.6rem;">Home</h2>' +
+      '  <div id="home-section-header" class="home-section-header">' +
+      '    <h2 id="home-section-title" class="home-section-title">Home</h2>' +
+      "  </div>" +
       '  <div id="home-flow"></div>' +
       '  <div id="generation-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
@@ -6141,6 +6143,88 @@
     renderHomeFlow(displayName || "");
   }
 
+  function restoreSurveyFormFromClarifySnapshot(snap) {
+    if (!snap) return;
+    setTimeout(function () {
+      var e1 = document.getElementById("gen-q1");
+      var e2 = document.getElementById("gen-q2");
+      if (e1) e1.value = snap.q1 || "";
+      if (e2) e2.value = snap.q2 || "";
+      var toneE = document.getElementById("gen-tone");
+      if (toneE && snap.tone) toneE.value = snap.tone;
+      var lenWant = snap.length || "Medium";
+      document.querySelectorAll('input[name="gen-length"]').forEach(function (r) {
+        r.checked = r.value === lenWant;
+      });
+      var persWant = snap.perspective || "First person";
+      document.querySelectorAll('input[name="gen-perspective"]').forEach(function (r) {
+        r.checked = r.value === persWant;
+      });
+      var useE = document.getElementById("gen-use-name");
+      if (useE) useE.checked = !!snap.useNameInScript;
+      setClarifyStepperValue(snap.requested != null ? snap.requested : 0);
+      wireGenLengthHint();
+      wirePerspectiveUseNameRow();
+    }, 0);
+  }
+
+  function abandonClarifyAndReturnToSurvey(displayName) {
+    var snap = homeClarifyFlow;
+    homeClarifyFlow = null;
+    generationMessage("", "");
+    setHomeFlowStep("survey", displayName);
+    restoreSurveyFormFromClarifySnapshot(snap);
+  }
+
+  function syncHomeSectionHeader(displayName) {
+    var header = document.getElementById("home-section-header");
+    var titleEl = document.getElementById("home-section-title");
+    if (!header || !titleEl) return;
+
+    var oldBack = document.getElementById("home-flow-back");
+    if (oldBack) oldBack.remove();
+
+    if (homeFlowStep === "landing") {
+      titleEl.hidden = false;
+      titleEl.textContent = "Home";
+      return;
+    }
+
+    var back = document.createElement("button");
+    back.type = "button";
+    back.id = "home-flow-back";
+    back.className = "playlist-back-arrow-btn home-flow-back-btn";
+    back.textContent = "←";
+
+    if (homeFlowStep === "category") {
+      back.setAttribute("aria-label", "Back to home");
+      titleEl.hidden = false;
+      titleEl.textContent = "Choose a category";
+      back.addEventListener("click", function () {
+        setHomeFlowStep("landing", displayName);
+      });
+    } else if (homeFlowStep === "survey") {
+      back.setAttribute("aria-label", "Back to categories");
+      titleEl.hidden = true;
+      back.addEventListener("click", function () {
+        setHomeFlowStep("category", displayName);
+      });
+    } else if (homeFlowStep === "clarify") {
+      back.setAttribute("aria-label", "Back to questions");
+      titleEl.hidden = false;
+      titleEl.textContent = "Clarifying";
+      back.addEventListener("click", function () {
+        abandonClarifyAndReturnToSurvey(displayName);
+      });
+    } else {
+      titleEl.hidden = false;
+      titleEl.textContent = "Home";
+      return;
+    }
+
+    header.insertBefore(back, titleEl);
+  }
+
   function resolvedSubscriptionTier() {
     if (!currentUserProfile) return "free";
     var raw = (currentUserProfile.subscriptionTier || "").toString().trim().toLowerCase();
@@ -6615,6 +6699,7 @@
   function renderHomeFlow(displayName) {
     var el = document.getElementById("home-flow");
     if (!el) return;
+    syncHomeSectionHeader(displayName);
     var cat = selectedCategory();
     if (homeFlowStep === "landing") {
       var ls = webListeningStats || normalizeListeningDoc({});
@@ -6792,9 +6877,8 @@
     if (homeFlowStep === "category") {
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
-        '  <p class="app-muted" style="margin:0;">Choose a category to personalize your script.</p>' +
+        '  <p class="app-muted" style="margin:0;">Pick a topic to personalize your script.</p>' +
         '  <div id="home-category-list" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.5rem;"></div>' +
-        '  <div><button type="button" class="app-btn app-btn-secondary" id="home-back-landing">Back</button></div>' +
         "</div>";
       var list = document.getElementById("home-category-list");
       if (list) {
@@ -6814,12 +6898,6 @@
             activeCategoryId = btn.getAttribute("data-home-category") || "confidence";
             setHomeFlowStep("survey", displayName);
           });
-        });
-      }
-      var backLanding = document.getElementById("home-back-landing");
-      if (backLanding) {
-        backLanding.addEventListener("click", function () {
-          setHomeFlowStep("landing", displayName);
         });
       }
       return;
@@ -6843,7 +6921,6 @@
         '    <textarea id="clarify-answer" class="gen-survey-textarea gen-clarify-textarea" required rows="5" placeholder="Share what feels true for you…"></textarea>' +
         "  </div>" +
         '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">' +
-        '    <button type="button" class="app-btn app-btn-secondary" id="clarify-cancel">Back</button>' +
         '    <button type="button" class="app-btn app-btn-primary" id="clarify-continue">' +
         (cf.currentIndex + 1 < cf.requested ? "Next" : "Generate") +
         "</button>" +
@@ -6853,38 +6930,6 @@
       if (cont) {
         cont.addEventListener("click", function () {
           submitClarifyAnswerAndContinue();
-        });
-      }
-      var cancelCl = document.getElementById("clarify-cancel");
-      if (cancelCl) {
-        cancelCl.addEventListener("click", function () {
-          var snap = homeClarifyFlow;
-          homeClarifyFlow = null;
-          generationMessage("", "");
-          setHomeFlowStep("survey", displayName);
-          if (snap) {
-            setTimeout(function () {
-              var e1 = document.getElementById("gen-q1");
-              var e2 = document.getElementById("gen-q2");
-              if (e1) e1.value = snap.q1 || "";
-              if (e2) e2.value = snap.q2 || "";
-              var toneE = document.getElementById("gen-tone");
-              if (toneE && snap.tone) toneE.value = snap.tone;
-              var lenWant = snap.length || "Medium";
-              document.querySelectorAll('input[name="gen-length"]').forEach(function (r) {
-                r.checked = r.value === lenWant;
-              });
-              var persWant = snap.perspective || "First person";
-              document.querySelectorAll('input[name="gen-perspective"]').forEach(function (r) {
-                r.checked = r.value === persWant;
-              });
-              var useE = document.getElementById("gen-use-name");
-              if (useE) useE.checked = !!snap.useNameInScript;
-              setClarifyStepperValue(snap.requested != null ? snap.requested : 0);
-              wireGenLengthHint();
-              wirePerspectiveUseNameRow();
-            }, 0);
-          }
         });
       }
       return;
@@ -6969,8 +7014,7 @@
       '  <p class="gen-pill-hint app-muted" style="margin-top:0.35rem;">' +
       escapeHtml(clarifyHint) +
       "</p>" +
-      '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.9rem;">' +
-      '    <button type="button" class="app-btn app-btn-secondary" id="home-back-category">Back to Categories</button>' +
+      '  <div style="margin-top:0.9rem;">' +
       '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate</button>' +
       "  </div>" +
       "</form>";
@@ -6986,12 +7030,6 @@
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         beginScriptGenerationFromForm(displayName || "");
-      });
-    }
-    var backCategory = document.getElementById("home-back-category");
-    if (backCategory) {
-      backCategory.addEventListener("click", function () {
-        setHomeFlowStep("category", displayName);
       });
     }
   }

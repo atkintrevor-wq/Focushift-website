@@ -2865,6 +2865,22 @@ html.fs-app[data-app-theme="light"] .voices-toolbar-row {
   }
 }
 
+.home-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.6rem;
+  min-height: 1.75rem;
+}
+.home-section-title {
+  font-size: 1.1rem;
+  margin: 0;
+  line-height: 1.25;
+}
+.home-flow-back-btn {
+  flex-shrink: 0;
+}
+
 /* Home — create script: segmented pills, clarify stepper, I am… tips */
 .gen-field-label {
   font-size: 0.72rem;
