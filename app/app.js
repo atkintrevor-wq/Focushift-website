@@ -525,6 +525,82 @@
   var homeFlowStep = "landing";
   /** Set while asking Stripe-style follow-ups before final script (see iOS SurveyViewModel). */
   var homeClarifyFlow = null;
+
+  /** Per-tab help copy (matches iOS `ScreenHelpSheet` on Home, Library, Playlists, Voices, Audio). */
+  var SCREEN_HELP = {
+    home: {
+      title: "Home",
+      content:
+        "Create Personalized Mental Script — Tap to start the questionnaire and generate a personalized mental script (Starter and Creator). On Free, you'll be prompted to upgrade.\n\n" +
+        "Listen today — Tap the big row to play your saved shortcut (playlist or library track). Use Shortcuts & picks… or Account → Preferences to change what it does.\n\n" +
+        "Listening activity — Your streak, plays (tap Plays to cycle week / month / year / all time), last played track, and milestones. Same Firestore fields as the iOS app.\n\n" +
+        "Your library — Collapsible counts for scripts, audio-ready scripts, and playlists (synced from your account).\n\n" +
+        "Account — Open the person icon (top right) for settings, plans, preferences, and usage.",
+    },
+    library: {
+      title: "Library",
+      content:
+        "This screen shows your affirmation scripts and the App Library catalog.\n\n" +
+        "My Library / App Library — Use the segmented tabs at the top to switch views.\n\n" +
+        "My Library — Tap a script card to expand controls: edit title and text, play, generate spoken audio, pick voice and background, or add to a playlist.\n\n" +
+        "• + New — Create a blank script, or use the menu for Import Audio (Starter/Creator).\n" +
+        "• Chevron (▼) on the toolbar expands or collapses voice/background controls on all cards at once.\n" +
+        "• Scripts sync from Firebase across devices on the same account.\n" +
+        "• A * after a title means it's a custom version of a premade script.\n\n" +
+        "App Library — Browse premade scripts by category. Play, save to My Library, or add audio to a playlist.",
+    },
+    playlists: {
+      title: "Playlists",
+      content:
+        "Playlists let you group affirmation audio and play them in order (or on shuffle).\n\n" +
+        "• Tap + New Playlist to create one.\n" +
+        "• Tap a playlist card to open it: add or remove tracks, reorder them, or tap a track to play.\n" +
+        "• Loop and Shuffle icons on the playlist detail screen control playback modes.\n" +
+        "• Use the timer icon for a sleep timer (stops playback after the chosen time).\n" +
+        "• Remove a track with the trash icon on that row.\n" +
+        "• Playlist limits depend on your plan (Free: 2, Starter: 4, Creator: unlimited).",
+    },
+    "playlist-detail": {
+      title: "Playlist & Player",
+      content:
+        "Here you can manage this playlist and control playback.\n\n" +
+        "On this screen\n" +
+        "• Add audio — Pick tracks from My Library or App Library.\n" +
+        "• Edit — Change the playlist name and drag track order (up/down arrows).\n" +
+        "• Loop / Shuffle — Toolbar icons toggle repeat and random order.\n" +
+        "• Timer — Set a sleep timer from the clock icon.\n" +
+        "• Tap a track row to play from that point (or pause if it's already playing).\n\n" +
+        "Mini player\n" +
+        "• The bar at the bottom shows what's playing. Use play/pause, skip, seek, and volume.\n" +
+        "• Open expanded controls from the mini player when available on your device.",
+    },
+    voices: {
+      title: "Voices",
+      content:
+        "Choose the voice that speaks your affirmations when you generate audio.\n\n" +
+        "My Voices\n" +
+        "• Your saved voices: cloned voices (Creator), added app voices, and uploaded custom voices.\n" +
+        "• Clone (Creator) records or uploads your voice to create a personalized clone.\n" +
+        "• Preview with the play control; apply a voice to a script from the library card.\n\n" +
+        "App Voices\n" +
+        "• Built-in voices included with the app. Add any voice to My Voices for quick access.\n" +
+        "• Voice availability depends on your plan; some require Starter or Creator.",
+    },
+    audio: {
+      title: "Background Audio",
+      content:
+        "Choose background audio that plays behind your affirmations when you generate audio.\n\n" +
+        "My Audio\n" +
+        "• Your saved tracks: uploaded files and app audio you've added (Starter or Creator for uploads).\n" +
+        "• Import adds files in this browser; they stay on this device until you use them in a script.\n" +
+        "• Preview with play; apply to a script from library voice/background controls.\n\n" +
+        "App Audio\n" +
+        "• Built-in background tracks. Use + or Add to save a track to My Audio.\n" +
+        "• Expand/collapse categories with the chevron on each section.\n" +
+        "• Some tracks require Starter or Creator.",
+    },
+  };
+
   /** Long tips for I am… questions (matches iOS `IAMSurveyHelp`). */
   var IAM_SURVEY_HELP_Q1 =
     "Add everything you want in your script—who you're becoming.\n\n" +
@@ -1546,6 +1622,107 @@
     });
   }
 
+  function screenHelpIconSvg() {
+    return (
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+      '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/>' +
+      "</svg>"
+    );
+  }
+
+  function helpIconForSectionTitle(title) {
+    var t = (title || "").toLowerCase();
+    if (t.indexOf("script") >= 0 || t.indexOf("affirmation") >= 0 || t.indexOf("library") >= 0) return "📝";
+    if (t.indexOf("listen") >= 0 || t.indexOf("play") >= 0 || t.indexOf("mini") >= 0) return "▶️";
+    if (t.indexOf("dashboard") >= 0 || t.indexOf("listening") >= 0 || t.indexOf("activity") >= 0) return "📊";
+    if (t.indexOf("account") >= 0) return "⚙️";
+    if (t.indexOf("playlist") >= 0) return "📚";
+    if (t.indexOf("voice") >= 0) return "🎙";
+    if (t.indexOf("audio") >= 0 || t.indexOf("background") >= 0) return "🔊";
+    if (t.indexOf("my ") === 0 || t.indexOf("app ") === 0) return "•";
+    if (t.indexOf("on this") >= 0) return "📋";
+    return "ℹ️";
+  }
+
+  function parseScreenHelpSections(content) {
+    return String(content || "")
+      .split(/\n\n+/)
+      .map(function (block) {
+        block = block.trim();
+        if (!block) return null;
+        var firstLine = block.split("\n")[0] || "";
+        var title = firstLine.trim();
+        var dash = title.indexOf(" — ");
+        if (dash < 0) dash = title.indexOf(" - ");
+        if (dash >= 0) title = title.slice(0, dash).trim();
+        return {
+          title: title,
+          body: block,
+          icon: helpIconForSectionTitle(title),
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function resolveScreenHelpKey() {
+    if (activeAdminTab === "playlists" && playlistDetailVisible && selectedPlaylistId) {
+      return "playlist-detail";
+    }
+    if (SCREEN_HELP[activeAdminTab]) return activeAdminTab;
+    return "home";
+  }
+
+  function renderScreenHelpBody(title, content) {
+    var titleEl = document.getElementById("screen-help-title");
+    var sectionsEl = document.getElementById("screen-help-sections");
+    if (titleEl) titleEl.textContent = title || "Help";
+    if (!sectionsEl) return;
+    var sections = parseScreenHelpSections(content);
+    sectionsEl.innerHTML = sections
+      .map(function (sec) {
+        return (
+          '<section class="screen-help-section">' +
+          '<div class="screen-help-section-head">' +
+          '<span class="screen-help-section-icon" aria-hidden="true">' +
+          escapeHtml(sec.icon) +
+          "</span>" +
+          "<h4>" +
+          escapeHtml(sec.title) +
+          "</h4>" +
+          "</div>" +
+          '<div class="screen-help-section-body">' +
+          escapeHtml(sec.body) +
+          "</div>" +
+          "</section>"
+        );
+      })
+      .join("");
+  }
+
+  function openScreenHelp() {
+    var key = resolveScreenHelpKey();
+    var entry = SCREEN_HELP[key] || SCREEN_HELP.home;
+    var backdrop = document.getElementById("screen-help-backdrop");
+    if (!backdrop) return;
+    renderScreenHelpBody(entry.title, entry.content);
+    backdrop.hidden = false;
+    var doneBtn = document.getElementById("screen-help-done");
+    if (doneBtn) doneBtn.focus();
+  }
+
+  function closeScreenHelp() {
+    var backdrop = document.getElementById("screen-help-backdrop");
+    if (backdrop) backdrop.hidden = true;
+  }
+
+  function syncScreenHelpButtonLabel() {
+    var btn = document.getElementById("btn-screen-help");
+    if (!btn) return;
+    var key = resolveScreenHelpKey();
+    var entry = SCREEN_HELP[key] || SCREEN_HELP.home;
+    btn.setAttribute("aria-label", "Show help for " + (entry.title || "this screen"));
+  }
+
   function renderAdminShell(email, displayName) {
     var welcomeName = resolvedWelcomeNickname(email);
     root.innerHTML =
@@ -1566,6 +1743,9 @@
       '        <span id="app-playlist-timer-label" class="app-playlist-timer-label"></span>' +
       '        <button type="button" class="app-playlist-timer-clear" id="btn-app-playlist-timer-clear" aria-label="Clear playlist timer">×</button>' +
       "      </div>" +
+      '      <button type="button" class="app-header-help-btn" id="btn-screen-help" aria-label="Show help for this screen">' +
+      screenHelpIconSvg() +
+      "</button>" +
       '      <button type="button" class="app-header-account-btn" id="btn-account-menu" aria-label="Account menu" aria-haspopup="dialog" aria-expanded="false">' +
       '        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">' +
       '          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>' +
@@ -1757,6 +1937,18 @@
       '  <div id="backgrounds-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       "</section>" +
       "</section>" +
+      '<div id="screen-help-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal screen-help-modal" role="dialog" aria-modal="true" aria-labelledby="screen-help-title">' +
+      '    <div class="screen-help-modal-hero" aria-hidden="true"><span class="screen-help-modal-hero-icon">' +
+      screenHelpIconSvg() +
+      "</span></div>" +
+      '    <div class="screen-help-modal-head">' +
+      '      <h3 id="screen-help-title">Help</h3>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="screen-help-done">Done</button>' +
+      "    </div>" +
+      '    <div id="screen-help-sections" class="screen-help-sections"></div>' +
+      "  </div>" +
+      "</div>" +
       '<div id="account-modal-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal app-modal-account" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">' +
       '    <div class="account-modal-head">' +
@@ -2432,6 +2624,15 @@
         runDeleteAccountWeb();
       });
     })();
+    document.getElementById("btn-screen-help").addEventListener("click", function () {
+      openScreenHelp();
+    });
+    document.getElementById("screen-help-done").addEventListener("click", function () {
+      closeScreenHelp();
+    });
+    document.getElementById("screen-help-backdrop").addEventListener("click", function (ev) {
+      if (ev.target === ev.currentTarget) closeScreenHelp();
+    });
     document.getElementById("btn-account-menu").addEventListener("click", function () {
       openAccountModal();
     });
@@ -3212,6 +3413,7 @@
     if (activeAdminTab === "playlists") {
       updatePlaylistSectionVisibility();
     }
+    syncScreenHelpButtonLabel();
     if (activeAdminTab === "library" || activeAdminTab === "voices" || activeAdminTab === "audio") {
       requestAnimationFrame(function () {
         syncSubnavStickyOffset();
@@ -9134,6 +9336,7 @@
     selectedPlaylistId = playlistId;
     playlistDetailVisible = true;
     updatePlaylistSectionVisibility();
+    syncScreenHelpButtonLabel();
     renderPlaylists(currentPlaylists);
     renderSelectedPlaylistDetail();
   }
@@ -9141,6 +9344,7 @@
   function closePlaylistDetailView() {
     playlistDetailVisible = false;
     updatePlaylistSectionVisibility();
+    syncScreenHelpButtonLabel();
     var h = document.getElementById("playlist-detail-heading");
     if (h) h.textContent = "Playlist";
     var ha = document.getElementById("playlist-detail-head-actions");

@@ -206,20 +206,104 @@
   padding: 0;
 }
 .app-playlist-timer-clear:hover { background: rgba(220, 38, 38, 0.35); color: #fff; }
+.app-header-help-btn,
 .app-header-account-btn {
   width: 42px;
   height: 42px;
   border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.18);
   background: rgba(255,255,255,0.06);
-  color: #e2e8f0;
+  color: #93c5fd;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 0;
+  flex-shrink: 0;
 }
+.app-header-help-btn:hover,
 .app-header-account-btn:hover { border-color: #2563eb; color: #fff; }
+.app-header-account-btn { color: #e2e8f0; }
+.screen-help-modal {
+  max-width: 520px;
+  max-height: min(88vh, 720px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.screen-help-modal-hero {
+  display: flex;
+  justify-content: center;
+  padding: 0.35rem 0 0.15rem;
+}
+.screen-help-modal-hero-icon {
+  display: flex;
+  color: #60a5fa;
+}
+.screen-help-modal-hero-icon svg {
+  width: 44px;
+  height: 44px;
+}
+.screen-help-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.65rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.screen-help-modal-head h3 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.screen-help-sections {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  padding-right: 0.15rem;
+}
+.screen-help-section {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.72rem 0.78rem;
+}
+.screen-help-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.35rem;
+}
+.screen-help-section-head h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+.screen-help-section-icon {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.screen-help-section-body {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--muted, #94a3b8);
+  white-space: pre-line;
+}
+html.fs-app[data-app-theme="light"] .screen-help-section {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+html.fs-app[data-app-theme="light"] .screen-help-section-head h4 {
+  color: var(--text, #0f172a);
+}
+html.fs-app[data-app-theme="light"] .screen-help-modal-head {
+  border-bottom-color: rgba(15, 23, 42, 0.1);
+}
 .app-modal-account { max-width: 560px; max-height: calc(100vh - 2rem); overflow-y: auto; }
 .account-modal-head {
   display: flex;
