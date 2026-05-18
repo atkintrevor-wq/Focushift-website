@@ -47,6 +47,16 @@
   var PREF_LISTEN_SHORTCUT_SCRIPT_TITLE_KEY = "focusshiftWebPrefListenTodayScriptTitle";
   /** "1" = Your library section expanded on home; "0" = collapsed. */
   var PREF_HOME_LIBRARY_OPEN_KEY = "focusshiftWebHomeLibraryOpen";
+  var WEB_DEVICE_ID_KEY = "focusshiftWebDeviceId";
+  /** Loaded from Firestore + Storage when Account opens (mirrors iOS usage / devices / sharing). */
+  var accountInsightsSnapshot = {
+    usage: null,
+    devices: [],
+    shareAudienceCount: null,
+    storageBytes: null,
+    loading: false,
+    error: null,
+  };
   /** Mirrors iOS @AppStorage("adminModeEnabled"); gates catalog publish/edit on web. */
   var PREF_ADMIN_MODE_KEY = "focusshiftWebAdminModeEnabled";
   var PREF_APP_THEME_KEY = "focusshiftWebAppTheme";
@@ -1035,9 +1045,9 @@
 
   function readHomeLibrarySectionOpen() {
     try {
-      return localStorage.getItem(PREF_HOME_LIBRARY_OPEN_KEY) !== "0";
+      return localStorage.getItem(PREF_HOME_LIBRARY_OPEN_KEY) === "1";
     } catch (_e) {
-      return true;
+      return false;
     }
   }
 
@@ -1797,12 +1807,12 @@
       "      </section>" +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Devices &amp; sharing</h4>' +
-      '        <p class="app-muted account-section-card__text">Device and sharing controls are available in iOS today. This web section mirrors your account counts.</p>' +
-      '        <button type="button" class="app-btn app-btn-secondary" id="account-manage-devices">Manage devices (iOS)</button>' +
+      '        <p class="app-muted account-section-card__text">Counts sync from your account (same Firestore data as iOS). Remove extra devices in the iOS app if you are over your plan limit.</p>' +
+      '        <button type="button" class="app-btn app-btn-secondary" id="account-manage-devices">Refresh device list</button>' +
       "      </section>" +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Library &amp; storage</h4>' +
-      '        <p class="app-muted account-section-card__text">Library counts below are account-linked. Refresh to re-read profile and script stats.</p>' +
+      '        <p class="app-muted account-section-card__text">Library counts update from your scripts. Use Refresh in Usage &amp; statistics for cloud usage, devices, and storage.</p>' +
       '        <div class="account-section-card__btn-row">' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-library-stats">Refresh library stats</button>' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-sync-cloud">Sync status</button>' +
@@ -1814,7 +1824,10 @@
       '        <label class="account-pref-row"><input type="checkbox" id="pref-admin-mode" /> Admin mode (catalog publish &amp; edit)</label>' +
       "      </section>" +
       '      <section class="account-section-card account-section-card--insights">' +
-      '        <h4 class="account-section-card__title">Usage &amp; statistics</h4>' +
+      '        <div class="account-section-title-row">' +
+      '          <h4 class="account-section-card__title" style="margin:0;">Usage &amp; statistics</h4>' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-usage-stats" style="padding:0.32rem 0.55rem;font-size:0.78rem;">Refresh</button>' +
+      "        </div>" +
       '        <div id="account-insights" class="account-insights-grid"></div>' +
       "      </section>" +
       '      <section class="account-section-card">' +
@@ -2353,12 +2366,26 @@
       this.textContent = willShow ? "Hide plans" : "View plans & upgrade";
     });
     document.getElementById("account-manage-devices").addEventListener("click", function () {
-      setAccountMessage("Device management is currently available in the iOS app. Web mirrors your account counts.", "");
+      refreshAccountInsightsFromCloud().then(function () {
+        setAccountMessage(
+          "Device list refreshed. Remove devices in the iOS app if you are over your plan limit.",
+          "success"
+        );
+      });
     });
     document.getElementById("account-refresh-library-stats").addEventListener("click", function () {
-      renderAccountInsights();
-      setAccountMessage("Library and storage stats refreshed.", "success");
+      refreshAccountInsightsFromCloud().then(function () {
+        setAccountMessage("Usage and library statistics refreshed.", "success");
+      });
     });
+    var accountRefreshUsageBtn = document.getElementById("account-refresh-usage-stats");
+    if (accountRefreshUsageBtn) {
+      accountRefreshUsageBtn.addEventListener("click", function () {
+        refreshAccountInsightsFromCloud().then(function () {
+          setAccountMessage("Usage statistics refreshed.", "success");
+        });
+      });
+    }
     document.getElementById("account-sync-cloud").addEventListener("click", function () {
       setAccountMessage("Cloud sync is account-linked. New scripts and playlists should appear across devices after refresh.", "");
     });
@@ -3135,6 +3162,7 @@
     resetAccountPlansPanel();
     syncAccountPreferencesForm();
     renderAccountInsights();
+    refreshAccountInsightsFromCloud();
     setAccountModalTab("settings");
     bd.hidden = false;
     var btn = document.getElementById("btn-account-menu");
@@ -5731,29 +5759,250 @@
     }).length;
   }
 
+  function getWebDeviceId() {
+    try {
+      var existing = localStorage.getItem(WEB_DEVICE_ID_KEY);
+      if (existing && String(existing).trim()) return String(existing).trim();
+      var id = "web-" + (window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36));
+      localStorage.setItem(WEB_DEVICE_ID_KEY, id);
+      return id;
+    } catch (_e) {
+      return "web-" + Date.now().toString(36);
+    }
+  }
+
+  function webDeviceDisplayName() {
+    var label = "Web browser";
+    try {
+      if (navigator.userAgentData && navigator.userAgentData.platform) {
+        label = "Web (" + navigator.userAgentData.platform + ")";
+      } else if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        label = "Web (iOS)";
+      } else if (/Android/i.test(navigator.userAgent)) {
+        label = "Web (Android)";
+      } else if (/Mac/i.test(navigator.userAgent)) {
+        label = "Web (Mac)";
+      } else if (/Windows/i.test(navigator.userAgent)) {
+        label = "Web (Windows)";
+      }
+    } catch (_e2) {}
+    return label;
+  }
+
+  function registerWebDeviceRecord(uid) {
+    if (!uid) return Promise.resolve();
+    var deviceId = getWebDeviceId();
+    return db
+      .collection("users")
+      .doc(uid)
+      .collection("devices")
+      .doc(deviceId)
+      .set(
+        {
+          name: webDeviceDisplayName(),
+          lastActiveAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+  }
+
+  function estimateCloudStorageBytes(uid) {
+    if (!uid || typeof firebase.storage !== "function") return Promise.resolve(null);
+    var rootRef = firebase.storage().ref("users/" + uid + "/audios");
+    return rootRef
+      .listAll()
+      .then(function (list) {
+        if (!list.items.length) return 0;
+        return Promise.all(
+          list.items.map(function (itemRef) {
+            return itemRef
+              .getMetadata()
+              .then(function (meta) {
+                return meta && meta.size ? Number(meta.size) : 0;
+              })
+              .catch(function () {
+                return 0;
+              });
+          })
+        ).then(function (sizes) {
+          return sizes.reduce(function (sum, n) {
+            return sum + (isFinite(n) ? n : 0);
+          }, 0);
+        });
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+
+  function webTierDeviceLimit(tier) {
+    if (tier === "starter") return 3;
+    if (tier === "creator") return 5;
+    return 2;
+  }
+
+  function webTierUsageLimits(tier) {
+    if (tier === "starter") {
+      return { scriptsLimit: 50, wordsLimit: 3000, ttsLimit: 15000 };
+    }
+    if (tier === "creator") {
+      return { scriptsLimit: null, wordsLimit: 8000, ttsLimit: 40000 };
+    }
+    return { scriptsLimit: 0, wordsLimit: 0, ttsLimit: 0 };
+  }
+
+  function usageDocInt(usage, key) {
+    if (!usage || usage[key] == null) return 0;
+    var n = Number(usage[key]);
+    return isFinite(n) ? Math.max(0, Math.floor(n)) : 0;
+  }
+
+  function formatInsightsLimit(n) {
+    if (n === null || typeof n === "undefined") return "Unlimited";
+    var num = Number(n);
+    if (!isFinite(num)) return "-";
+    if (num >= 999999) return "Unlimited";
+    return num.toLocaleString();
+  }
+
+  function formatUsageRatio(used, limit) {
+    if (limit === null) return formatInsightsInt(used) + " (unlimited)";
+    return formatInsightsInt(used) + " / " + formatInsightsLimit(limit);
+  }
+
+  function formatInsightsInt(n) {
+    var num = Number(n);
+    if (!isFinite(num)) return "-";
+    return Math.floor(num).toLocaleString();
+  }
+
+  function firestoreDateLabel(val) {
+    if (!val) return "";
+    try {
+      if (val.toDate) return formatDate(val);
+      if (val instanceof Date) return formatDate(val);
+    } catch (_e) {}
+    return "";
+  }
+
+  function refreshAccountInsightsFromCloud() {
+    if (!currentUser) return Promise.resolve();
+    var uid = currentUser.uid;
+    accountInsightsSnapshot.loading = true;
+    accountInsightsSnapshot.error = null;
+    renderAccountInsights();
+
+    return currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/usage/refresh", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+          },
+          body: "{}",
+        }).catch(function () {
+          return null;
+        });
+      })
+      .then(function () {
+        return registerWebDeviceRecord(uid);
+      })
+      .then(function () {
+        return Promise.all([
+          db.collection("users").doc(uid).collection("meta").doc("usage").get(),
+          db.collection("users").doc(uid).collection("devices").get(),
+          db.collection("users").doc(uid).collection("shareAudience").get(),
+          estimateCloudStorageBytes(uid),
+        ]);
+      })
+      .then(function (results) {
+        var usageSnap = results[0];
+        var devicesSnap = results[1];
+        var audienceSnap = results[2];
+        accountInsightsSnapshot.usage = usageSnap.exists ? usageSnap.data() || {} : {};
+        accountInsightsSnapshot.devices = devicesSnap.docs.map(function (doc) {
+          var data = doc.data() || {};
+          return {
+            id: doc.id,
+            name: (data.name && String(data.name)) || "Device",
+            lastActiveAt: data.lastActiveAt || null,
+            isCurrent: doc.id === getWebDeviceId(),
+          };
+        });
+        accountInsightsSnapshot.shareAudienceCount = audienceSnap.size;
+        accountInsightsSnapshot.storageBytes = results[3];
+        accountInsightsSnapshot.loading = false;
+        accountInsightsSnapshot.error = null;
+        renderAccountInsights();
+      })
+      .catch(function (e) {
+        accountInsightsSnapshot.loading = false;
+        accountInsightsSnapshot.error = (e && e.message) || "Could not load account usage.";
+        renderAccountInsights();
+      });
+  }
+
   function renderAccountInsights() {
     var el = document.getElementById("account-insights");
     if (!el) return;
 
+    if (accountInsightsSnapshot.loading) {
+      el.innerHTML = '<p class="app-muted" style="margin:0;">Loading usage from your account…</p>';
+      syncAccountSubscriptionHeadline();
+      return;
+    }
+
+    if (accountInsightsSnapshot.error) {
+      el.innerHTML =
+        '<p class="app-inline-msg error" style="margin:0 0 0.5rem;">' +
+        escapeHtml(accountInsightsSnapshot.error) +
+        '</p><button type="button" class="app-btn app-btn-secondary" id="account-insights-retry">Try again</button>';
+      var retryBtn = document.getElementById("account-insights-retry");
+      if (retryBtn) {
+        retryBtn.addEventListener("click", function () {
+          refreshAccountInsightsFromCloud().then(function () {
+            setAccountMessage("Usage statistics updated.", "success");
+          });
+        });
+      }
+      syncAccountSubscriptionHeadline();
+      return;
+    }
+
     var plan = resolvePlanLabel();
-    var deviceCount = profileFirstArrayLength(["devices", "registeredDevices", "deviceIDs"]);
-    if (deviceCount === null) {
-      deviceCount = profileFirstNumber(["deviceCount", "connectedDevices", "devicesCount"]);
-    }
-    var deviceLimit = profileFirstNumber(["deviceLimit", "maxDevices", "devicesLimit"]);
-    var sharingCount = profileFirstArrayLength(["sharedRecipients", "sharedListeners", "shareRecipients"]);
-    if (sharingCount === null) {
-      sharingCount = profileFirstNumber(["sharedRecipientsCount", "sharedListenersCount"]);
-    }
-    var scriptsUsed = profileFirstNumber(["scriptsThisMonth", "aiScriptsUsed", "usageScripts"]);
-    var scriptsLimit = profileFirstNumber(["scriptsLimit", "monthlyScriptsLimit", "aiScriptsLimit"]);
-    var wordsUsed = profileFirstNumber(["wordsThisMonth", "aiWordsUsed", "usageWords"]);
-    var wordsLimit = profileFirstNumber(["wordsLimit", "monthlyWordsLimit", "aiWordsLimit"]);
-    var storageBytes = profileFirstNumber(["storageUsageBytes", "storageBytes", "usedStorageBytes"]);
-    var storageMB = profileFirstNumber(["storageUsageMB", "storageMB", "usedStorageMB"]);
+    var tier = resolvedSubscriptionTier();
+    var limits = webTierUsageLimits(tier);
+    var usage = accountInsightsSnapshot.usage || {};
+    var scriptsUsed = usageDocInt(usage, "scriptsThisMonth");
+    var wordsUsed = usageDocInt(usage, "wordsThisMonth");
+    var ttsUsed = usageDocInt(usage, "ttsCharactersThisMonth");
+    var stepUpWords = usageDocInt(usage, "stepUpWordsThisMonth");
+    var stepUpTts = usageDocInt(usage, "stepUpTtsCharactersThisMonth");
+    var effectiveWordsLimit =
+      limits.wordsLimit > 0 ? limits.wordsLimit + stepUpWords : limits.wordsLimit;
+    var effectiveTtsLimit = limits.ttsLimit > 0 ? limits.ttsLimit + stepUpTts : limits.ttsLimit;
+
+    var devices = accountInsightsSnapshot.devices || [];
+    var deviceCount = devices.length;
+    var deviceLimit = webTierDeviceLimit(tier);
+    var sharingCount = accountInsightsSnapshot.shareAudienceCount;
+    var shareCap = 15;
+
     var storageDisplay = "-";
-    if (storageBytes !== null) storageDisplay = formatBytesHuman(storageBytes);
-    else if (storageMB !== null) storageDisplay = formatCount(storageMB) + " MB";
+    if (accountInsightsSnapshot.storageBytes !== null) {
+      storageDisplay = formatBytesHuman(accountInsightsSnapshot.storageBytes);
+    } else if (accountInsightsSnapshot.storageBytes === 0) {
+      storageDisplay = "0 B";
+    }
+
+    var usageResetLabel = "";
+    if (usage.usagePeriodEnd) {
+      usageResetLabel = firestoreDateLabel(usage.usagePeriodEnd);
+    } else if (usage.monthStart) {
+      usageResetLabel = firestoreDateLabel(usage.monthStart) + " (monthly)";
+    }
 
     function row(label, value) {
       return (
@@ -5763,6 +6012,57 @@
         escapeHtml(value) +
         "</span></div>"
       );
+    }
+
+    var deviceRows = "";
+    if (devices.length) {
+      deviceRows =
+        '<div class="account-insight-device-list">' +
+        devices
+          .slice(0, 6)
+          .map(function (d) {
+            var tagOpen = "<" + "div" + ' class="account-insight-device">';
+            return tagOpen + escapeHtml(d.name + (d.isCurrent ? " (this browser)" : "")) + "</" + "div" + ">";
+          })
+          .join("") +
+        (devices.length > 6
+          ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">+' +
+            String(devices.length - 6) +
+            " more on other devices.</p>"
+          : "") +
+        "</" + "div" + ">";
+    }
+
+    var sharingValue =
+      tier === "creator" ? formatUsageRatio(sharingCount || 0, shareCap) : "Requires Creator plan";
+
+    var aiSection = "";
+    if (tier === "free") {
+      aiSection =
+        '<section class="account-insight-card">' +
+        "<h4>AI script usage</h4>" +
+        '<p class="app-muted" style="margin:0;font-size:0.82rem;line-height:1.45;">Upgrade to Starter or Creator for monthly AI words, scripts, and voice (TTS) quotas.</p>' +
+        "</section>";
+    } else {
+      aiSection =
+        '<section class="account-insight-card">' +
+        "<h4>AI script usage</h4>" +
+        (usageResetLabel ? row("Usage resets", usageResetLabel) : "") +
+        row(
+          "Scripts this month",
+          limits.scriptsLimit === null
+            ? formatInsightsInt(scriptsUsed) + " (unlimited)"
+            : formatUsageRatio(scriptsUsed, limits.scriptsLimit)
+        ) +
+        row("Words this month", formatUsageRatio(wordsUsed, effectiveWordsLimit || limits.wordsLimit)) +
+        row("Voice (TTS) characters", formatUsageRatio(ttsUsed, effectiveTtsLimit || limits.ttsLimit)) +
+        (stepUpWords || stepUpTts
+          ? row(
+              "Step-up bonus",
+              "+" + formatInsightsInt(stepUpWords) + " words, +" + formatInsightsInt(stepUpTts) + " TTS"
+            )
+          : "") +
+        "</section>";
     }
 
     el.innerHTML =
@@ -5778,23 +6078,21 @@
       "</section>" +
       '<section class="account-insight-card">' +
       "<h4>Devices and sharing</h4>" +
-      row("Registered devices", deviceCount === null ? "-" : formatCount(deviceCount)) +
-      row("Device limit", deviceLimit === null ? "-" : formatCount(deviceLimit)) +
-      row("Shared listeners", sharingCount === null ? "-" : formatCount(sharingCount)) +
+      row("Registered devices", formatInsightsInt(deviceCount) + " / " + formatInsightsInt(deviceLimit)) +
+      deviceRows +
+      row("Shared listeners", sharingValue) +
+      (tier === "creator"
+        ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">Manage listeners in the iOS app.</p>'
+        : "") +
       "</section>" +
-      '<section class="account-insight-card">' +
-      "<h4>AI script usage</h4>" +
-      row("Scripts this month", scriptsUsed === null ? "-" : formatCount(scriptsUsed)) +
-      row("Scripts limit", scriptsLimit === null ? "-" : formatCount(scriptsLimit)) +
-      row("Words this month", wordsUsed === null ? "-" : formatCount(wordsUsed)) +
-      row("Words limit", wordsLimit === null ? "-" : formatCount(wordsLimit)) +
-      "</section>" +
+      aiSection +
       '<section class="account-insight-card">' +
       "<h4>Library and storage</h4>" +
       row("My scripts", formatCount(currentScripts.length)) +
       row("Scripts with audio", formatCount(scriptsWithAudioCount())) +
       row("Imported audio", formatCount(importedAudioCount())) +
-      row("Storage used", storageDisplay) +
+      row("Cloud audio storage", storageDisplay) +
+      '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">Total size of hosted audio files in Firebase Storage.</p>' +
       "</section>";
     syncAccountSubscriptionHeadline();
   }
@@ -6430,14 +6728,14 @@
         "    </div>" +
         milestonesBlock +
         "  </div>" +
-        '  <details class="home-library-details" id="home-library-details"' +
+        '  <details class="app-card app-glass-card home-library-details" id="home-library-details"' +
         libDetailsOpen +
         ">" +
-        '    <summary class="home-library-summary">' +
+        '    <summary class="home-library-summary" aria-label="Your library, tap to expand or collapse">' +
         '      <span class="home-library-chevron" aria-hidden="true">▸</span>' +
         '      <span class="home-library-summary-main">' +
         '        <span class="home-library-summary-title">Your library</span>' +
-        '        <span class="app-muted home-library-summary-hint">Scripts · audio ready · playlists · published</span>' +
+        '        <span class="app-muted home-library-summary-hint">Scripts · audio ready · playlists</span>' +
         "      </span>" +
         "    </summary>" +
         '    <div class="home-library-body">' +
@@ -6453,13 +6751,6 @@
         escapeHtml(String(currentPlaylists.length)) +
         "</div></div>" +
         "      </div>" +
-        '      <p class="app-muted" style="margin:0.55rem 0 0;font-size:0.82rem;line-height:1.45;">' +
-        '<span aria-hidden="true">☁️</span> <strong>Published</strong> (App Library): ' +
-        escapeHtml(String(publishedByMeCount())) +
-        ". Turn on <strong>Admin mode</strong> in Account to publish or edit premades.</p>" +
-        '      <p class="app-muted" style="margin:0.45rem 0 0;">' +
-        escapeHtml(mostRecentScriptUpdateLabel()) +
-        "</p>" +
         "    </div>" +
         "  </details>" +
         "</div>";
