@@ -3059,8 +3059,9 @@ html.fs-app[data-app-theme="light"] .voices-toolbar-row {
   line-height: 1.45;
   margin: 0.35rem 0 0;
 }
-.gen-survey-textarea::placeholder {
-  color: rgba(148, 163, 184, 0.85);
+.gen-survey-textarea::placeholder,
+.gen-clarify-textarea::placeholder {
+  color: var(--muted, rgba(148, 163, 184, 0.85));
   line-height: 1.4;
 }
 textarea.gen-survey-textarea {
@@ -3076,7 +3077,7 @@ textarea.gen-survey-textarea {
   padding: 0.75rem 0.9rem;
   min-height: 120px;
   resize: vertical;
-  color: #f1f5f9;
+  color: var(--text, #f1f5f9);
   transition: border-color var(--app-transition), box-shadow var(--app-transition);
 }
 textarea.gen-survey-textarea:focus {
@@ -3112,7 +3113,7 @@ textarea.gen-survey-textarea:focus {
   padding: 0.75rem 0.9rem;
   min-height: 132px;
   resize: vertical;
-  color: #f1f5f9;
+  color: var(--text, #f1f5f9);
   transition: border-color var(--app-transition), box-shadow var(--app-transition);
 }
 .gen-clarify-textarea:focus {
@@ -3255,6 +3256,19 @@ html.fs-app[data-app-theme="light"] #audio-segmented-tabs.voice-segmented-tabs {
   border-color: rgba(15, 23, 42, 0.12);
 }
 
+html.fs-app[data-app-theme="light"] textarea.gen-survey-textarea,
+html.fs-app[data-app-theme="light"] .gen-clarify-textarea {
+  color: var(--text, #0f172a);
+  background: var(--bg-card, #ffffff);
+  border-color: var(--border, rgba(15, 23, 42, 0.12));
+}
+
+html.fs-app[data-app-theme="light"] #generate-form label,
+html.fs-app[data-app-theme="light"] .gen-field-label,
+html.fs-app[data-app-theme="light"] .gen-clarify-field > label {
+  color: var(--muted, #64748b);
+}
+
 @media (prefers-color-scheme: light) {
   html.fs-app[data-app-theme="system"] {
     --bg: #e8edf4;
@@ -3301,6 +3315,19 @@ html.fs-app[data-app-theme="light"] #audio-segmented-tabs.voice-segmented-tabs {
   html.fs-app[data-app-theme="system"] #audio-segmented-tabs.voice-segmented-tabs {
     background: rgba(255, 255, 255, 0.75);
     border-color: rgba(15, 23, 42, 0.12);
+  }
+
+  html.fs-app[data-app-theme="system"] textarea.gen-survey-textarea,
+  html.fs-app[data-app-theme="system"] .gen-clarify-textarea {
+    color: var(--text, #0f172a);
+    background: var(--bg-card, #ffffff);
+    border-color: var(--border, rgba(15, 23, 42, 0.12));
+  }
+
+  html.fs-app[data-app-theme="system"] #generate-form label,
+  html.fs-app[data-app-theme="system"] .gen-field-label,
+  html.fs-app[data-app-theme="system"] .gen-clarify-field > label {
+    color: var(--muted, #64748b);
   }
 
   html.fs-app[data-app-theme="system"] .library-toolbar-row,
