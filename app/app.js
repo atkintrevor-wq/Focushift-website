@@ -742,6 +742,151 @@
       .replace(/"/g, "&quot;");
   }
 
+  var appBannerDismissTimer = null;
+  var BANNER_AUTO_DISMISS_MS = 2800;
+  var BANNER_HIDE_ANIM_MS = 320;
+
+  function ensureAppBannerHost() {
+    var host = document.getElementById("app-banner-host");
+    if (host) return host;
+    host = document.createElement("div");
+    host.id = "app-banner-host";
+    host.className = "app-banner-host";
+    host.hidden = true;
+    host.setAttribute("aria-live", "polite");
+    document.body.insertBefore(host, document.body.firstChild);
+    return host;
+  }
+
+  function hideAppBanner() {
+    if (appBannerDismissTimer) {
+      clearTimeout(appBannerDismissTimer);
+      appBannerDismissTimer = null;
+    }
+    var host = document.getElementById("app-banner-host");
+    if (!host) return;
+    var banner = host.querySelector(".app-banner");
+    if (!banner) {
+      host.innerHTML = "";
+      host.hidden = true;
+      return;
+    }
+    banner.classList.remove("is-visible");
+    banner.classList.add("is-hiding");
+    setTimeout(function () {
+      var hiding = host.querySelector(".app-banner.is-hiding");
+      if (hiding) {
+        host.innerHTML = "";
+        host.hidden = true;
+      }
+    }, BANNER_HIDE_ANIM_MS);
+  }
+
+  function bannerTypeFromKind(kind) {
+    var k = String(kind || "").toLowerCase();
+    if (k === "error") return "error";
+    if (k === "success") return "success";
+    return "info";
+  }
+
+  function bannerTitleFromKind(kind) {
+    var k = String(kind || "").toLowerCase();
+    if (k === "error") return "Error";
+    if (k === "success") return "Success";
+    return "Notice";
+  }
+
+  function showAppBanner(title, detail, type, options) {
+    options = options || {};
+    var textDetail = String(detail || "").trim();
+    var textTitle = String(title || "").trim();
+    if (!textDetail && !textTitle) {
+      hideAppBanner();
+      return;
+    }
+    if (!textDetail) textDetail = textTitle;
+    if (!textTitle) textTitle = bannerTitleFromKind(type);
+
+    type = type || "info";
+    if (appBannerDismissTimer) {
+      clearTimeout(appBannerDismissTimer);
+      appBannerDismissTimer = null;
+    }
+
+    var host = ensureAppBannerHost();
+    var autoDismiss = options.autoDismiss !== false;
+    var duration =
+      typeof options.duration === "number" ? options.duration : BANNER_AUTO_DISMISS_MS;
+
+    var iconSvg =
+      type === "success"
+        ? '<svg class="app-banner-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm-1.2 13.8-3.5-3.4 1.4-1.4 2.1 2.1 5-5.1 1.4 1.4-6.4 6.5z"/></svg>'
+        : type === "error"
+          ? '<svg class="app-banner-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
+          : '<svg class="app-banner-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
+
+    host.hidden = false;
+    host.innerHTML =
+      '<div class="app-banner app-banner--' +
+      escapeHtml(type) +
+      '" role="status">' +
+      '<div class="app-banner-inner">' +
+      iconSvg +
+      '<div class="app-banner-text">' +
+      '<div class="app-banner-title">' +
+      escapeHtml(textTitle) +
+      "</div>" +
+      '<div class="app-banner-detail">' +
+      escapeHtml(textDetail) +
+      "</div>" +
+      "</div>" +
+      '<button type="button" class="app-banner-dismiss" aria-label="Dismiss">&times;</button>' +
+      "</div>" +
+      "</div>";
+
+    var banner = host.querySelector(".app-banner");
+    var dismissBtn = host.querySelector(".app-banner-dismiss");
+    if (dismissBtn) {
+      dismissBtn.addEventListener("click", hideAppBanner);
+    }
+
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        if (banner) banner.classList.add("is-visible");
+      });
+    });
+
+    if (autoDismiss) {
+      appBannerDismissTimer = setTimeout(hideAppBanner, duration);
+    }
+  }
+
+  function showLegacyAppBanner(text, kind, options) {
+    var msg = String(text || "").trim();
+    if (!msg) {
+      hideAppBanner();
+      return;
+    }
+    showAppBanner(bannerTitleFromKind(kind), msg, bannerTypeFromKind(kind), options);
+  }
+
+  /** Route transient feedback to the global banner; clear legacy inline slot. */
+  function postScreenMessage(elementId, text, kind, options) {
+    options = options || {};
+    var el = elementId ? document.getElementById(elementId) : null;
+    if (options.inlineOnly) {
+      if (!el) return;
+      el.className = "app-inline-msg" + (kind ? " " + kind : "");
+      el.textContent = text || "";
+      return;
+    }
+    if (el) {
+      el.className = "app-inline-msg";
+      el.textContent = "";
+    }
+    showLegacyAppBanner(text, kind, options);
+  }
+
   function teardownScriptsListener() {
     if (typeof scriptsUnsubscribe === "function") {
       scriptsUnsubscribe();
@@ -2436,7 +2581,7 @@
       "</div>";
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
-      openEditor(null);
+      createBlankScriptAndOpenEditor();
     });
     document.getElementById("btn-library-create-menu").addEventListener("click", function (ev) {
       ev.stopPropagation();
@@ -2444,7 +2589,7 @@
     });
     document.getElementById("library-dropdown-create").addEventListener("click", function () {
       closeLibraryCreateMenu();
-      openEditor(null);
+      createBlankScriptAndOpenEditor();
     });
     document.getElementById("library-dropdown-import").addEventListener("click", function () {
       closeLibraryCreateMenu();
@@ -3036,10 +3181,7 @@
   }
 
   function setPublishPremadeMessage(text, kind) {
-    var el = document.getElementById("publish-premade-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("publish-premade-message", text, kind);
   }
 
   function openPublishPremadeModal() {
@@ -3193,10 +3335,7 @@
   }
 
   function setEditPremadeMessage(text, kind) {
-    var el = document.getElementById("premade-edit-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("premade-edit-message", text, kind);
   }
 
   function openEditPremadeModal(premade) {
@@ -3490,17 +3629,11 @@
   }
 
   function generationMessage(text, kind) {
-    var el = document.getElementById("generation-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("generation-message", text, kind);
   }
 
   function setMediaPickerMessage(text, kind) {
-    var el = document.getElementById("media-picker-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("media-picker-message", text, kind);
   }
 
   function voiceNameById(voiceID) {
@@ -4013,17 +4146,11 @@
   }
 
   function setVoicesMessage(text, kind) {
-    var el = document.getElementById("voices-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("voices-message", text, kind);
   }
 
   function setBackgroundsMessage(text, kind) {
-    var el = document.getElementById("backgrounds-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("backgrounds-message", text, kind);
   }
 
   function saveUserDefaults(partial) {
@@ -4270,10 +4397,7 @@
   }
 
   function setVoiceRecordingStatus(text, kind) {
-    var el = document.getElementById("voice-recording-status");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("voice-recording-status", text, kind, { inlineOnly: true });
   }
 
   function formatDurationShort(seconds) {
@@ -4340,17 +4464,11 @@
   }
 
   function setVoiceConsentMessage(text, kind) {
-    var el = document.getElementById("voice-consent-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("voice-consent-message", text, kind);
   }
 
   function setVoiceMicHelpMessage(text, kind) {
-    var el = document.getElementById("voice-mic-help-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("voice-mic-help-message", text, kind);
   }
 
   function openVoiceMicHelpModal(reasonText) {
@@ -4417,10 +4535,7 @@
   }
 
   function setVoiceAdjustMessage(text, kind) {
-    var el = document.getElementById("voice-adjust-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("voice-adjust-message", text, kind);
   }
 
   function updateVoiceAdjustReadout(kind) {
@@ -5062,10 +5177,7 @@
   }
 
   function setVoiceSettingsMessage(text, kind) {
-    var el = document.getElementById("voice-settings-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("voice-settings-message", text, kind);
   }
 
   function updateVoiceSettingsReadout(kind) {
@@ -5610,17 +5722,11 @@
   }
 
   function setAccountMessage(text, kind) {
-    var el = document.getElementById("account-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("account-message", text, kind);
   }
 
   function setPrivacyMessage(text, kind) {
-    var el = document.getElementById("account-privacy-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("account-privacy-message", text, kind);
   }
 
   function jsonReplacer(_key, value) {
@@ -6789,14 +6895,42 @@
             categoryID: ctx.cat.id,
           })
           .then(function () {
+            var newScriptId = docRef.id;
+            var scriptText = String(json.content).trim();
+            var now = firebase.firestore.Timestamp.now();
             generationMessage("Generated and saved as \"" + title + "\".", "success");
             homeClarifyFlow = null;
             var q1El = document.getElementById("gen-q1");
             var q2El = document.getElementById("gen-q2");
             if (q1El) q1El.value = "";
             if (q2El) q2El.value = "";
-            setMessage("Generated script saved to My Library.", "success");
+            if (
+              !currentScripts.some(function (s) {
+                return s.id === newScriptId;
+              })
+            ) {
+              currentScripts = [
+                {
+                  id: newScriptId,
+                  title: title,
+                  text: scriptText,
+                  audioURL: "",
+                  voiceID: selectedVoiceId,
+                  backgroundID: selectedBackgroundId,
+                  categoryID: ctx.cat.id,
+                  createdAt: now,
+                  updatedAt: null,
+                  audioCreatedAt: null,
+                  audioContentHash: "",
+                  audioVoiceID: "",
+                  audioBackgroundID: "",
+                },
+              ].concat(currentScripts);
+              updateTabCounts();
+            }
+            setMessage("Saved to My Library — edit the title or script below.", "success");
             setHomeFlowStep("landing", ctx.displayName || "");
+            openInlineScriptEditorForScript(newScriptId);
           });
       })
       .catch(function (e) {
@@ -7261,24 +7395,15 @@
   }
 
   function setMessage(text, kind) {
-    var el = document.getElementById("scripts-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("scripts-message", text, kind);
   }
 
   function setPlaylistsMessage(text, kind) {
-    var el = document.getElementById("playlists-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("playlists-message", text, kind);
   }
 
   function setPremadeMessage(text, kind) {
-    var el = document.getElementById("premade-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("premade-message", text, kind);
   }
 
   function updateTabCounts() {
@@ -8566,10 +8691,81 @@
             } catch (_e) {
               found.scrollIntoView({ block: "nearest" });
             }
+            if (inlineScriptEditorOpenById[sid]) {
+              var titleInput = found.querySelector(".script-inline-title-input");
+              if (titleInput) {
+                try {
+                  titleInput.focus();
+                  titleInput.select();
+                } catch (_focus) {}
+              }
+            }
           }
         });
       }
     });
+  }
+
+  function openInlineScriptEditorForScript(scriptId) {
+    if (!scriptId) return;
+    closeEditor();
+    activeLibraryTab = "my-library";
+    setAdminTab("library");
+    inlineScriptEditorOpenById[scriptId] = true;
+    setScriptControlsExpanded(scriptId, true);
+    renderScripts(currentScripts, scriptId);
+  }
+
+  function createBlankScriptAndOpenEditor() {
+    if (!currentUser) return;
+    var title = uniqueScriptTitle("New Script");
+    var docRef = scriptCollection(currentUser.uid).doc();
+    var now = firebase.firestore.Timestamp.now();
+    setMessage("Creating script…", "");
+    scriptCollection(currentUser.uid)
+      .doc(docRef.id)
+      .set({
+        title: title,
+        text: "",
+        createdAt: now,
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        audioURL: "",
+        backgroundID: selectedBackgroundId,
+        voiceID: selectedVoiceId,
+        audioCreatedAt: null,
+        categoryID: "",
+      })
+      .then(function () {
+        if (
+          !currentScripts.some(function (s) {
+            return s.id === docRef.id;
+          })
+        ) {
+          currentScripts = [
+            {
+              id: docRef.id,
+              title: title,
+              text: "",
+              audioURL: "",
+              voiceID: selectedVoiceId,
+              backgroundID: selectedBackgroundId,
+              categoryID: "",
+              createdAt: now,
+              updatedAt: null,
+              audioCreatedAt: null,
+              audioContentHash: "",
+              audioVoiceID: "",
+              audioBackgroundID: "",
+            },
+          ].concat(currentScripts);
+          updateTabCounts();
+        }
+        setMessage("New script created — edit the title and text below.", "success");
+        openInlineScriptEditorForScript(docRef.id);
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Could not create script.", "error");
+      });
   }
 
   function openEditor(script) {
@@ -8664,6 +8860,7 @@
       .then(function () {
         setMessage("Script created.", "success");
         closeEditor();
+        openInlineScriptEditorForScript(docRef.id);
       })
       .catch(function (e) {
         setMessage(e.message || "Could not create script.", "error");
@@ -8973,10 +9170,6 @@
   function postStripeCheckoutTier(tier, billingInterval) {
     if (!currentUser) return;
     setAccountMessage("Opening Stripe checkout…", "");
-    try {
-      var msgEl = document.getElementById("account-message");
-      if (msgEl && msgEl.scrollIntoView) msgEl.scrollIntoView({ block: "nearest" });
-    } catch (_scroll) {}
     currentUser
       .getIdToken(true)
       .then(function (token) {
@@ -9458,10 +9651,7 @@
   }
 
   function setPlaylistEditMessage(text, kind) {
-    var el = document.getElementById("playlist-edit-message");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("playlist-edit-message", text, kind);
   }
 
   function closePlaylistEditModal() {
@@ -9682,10 +9872,7 @@
   }
 
   function setPlaylistTimerModalMessage(text, kind) {
-    var el = document.getElementById("playlist-timer-modal-msg");
-    if (!el) return;
-    el.className = "app-inline-msg" + (kind ? " " + kind : "");
-    el.textContent = text || "";
+    postScreenMessage("playlist-timer-modal-msg", text, kind);
   }
 
   function openPlaylistTimerModal() {

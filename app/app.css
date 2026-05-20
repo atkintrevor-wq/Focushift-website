@@ -3569,3 +3569,90 @@ html.fs-app[data-app-theme="light"] .mini-player-time {
     opacity: 1;
   }
 }
+
+/* iOS-style transient banners (BannerManager / BannerView parity) */
+.app-banner-host {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 12000;
+  pointer-events: none;
+  padding: max(0.5rem, env(safe-area-inset-top, 0px)) 0.75rem 0;
+  display: flex;
+  justify-content: center;
+}
+.app-banner-host:not([hidden]) {
+  pointer-events: auto;
+}
+.app-banner {
+  width: min(100%, 520px);
+  transform: translateY(-120%);
+  opacity: 0;
+  transition: transform 0.28s ease, opacity 0.28s ease;
+}
+.app-banner.is-visible {
+  transform: translateY(0);
+  opacity: 1;
+}
+.app-banner.is-hiding {
+  transform: translateY(-120%);
+  opacity: 0;
+}
+.app-banner-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.85rem 0.9rem;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  color: #fff;
+}
+.app-banner--success .app-banner-inner {
+  background: rgba(22, 163, 74, 0.98);
+}
+.app-banner--error .app-banner-inner {
+  background: rgba(220, 38, 38, 0.98);
+}
+.app-banner--info .app-banner-inner {
+  background: rgba(37, 99, 235, 0.98);
+}
+.app-banner-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  opacity: 0.95;
+}
+.app-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+.app-banner-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+.app-banner-detail {
+  font-size: 0.875rem;
+  line-height: 1.4;
+  margin-top: 0.15rem;
+  opacity: 0.96;
+  word-break: break-word;
+}
+.app-banner-dismiss {
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 1.35rem;
+  line-height: 1;
+  padding: 0.15rem 0.35rem;
+  margin: -0.15rem -0.2rem 0 0;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.app-banner-dismiss:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
