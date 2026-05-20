@@ -133,6 +133,8 @@
   var scriptsRenderGeneration = 0;
   var CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebCardAudioControls_";
   var GENERATED_HASH_STORAGE_PREFIX = "generatedHash_";
+  /** In-memory voice/background at first load when Firestore has no audioVoiceID (iOS-generated audio). */
+  var frozenAudioSettingsByScriptId = {};
   var expandedPremadeTextById = {};
   var expandedPremadeAudioControlsById = {};
   var expandedPremadeSectionById = {};
@@ -7289,16 +7291,82 @@
     renderAccountInsights();
   }
 
+  function accountDefaultVoiceId() {
+    var fromProfile =
+      currentUserProfile && currentUserProfile.defaultVoiceID
+        ? String(currentUserProfile.defaultVoiceID).trim()
+        : "";
+    if (fromProfile) return fromProfile;
+    return (selectedVoiceId || "").trim();
+  }
+
+  function accountDefaultBackgroundId() {
+    var fromProfile =
+      currentUserProfile && currentUserProfile.defaultBackgroundID
+        ? String(currentUserProfile.defaultBackgroundID).trim()
+        : "";
+    if (fromProfile) return fromProfile;
+    return (selectedBackgroundId || "").trim();
+  }
+
   function effectiveVoiceIdForScript(script) {
     var v = script && script.voiceID ? String(script.voiceID).trim() : "";
-    if (!v || v === "default") return (selectedVoiceId || "").trim();
+    if (!v || v === "default") return accountDefaultVoiceId();
     return v;
   }
 
   function effectiveBackgroundIdForScript(script) {
     var b = script && script.backgroundID ? String(script.backgroundID).trim() : "";
-    if (!b) return (selectedBackgroundId || "").trim();
+    if (!b) return accountDefaultBackgroundId();
     return b;
+  }
+
+  function getFrozenAudioVoiceId(script) {
+    if (!script) return "";
+    if (script.audioVoiceID && String(script.audioVoiceID).trim()) {
+      return String(script.audioVoiceID).trim();
+    }
+    var cached = frozenAudioSettingsByScriptId[script.id];
+    return cached && cached.voiceID ? cached.voiceID : "";
+  }
+
+  function getFrozenAudioBackgroundId(script) {
+    if (!script) return "";
+    if (script.audioBackgroundID && String(script.audioBackgroundID).trim()) {
+      return String(script.audioBackgroundID).trim();
+    }
+    var cached = frozenAudioSettingsByScriptId[script.id];
+    return cached && cached.backgroundID ? cached.backgroundID : "";
+  }
+
+  /** Cache voice/background from first snapshot when audio exists but audioVoiceID is missing (legacy / iOS). */
+  function ensureFrozenAudioSettingsCached(script) {
+    if (!script || !script.id) return;
+    if (getFrozenAudioVoiceId(script) || getFrozenAudioBackgroundId(script)) return;
+    if (frozenAudioSettingsByScriptId[script.id]) return;
+    if (!(script.audioURL && String(script.audioURL).trim()) || !getEffectiveStoredContentHash(script)) {
+      return;
+    }
+    var sv = (script.voiceID && String(script.voiceID).trim()) || "";
+    var sb = (script.backgroundID && String(script.backgroundID).trim()) || "";
+    frozenAudioSettingsByScriptId[script.id] = {
+      voiceID: sv || accountDefaultVoiceId(),
+      backgroundID: sb || accountDefaultBackgroundId(),
+    };
+  }
+
+  function scriptHasFrozenAudioSettings(script) {
+    if (!script) return false;
+    ensureFrozenAudioSettingsCached(script);
+    return !!(getFrozenAudioVoiceId(script) || getFrozenAudioBackgroundId(script));
+  }
+
+  function scriptVoiceBackgroundDrifted(script) {
+    if (!script || !(script.audioURL && String(script.audioURL).trim())) return false;
+    if (!scriptHasFrozenAudioSettings(script)) return false;
+    var av = getFrozenAudioVoiceId(script);
+    var ab = getFrozenAudioBackgroundId(script);
+    return effectiveVoiceIdForScript(script) !== av || effectiveBackgroundIdForScript(script) !== ab;
   }
 
   function scriptDigestSourceFromScript(script) {
@@ -7414,12 +7482,18 @@
     if (!hasAudio) return true;
     var stored = getEffectiveStoredContentHash(script);
     if (!stored) return true;
+    if (scriptHasFrozenAudioSettings(script)) {
+      return scriptVoiceBackgroundDrifted(script);
+    }
     return stored !== contentHashHex;
   }
 
-  /** True when existing audio was generated for a different text/voice/background than now selected. */
+  /** True when voice or background changed since audio was generated (iOS-style frozen settings). */
   function scriptAudioSettingsDrifted(script, contentHashHex) {
     if (!script || !(script.audioURL && String(script.audioURL).trim())) return false;
+    if (scriptHasFrozenAudioSettings(script)) {
+      return scriptVoiceBackgroundDrifted(script);
+    }
     var stored = getEffectiveStoredContentHash(script);
     return !!stored && stored !== contentHashHex;
   }
@@ -7795,6 +7869,14 @@
             data.audioContentHash != null && String(data.audioContentHash).trim()
               ? String(data.audioContentHash).trim()
               : cur.audioContentHash || "",
+          audioVoiceID:
+            data.audioVoiceID != null && String(data.audioVoiceID).trim()
+              ? String(data.audioVoiceID).trim()
+              : cur.audioVoiceID || "",
+          audioBackgroundID:
+            data.audioBackgroundID != null && String(data.audioBackgroundID).trim()
+              ? String(data.audioBackgroundID).trim()
+              : cur.audioBackgroundID || "",
           audioCreatedAt: data.audioCreatedAt != null ? data.audioCreatedAt : cur.audioCreatedAt || null,
         };
         if (currentScripts[idx].audioContentHash && getStoredGeneratedHash(scriptId) !== currentScripts[idx].audioContentHash) {
@@ -7836,14 +7918,17 @@
     var genTitle = "";
     if (!isBusy) {
       if (!genEnabled && hasAudio) {
-        genTitle = "Audio already matches this script text, voice, and background.";
+        genTitle = "Audio already matches your selected voice and background.";
+      } else if (genEnabled && hasAudio && drift) {
+        genTitle =
+          "Voice or background changed since this audio was generated. Tap Generate to apply your current selections.";
       } else if (genEnabled && hasAudio && getEffectiveStoredContentHash(script)) {
         genTitle =
-          "Script text, voice, or background changed since this audio was generated. Tap Generate to refresh the file with your current settings.";
+          "Script settings changed since this audio was generated. Tap Generate to refresh the file.";
       }
     }
     var regenHintHtml = drift
-      ? '<div class="script-card-regen-hint" role="status">Your script text, voice, or background changed since this audio was generated. Expand audio controls and tap <strong>Generate</strong> to refresh the file.</div>'
+      ? '<div class="script-card-regen-hint" role="status">Voice or background changed — expand audio controls and tap <strong>Generate</strong> to apply to your audio.</div>'
       : "";
     var audioUrlStr = script.audioURL && String(script.audioURL).trim();
     var hostedAudio = !!(audioUrlStr && /^https?:\/\//i.test(audioUrlStr));
@@ -8970,12 +9055,15 @@
                   updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                   voiceID: vId,
                   backgroundID: bId,
+                  audioVoiceID: vId,
+                  audioBackgroundID: bId,
                   audioContentHash: digest,
                 },
                 { merge: true }
               )
               .then(function () {
                 setStoredGeneratedHash(script.id, digest);
+                delete frozenAudioSettingsByScriptId[script.id];
                 setMessage('Audio generated for "' + script.title + '".', "success");
               });
           });
@@ -10578,12 +10666,15 @@
               updatedAt: data.updatedAt || null,
               audioCreatedAt: data.audioCreatedAt || null,
               audioContentHash: (data.audioContentHash && String(data.audioContentHash).trim()) || "",
+              audioVoiceID: (data.audioVoiceID && String(data.audioVoiceID).trim()) || "",
+              audioBackgroundID: (data.audioBackgroundID && String(data.audioBackgroundID).trim()) || "",
             };
           });
           scripts.forEach(function (s) {
             if (s.audioContentHash && getStoredGeneratedHash(s.id) !== s.audioContentHash) {
               setStoredGeneratedHash(s.id, s.audioContentHash);
             }
+            ensureFrozenAudioSettingsCached(s);
           });
           currentScripts = scripts;
           updateTabCounts();
