@@ -23,6 +23,8 @@
   /** 1s timer for bottom generation overlay (My Library + premade). */
   var generationOverlayTimerId = null;
   var generationOverlayStartedAt = 0;
+  var scriptWorkOverlayTimerId = null;
+  var scriptWorkOverlayStartedAt = 0;
   var activeAudio = null;
   var activeAudioScriptId = null;
   var activeAudioTitle = "";
@@ -6875,7 +6877,11 @@
   function finalizeScriptGeneration(ctx) {
     if (!currentUser) return;
     var payload = buildScriptGeneratePayload(ctx, 0);
-    generationMessage("Generating script...", "");
+    generationMessage("", "");
+    showScriptWorkOverlay({
+      title: "Generating your script...",
+      detail: "Can take up to 3 minutes.",
+    });
     postGenerateScriptRequest(payload)
       .then(function (json) {
         if (!json.content) throw new Error("Empty script response.");
@@ -6935,16 +6941,25 @@
       })
       .catch(function (e) {
         generationMessage(e.message || "Could not generate script.", "error");
+      })
+      .finally(function () {
+        stopScriptWorkOverlay();
       });
   }
 
   function requestNextClarifyingQuestion() {
     if (!homeClarifyFlow || !currentUser) return;
     var f = homeClarifyFlow;
-    generationMessage(
-      "Generating clarifying question " + (f.currentIndex + 1) + " of " + f.requested + "…",
-      ""
-    );
+    generationMessage("", "");
+    showScriptWorkOverlay({
+      title:
+        "Generating clarifying question " +
+        (f.currentIndex + 1) +
+        " of " +
+        f.requested +
+        "…",
+      detail: "This usually takes a moment.",
+    });
     var ctx = {
       displayName: f.displayName,
       cat: f.cat,
@@ -6971,6 +6986,9 @@
         generationMessage(e.message || "Could not load clarifying question.", "error");
         homeClarifyFlow = null;
         setHomeFlowStep("survey", f.displayName);
+      })
+      .finally(function () {
+        stopScriptWorkOverlay();
       });
   }
 
@@ -7927,6 +7945,81 @@
     return m + ":" + (s < 10 ? "0" : "") + s;
   }
 
+  function ensureScriptWorkOverlay() {
+    var overlay = document.getElementById("script-work-overlay");
+    if (overlay) return overlay;
+    overlay = document.createElement("div");
+    overlay.id = "script-work-overlay";
+    overlay.className = "script-work-overlay";
+    overlay.hidden = true;
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.innerHTML =
+      '<div class="script-work-overlay-backdrop" aria-hidden="true"></div>' +
+      '<div class="script-work-overlay-card" role="status">' +
+      '<div class="script-work-overlay-spinner" aria-hidden="true"></div>' +
+      '<p id="script-work-overlay-title" class="script-work-overlay-title">Generating your script...</p>' +
+      '<p id="script-work-overlay-detail" class="script-work-overlay-detail">Can take up to 3 minutes.</p>' +
+      '<p id="script-work-overlay-elapsed" class="script-work-overlay-elapsed">0:00</p>' +
+      "</div>";
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+
+  function updateScriptWorkOverlayElapsed() {
+    var el = document.getElementById("script-work-overlay-elapsed");
+    if (!el || !scriptWorkOverlayStartedAt) return;
+    var secs = Math.max(0, Math.floor((Date.now() - scriptWorkOverlayStartedAt) / 1000));
+    el.textContent = formatGenerationElapsed(secs);
+  }
+
+  /** Centered progress box (iOS SurveyView loadingOverlay parity). */
+  function showScriptWorkOverlay(options) {
+    options = options || {};
+    var title = options.title || "Generating your script...";
+    var detail =
+      options.detail != null ? options.detail : "Can take up to 3 minutes.";
+    var showTimer = options.showTimer !== false;
+
+    var overlay = ensureScriptWorkOverlay();
+    var titleEl = document.getElementById("script-work-overlay-title");
+    var detailEl = document.getElementById("script-work-overlay-detail");
+    var elapsedEl = document.getElementById("script-work-overlay-elapsed");
+    if (titleEl) titleEl.textContent = title;
+    if (detailEl) {
+      detailEl.textContent = detail;
+      detailEl.hidden = !detail;
+    }
+    if (elapsedEl) {
+      elapsedEl.hidden = !showTimer;
+      elapsedEl.textContent = "0:00";
+    }
+
+    scriptWorkOverlayStartedAt = Date.now();
+    overlay.hidden = false;
+    overlay.setAttribute("aria-hidden", "false");
+    document.body.classList.add("script-work-overlay-open");
+
+    updateScriptWorkOverlayElapsed();
+    if (scriptWorkOverlayTimerId) clearInterval(scriptWorkOverlayTimerId);
+    if (showTimer) {
+      scriptWorkOverlayTimerId = setInterval(updateScriptWorkOverlayElapsed, 1000);
+    }
+  }
+
+  function stopScriptWorkOverlay() {
+    if (scriptWorkOverlayTimerId) {
+      clearInterval(scriptWorkOverlayTimerId);
+      scriptWorkOverlayTimerId = null;
+    }
+    scriptWorkOverlayStartedAt = 0;
+    var overlay = document.getElementById("script-work-overlay");
+    if (overlay) {
+      overlay.hidden = true;
+      overlay.setAttribute("aria-hidden", "true");
+    }
+    document.body.classList.remove("script-work-overlay-open");
+  }
+
   function updateGenerationOverlayElapsed() {
     var el = document.getElementById("audio-generation-overlay-elapsed");
     if (!el || !generationOverlayStartedAt) return;
@@ -8721,7 +8814,11 @@
     var title = uniqueScriptTitle("New Script");
     var docRef = scriptCollection(currentUser.uid).doc();
     var now = firebase.firestore.Timestamp.now();
-    setMessage("Creating script…", "");
+    setMessage("", "");
+    showScriptWorkOverlay({
+      title: "Creating script...",
+      detail: "Saving to your library.",
+    });
     scriptCollection(currentUser.uid)
       .doc(docRef.id)
       .set({
@@ -8765,6 +8862,9 @@
       })
       .catch(function (e) {
         setMessage(e.message || "Could not create script.", "error");
+      })
+      .finally(function () {
+        stopScriptWorkOverlay();
       });
   }
 

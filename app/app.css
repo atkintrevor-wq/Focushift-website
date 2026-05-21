@@ -1385,6 +1385,77 @@ html.fs-app[data-app-theme="light"] .audio-generation-overlay-elapsed {
   color: #0369a1;
 }
 
+/* Home / Library: script creation progress (iOS SurveyView loadingOverlay parity) */
+body.script-work-overlay-open {
+  overflow: hidden;
+}
+.script-work-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 11950;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.25rem;
+}
+.script-work-overlay[hidden] {
+  display: none !important;
+}
+.script-work-overlay-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+}
+.script-work-overlay-card {
+  position: relative;
+  width: min(100%, 260px);
+  padding: 1.5rem 1.35rem 1.25rem;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.65rem;
+}
+.script-work-overlay-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: script-work-spin 0.85s linear infinite;
+}
+@keyframes script-work-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.script-work-overlay-title {
+  margin: 0.15rem 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+.script-work-overlay-detail {
+  margin: 0;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.88);
+}
+.script-work-overlay-elapsed {
+  margin: 0.1rem 0 0;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.9);
+}
+html.fs-app[data-app-theme="light"] .script-work-overlay-card {
+  background: rgba(15, 23, 42, 0.92);
+}
+
 .script-card-sync-row {
   display: flex;
   align-items: center;
