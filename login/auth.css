@@ -194,6 +194,24 @@ body.auth-is-busy #btn-forgot {
   color: #1f2937;
 }
 
+.auth-btn-apple {
+  background: #000;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.auth-btn-apple .auth-spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+.auth-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .auth-banner {
   display: none;
   margin-bottom: 1rem;

@@ -55,6 +55,31 @@ Use this checklist in order. Pause after each **big step** and test if noted.
 
 ---
 
+## Part B2 — Apple Sign In (web + iOS use different IDs)
+
+**Goal:** Web uses a **Services ID**; iOS uses your **bundle ID**. Both can share the same `.p8` key in Apple Developer.
+
+### Apple Developer (developer.apple.com)
+
+1. **Keys** — you should already have a Sign in with Apple key (`.p8`) from iOS setup. Note **Key ID** and **Team ID**.
+2. **Identifiers** → **Services IDs** → create or open the **web** Services ID (example: `com.trevoratkin.FocuShift.firebase`).
+3. Enable **Sign in with Apple** → **Configure**:
+   - **Primary App ID:** `com.trevoratkin.FocuShift`
+   - **Domains:** `focusshift.app`, `focushift-eeb60.firebaseapp.com`
+   - **Return URLs:** `https://focushift-eeb60.firebaseapp.com/__/auth/handler`
+4. Keep a **separate** App ID entry for iOS (`com.trevoratkin.FocuShift`) — Firebase iOS Apple provider must use the **bundle ID**, not the Services ID.
+
+### Firebase Console
+
+1. **Authentication** → **Sign-in method** → **Apple** → **Enable**.
+2. For **web**, set **Services ID** to your web Services ID (e.g. `com.trevoratkin.FocuShift.firebase`) — **not** the iOS bundle ID.
+3. Fill **Team ID**, **Key ID**, and upload the **`.p8` private key** (same key as iOS is fine).
+4. OAuth code flow configuration should list return URL `https://focushift-eeb60.firebaseapp.com/__/auth/handler` (Firebase usually shows this).
+
+**Check:** `/login/` shows **Continue with Apple**; tapping it opens Apple’s sign-in (popup or redirect). Same Firebase user as iOS when using the same Apple ID.
+
+---
+
 ## Part C — Firebase: authorized domains (fixes “popup blocked / unauthorized domain”)
 
 **Goal:** Allow sign-in from your real site and from your computer.
@@ -167,6 +192,9 @@ Full copy-paste flow is also in **`DEPLOY_CHEATSHEET.md`**.
 | Google: **unauthorized domain** | Part C — add the **exact** host from the address bar. |
 | **Permission denied** in browser console on Firestore | Rules not deployed (Part D) or user not signed in. |
 | Email sign-in works on iOS but not web | Wrong Firebase **project** in `firebase-config.js` or provider not enabled (Part B). |
+| Apple: **operation-not-allowed** | Enable Apple in Firebase (Part B2). |
+| Apple: **invalid client** / redirect error | Services ID + Return URL in Apple Developer must match Firebase handler URL (Part B2). |
+| Apple: **account exists with different credential** | User already signed up with email/Google; sign in that way first (same email). |
 | `firebase deploy` errors | Run from **`/Users/trevoratkin/Desktop/FocuShift`**, not `website/`. |
 
 ---

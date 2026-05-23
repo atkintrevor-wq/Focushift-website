@@ -7,6 +7,7 @@
   var setupBanner = document.getElementById("setup-banner");
   var errorBanner = document.getElementById("error-banner");
   var btnGoogle = document.getElementById("btn-google");
+  var btnApple = document.getElementById("btn-apple");
   var btnEmailSubmit = document.getElementById("btn-email-submit");
   var btnEmailLabel = btnEmailSubmit ? btnEmailSubmit.querySelector(".auth-btn-text") : null;
   var emailForm = document.getElementById("email-form");
@@ -48,6 +49,10 @@
     if (btnGoogle) {
       btnGoogle.classList.toggle("is-busy", busy);
       btnGoogle.disabled = busy;
+    }
+    if (btnApple) {
+      btnApple.classList.toggle("is-busy", busy);
+      btnApple.disabled = busy;
     }
     if (btnEmailSubmit) {
       btnEmailSubmit.classList.toggle("is-busy", busy);
@@ -97,13 +102,48 @@
   var auth = firebase.auth();
   var db = firebase.firestore();
 
-  function syncUserProfile(user) {
-    var payload = {
-      email: user.email || "",
-      displayName: user.displayName || "",
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    };
-    return db.collection("users").doc(user.uid).set(payload, { merge: true });
+  function syncUserProfile(user, additionalUserInfo) {
+    var displayName = (user.displayName || "").trim();
+    if (!displayName && additionalUserInfo && additionalUserInfo.profile) {
+      var profile = additionalUserInfo.profile;
+      var given = profile.given_name || profile.firstName || "";
+      var family = profile.family_name || profile.lastName || "";
+      displayName = (String(given) + " " + String(family)).trim();
+    }
+
+    function writeProfileDoc() {
+      var payload = {
+        email: user.email || "",
+        displayName: displayName || user.displayName || "",
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      };
+      return db.collection("users").doc(user.uid).set(payload, { merge: true });
+    }
+
+    if (displayName && displayName !== (user.displayName || "").trim()) {
+      return user.updateProfile({ displayName: displayName }).then(writeProfileDoc);
+    }
+    return writeProfileDoc();
+  }
+
+  function friendlyAuthError(err) {
+    if (!err) return "Sign-in failed.";
+    if (err.code === "auth/popup-closed-by-user") return "";
+    if (err.code === "auth/account-exists-with-different-credential") {
+      return (
+        "An account already exists with this email using a different sign-in method. " +
+        "Sign in with email or Google here, or use the same Apple ID on the iOS app."
+      );
+    }
+    if (err.code === "auth/operation-not-allowed") {
+      return "Apple sign-in is not enabled yet. Enable Apple in Firebase Authentication → Sign-in method.";
+    }
+    return err.message || "Sign-in failed.";
+  }
+
+  function finishAuthSuccess(cred) {
+    persistRememberPreferences((cred.user && cred.user.email) || "");
+    return syncUserProfile(cred.user, cred.additionalUserInfo).then(goApp);
   }
 
   function goApp() {
@@ -149,7 +189,43 @@
   });
 
   btnGoogle.disabled = false;
+  if (btnApple) btnApple.disabled = false;
   btnEmailSubmit.disabled = false;
+
+  auth
+    .getRedirectResult()
+    .then(function (result) {
+      if (!result || !result.user) return;
+      return withAuthBusy(finishAuthSuccess(result));
+    })
+    .catch(function (e) {
+      var msg = friendlyAuthError(e);
+      if (msg) showError(msg);
+    });
+
+  function signInWithApple() {
+    showError("");
+    var provider = new firebase.auth.OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+
+    return applyAuthPersistence()
+      .then(function () {
+        return auth.signInWithPopup(provider);
+      })
+      .catch(function (e) {
+        if (e && e.code === "auth/popup-blocked") {
+          return applyAuthPersistence().then(function () {
+            return auth.signInWithRedirect(provider);
+          });
+        }
+        throw e;
+      })
+      .then(function (cred) {
+        if (!cred) return;
+        return finishAuthSuccess(cred);
+      });
+  }
 
   btnGoogle.addEventListener("click", function () {
     showError("");
@@ -159,15 +235,19 @@
         .then(function () {
           return auth.signInWithPopup(provider);
         })
-        .then(function (cred) {
-          persistRememberPreferences((cred.user && cred.user.email) || "");
-          return syncUserProfile(cred.user);
-        })
-        .then(goApp)
+        .then(finishAuthSuccess)
     ).catch(function (e) {
-      showError(e.message || "Google sign-in failed.");
+      showError(friendlyAuthError(e));
     });
   });
+
+  if (btnApple) {
+    btnApple.addEventListener("click", function () {
+      withAuthBusy(signInWithApple()).catch(function (e) {
+        showError(friendlyAuthError(e));
+      });
+    });
+  }
 
   emailForm.addEventListener("submit", function (ev) {
     ev.preventDefault();
@@ -214,7 +294,7 @@
           });
         }).then(goApp)
       ).catch(function (e) {
-        showError(e.message || "Sign up failed.");
+        showError(friendlyAuthError(e));
       });
     } else {
       withAuthBusy(
@@ -225,7 +305,7 @@
           });
         }).then(goApp)
       ).catch(function (e) {
-        showError(e.message || "Sign in failed.");
+        showError(friendlyAuthError(e));
       });
     }
   });
