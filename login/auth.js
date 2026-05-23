@@ -21,8 +21,15 @@
   var authTitle = document.getElementById("auth-title");
   var btnForgot = document.getElementById("btn-forgot");
   var rememberCheckbox = document.getElementById("remember-me");
+  var appleLinkPanel = document.getElementById("apple-link-panel");
+  var appleLinkEmailEl = document.getElementById("apple-link-email");
+  var appleLinkPasswordInput = document.getElementById("apple-link-password");
+  var btnAppleLinkSubmit = document.getElementById("btn-apple-link-submit");
+  var btnAppleLinkCancel = document.getElementById("btn-apple-link-cancel");
 
   var isSignUp = false;
+  var pendingAppleLinkCredential = null;
+  var pendingAppleLinkEmail = "";
 
   function showError(msg) {
     errorBanner.textContent = msg || "";
@@ -53,6 +60,10 @@
     if (btnApple) {
       btnApple.classList.toggle("is-busy", busy);
       btnApple.disabled = busy;
+    }
+    if (btnAppleLinkSubmit) {
+      btnAppleLinkSubmit.classList.toggle("is-busy", busy);
+      btnAppleLinkSubmit.disabled = busy;
     }
     if (btnEmailSubmit) {
       btnEmailSubmit.classList.toggle("is-busy", busy);
@@ -130,15 +141,72 @@
     if (!err) return "Sign-in failed.";
     if (err.code === "auth/popup-closed-by-user") return "";
     if (err.code === "auth/account-exists-with-different-credential") {
+      return "";
+    }
+    if (err.code === "auth/credential-already-in-use") {
       return (
-        "An account already exists with this email using a different sign-in method. " +
-        "Sign in with email or Google here, or use the same Apple ID on the iOS app."
+        "This Apple ID is already linked to another Focus Shift account. " +
+        "Sign in with Apple only if that is your main account, or sign in with email here and link Apple from Account settings."
       );
     }
     if (err.code === "auth/operation-not-allowed") {
       return "Apple sign-in is not enabled yet. Enable Apple in Firebase Authentication → Sign-in method.";
     }
     return err.message || "Sign-in failed.";
+  }
+
+  function showAppleLinkPanel(email) {
+    pendingAppleLinkEmail = (email || "").trim();
+    if (appleLinkEmailEl) appleLinkEmailEl.textContent = pendingAppleLinkEmail || "your account";
+    if (emailInput && pendingAppleLinkEmail) emailInput.value = pendingAppleLinkEmail;
+    if (appleLinkPasswordInput) appleLinkPasswordInput.value = "";
+    if (appleLinkPanel) appleLinkPanel.hidden = false;
+    setMode(false);
+    showError("");
+  }
+
+  function hideAppleLinkPanel() {
+    pendingAppleLinkCredential = null;
+    pendingAppleLinkEmail = "";
+    if (appleLinkPanel) appleLinkPanel.hidden = true;
+    if (appleLinkPasswordInput) appleLinkPasswordInput.value = "";
+  }
+
+  function completeAppleLinkWithPassword(password) {
+    if (!pendingAppleLinkCredential || !pendingAppleLinkEmail) {
+      return Promise.reject(new Error("Apple link session expired. Try Continue with Apple again."));
+    }
+    return applyAuthPersistence()
+      .then(function () {
+        return auth.signInWithEmailAndPassword(pendingAppleLinkEmail, password);
+      })
+      .then(function (cred) {
+        return cred.user.linkWithCredential(pendingAppleLinkCredential);
+      })
+      .then(function (linked) {
+        hideAppleLinkPanel();
+        return finishAuthSuccess(linked);
+      });
+  }
+
+  function appleOAuthProvider() {
+    var provider = new firebase.auth.OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+    return provider;
+  }
+
+  function handleAuthConflict(error) {
+    if (!error || error.code !== "auth/account-exists-with-different-credential") {
+      throw error;
+    }
+    pendingAppleLinkCredential = error.credential || null;
+    showAppleLinkPanel(error.email || "");
+    if (!pendingAppleLinkCredential) {
+      showError(
+        "An account already exists with this email. Sign in with email or Google below, then link Apple in Account → Privacy & Security."
+      );
+    }
   }
 
   function finishAuthSuccess(cred) {
@@ -205,9 +273,8 @@
 
   function signInWithApple() {
     showError("");
-    var provider = new firebase.auth.OAuthProvider("apple.com");
-    provider.addScope("email");
-    provider.addScope("name");
+    hideAppleLinkPanel();
+    var provider = appleOAuthProvider();
 
     return applyAuthPersistence()
       .then(function () {
@@ -219,7 +286,7 @@
             return auth.signInWithRedirect(provider);
           });
         }
-        throw e;
+        return handleAuthConflict(e);
       })
       .then(function (cred) {
         if (!cred) return;
@@ -244,8 +311,29 @@
   if (btnApple) {
     btnApple.addEventListener("click", function () {
       withAuthBusy(signInWithApple()).catch(function (e) {
-        showError(friendlyAuthError(e));
+        var msg = friendlyAuthError(e);
+        if (msg) showError(msg);
       });
+    });
+  }
+
+  if (btnAppleLinkSubmit) {
+    btnAppleLinkSubmit.addEventListener("click", function () {
+      var password = appleLinkPasswordInput ? appleLinkPasswordInput.value : "";
+      if (!password) {
+        showError("Enter your account password to link Apple ID.");
+        return;
+      }
+      withAuthBusy(completeAppleLinkWithPassword(password)).catch(function (e) {
+        showError(friendlyAuthError(e) || e.message || "Could not link Apple ID.");
+      });
+    });
+  }
+
+  if (btnAppleLinkCancel) {
+    btnAppleLinkCancel.addEventListener("click", function () {
+      hideAppleLinkPanel();
+      showError("");
     });
   }
 

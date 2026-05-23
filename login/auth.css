@@ -279,3 +279,36 @@ body.is-sign-up .sign-in-only {
   font-size: 0.875rem;
   padding: 0;
 }
+
+.auth-provider-hint {
+  margin: 0.35rem 0 0.85rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted, #8b9bb4);
+  text-align: center;
+}
+
+.auth-link-panel {
+  margin: 0 0 0.85rem;
+  padding: 0.85rem 0.95rem;
+  border-radius: 12px;
+  border: 1px solid rgba(79, 140, 255, 0.35);
+  background: rgba(79, 140, 255, 0.08);
+}
+
+.auth-link-panel__lede {
+  margin: 0 0 0.75rem;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--text, #e8edf7);
+}
+
+.auth-link-panel__cancel {
+  display: block;
+  margin: 0.65rem auto 0;
+}
+
+body.auth-is-busy #apple-link-panel {
+  pointer-events: none;
+  opacity: 0.65;
+}

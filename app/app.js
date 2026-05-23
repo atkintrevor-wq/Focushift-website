@@ -1762,6 +1762,9 @@
       "<p class=\"app-muted\">Hi " +
       escapeHtml(displayName || email || "there") +
       ". Full Focus Shift tools on the web are <strong>coming soon</strong>. For now, use the iOS app for playlists, audio generation, and your full library.</p>" +
+      (email && email.indexOf("@privaterelay.appleid.com") !== -1
+        ? '<p class="app-muted">This looks like a <strong>new</strong> Apple sign-in (Hide My Email). If you already have an account with email on iOS or web, sign out and sign in with that email instead.</p>'
+        : "") +
       "<p class=\"app-muted\">Signed in as <strong>" +
       escapeHtml(email || "") +
       "</strong></p>" +
@@ -2255,7 +2258,8 @@
       '      <div id="account-privacy-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Security</h4>' +
-      '        <p class="app-muted account-section-card__text">Web sign-in uses your email/password or Google. Biometric unlock is iOS-only today.</p>' +
+      '        <p class="app-muted account-section-card__text">Web sign-in uses email/password or Google. Sign in with Apple on the iOS app. Biometric unlock is iOS-only today.</p>' +
+      '        <p id="account-apple-link-status" class="app-muted account-section-card__text">Apple Sign In on the web is unavailable while iOS and web share one Firebase Apple Services ID (bundle ID). Use the iOS app for Apple login.</p>' +
       '        <div class="account-section-card__btn-row">' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-password-reset">Send password reset email</button>' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-refresh-session">Refresh session</button>' +
@@ -2753,6 +2757,16 @@
       sendPasswordResetFromAccount();
       setPrivacyMessage("If you requested a reset, check your email inbox.", "success");
     });
+    var linkAppleBtn = document.getElementById("account-btn-link-apple");
+    if (linkAppleBtn) {
+      linkAppleBtn.addEventListener("click", function () {
+        setPrivacyMessage("Opening Apple…", "");
+        linkAppleToCurrentAccount().catch(function (err) {
+          var msg = friendlyAppleLinkError(err);
+          if (msg) setPrivacyMessage(msg, "error");
+        });
+      });
+    }
     document.getElementById("account-privacy-refresh-session").addEventListener("click", function () {
       refreshSessionToken();
       setPrivacyMessage("Session refreshed.", "success");
@@ -3520,6 +3534,7 @@
     if (!bd) return;
     resetAccountPlansPanel();
     syncAccountPreferencesForm();
+    syncAccountAppleLinkUI();
     renderAccountInsights();
     refreshAccountInsightsFromCloud();
     setAccountModalTab("settings");
@@ -5736,6 +5751,73 @@
 
   function setPrivacyMessage(text, kind) {
     postScreenMessage("account-privacy-message", text, kind);
+  }
+
+  function userHasAppleProvider() {
+    if (!currentUser || !currentUser.providerData) return false;
+    return currentUser.providerData.some(function (p) {
+      return p && p.providerId === "apple.com";
+    });
+  }
+
+  function syncAccountAppleLinkUI() {
+    var statusEl = document.getElementById("account-apple-link-status");
+    if (!statusEl) return;
+    var linked = userHasAppleProvider();
+    statusEl.textContent = linked
+      ? "Apple ID is linked to this account (Sign in with Apple works on the iOS app)."
+      : "Apple Sign In on the web is unavailable while iOS and web share one Firebase Apple Services ID. Use the iOS app to sign in with Apple.";
+  }
+
+  function friendlyAppleLinkError(err) {
+    if (!err) return "Could not link Apple ID.";
+    if (err.code === "auth/credential-already-in-use") {
+      return (
+        "This Apple ID is already linked to another Focus Shift account. " +
+        "Sign in with Apple only if that is your main account, or remove the duplicate relay user in Firebase Authentication."
+      );
+    }
+    if (err.code === "auth/popup-closed-by-user") return "";
+    if (err.code === "auth/provider-already-linked") {
+      syncAccountAppleLinkUI();
+      return "Apple ID is already linked to this account.";
+    }
+    return err.message || "Could not link Apple ID.";
+  }
+
+  function linkAppleToCurrentAccount() {
+    if (!currentUser) {
+      return Promise.reject(new Error("You must be signed in."));
+    }
+    if (userHasAppleProvider()) {
+      syncAccountAppleLinkUI();
+      return Promise.resolve();
+    }
+    var provider = new firebase.auth.OAuthProvider("apple.com");
+    provider.addScope("email");
+    provider.addScope("name");
+    return currentUser
+      .linkWithPopup(provider)
+      .then(function () {
+        return currentUser.reload();
+      })
+      .then(function () {
+        syncAccountAppleLinkUI();
+        return syncUserProfileDocFromAuthUser(currentUser);
+      })
+      .then(function () {
+        setPrivacyMessage("Apple ID linked. You can now sign in with Apple on the login page.", "success");
+      });
+  }
+
+  function syncUserProfileDocFromAuthUser(user) {
+    if (!user) return Promise.resolve();
+    var payload = {
+      email: user.email || "",
+      displayName: user.displayName || "",
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    return db.collection("users").doc(user.uid).set(payload, { merge: true });
   }
 
   function jsonReplacer(_key, value) {

@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sign in — Focus Shift</title>
-  <meta name="description" content="Sign in to Focus Shift on the web with Apple, Google, or email." />
+  <meta name="description" content="Sign in to Focus Shift on the web with Google or email." />
   <link rel="canonical" href="https://focusshift.app/login/" />
   <meta name="theme-color" content="#0b1220" />
   <link rel="icon" href="../images/logo.png?v=8" type="image/png" />
@@ -12,7 +12,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="../styles.css?v=8" />
-  <link rel="stylesheet" href="auth.css?v=3" />
+  <link rel="stylesheet" href="auth.css?v=4" />
 </head>
 <body>
   <main class="auth-page">
@@ -24,6 +24,11 @@
       <div class="auth-banner auth-banner--setup" id="setup-banner" role="alert"></div>
       <div class="auth-banner auth-banner--error" id="error-banner" role="alert"></div>
 
+      <div class="auth-banner auth-banner--setup is-visible" id="apple-web-unavailable-banner" role="status">
+        Sign in with Apple on the web is unavailable while iOS uses the same Firebase Apple config (one Services ID). Use <strong>email</strong> or <strong>Google</strong> here, or Apple Sign In on the iOS app.
+      </div>
+
+      <!-- Hidden until Firebase supports web + iOS Apple Services IDs in one project.
       <button type="button" class="auth-btn auth-btn-apple" id="btn-apple" disabled>
         <span class="auth-spinner" aria-hidden="true"></span>
         <span class="auth-btn-icon" aria-hidden="true">
@@ -33,6 +38,24 @@
         </span>
         <span class="auth-btn-text">Continue with Apple</span>
       </button>
+      <p class="auth-provider-hint">Already use Focus Shift with email? Sign in with email first, then link Apple in Account → Privacy &amp; Security.</p>
+
+      <div id="apple-link-panel" class="auth-link-panel" hidden>
+        <p class="auth-link-panel__lede">
+          An account already exists for <strong id="apple-link-email"></strong>.
+          Enter that account’s password to link your Apple ID (same library and subscription as iOS).
+        </p>
+        <div class="auth-field">
+          <label for="apple-link-password">Password</label>
+          <input id="apple-link-password" type="password" autocomplete="current-password" />
+        </div>
+        <button type="button" class="auth-btn auth-btn-primary" id="btn-apple-link-submit">
+          <span class="auth-spinner" aria-hidden="true"></span>
+          <span class="auth-btn-text">Link Apple ID and continue</span>
+        </button>
+        <button type="button" class="auth-link-btn auth-link-panel__cancel" id="btn-apple-link-cancel">Cancel</button>
+      </div>
+      -->
 
       <button type="button" class="auth-btn auth-btn-google" id="btn-google" disabled>
         <span class="auth-spinner" aria-hidden="true"></span>
@@ -93,6 +116,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="auth.js?v=3"></script>
+  <script src="auth.js?v=5"></script>
 </body>
 </html>

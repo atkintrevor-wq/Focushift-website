@@ -55,28 +55,41 @@ Use this checklist in order. Pause after each **big step** and test if noted.
 
 ---
 
-## Part B2 — Apple Sign In (web + iOS use different IDs)
+## Part B2 — Apple Sign In (one Firebase Services ID — iOS wins)
 
-**Goal:** Web uses a **Services ID**; iOS uses your **bundle ID**. Both can share the same `.p8` key in Apple Developer.
+**Important:** Firebase Authentication allows **only one** Apple **Services ID** per project. That value must match the **`aud`** claim in Apple’s ID token:
 
-### Apple Developer (developer.apple.com)
+| Platform | Token audience | Firebase Services ID must be |
+|----------|----------------|------------------------------|
+| **iOS app** (native Sign in with Apple) | `com.trevoratkin.FocuShift` (bundle ID) | **`com.trevoratkin.FocuShift`** |
+| **Web** (OAuth popup) | `com.trevoratkin.FocuShift.firebase` (web Services ID) | Conflicts with iOS — see below |
 
-1. **Keys** — you should already have a Sign in with Apple key (`.p8`) from iOS setup. Note **Key ID** and **Team ID**.
-2. **Identifiers** → **Services IDs** → create or open the **web** Services ID (example: `com.trevoratkin.FocuShift.firebase`).
-3. Enable **Sign in with Apple** → **Configure**:
-   - **Primary App ID:** `com.trevoratkin.FocuShift`
-   - **Domains:** `focusshift.app`, `focushift-eeb60.firebaseapp.com`
-   - **Return URLs:** `https://focushift-eeb60.firebaseapp.com/__/auth/handler`
-4. Keep a **separate** App ID entry for iOS (`com.trevoratkin.FocuShift`) — Firebase iOS Apple provider must use the **bundle ID**, not the Services ID.
+**Use this in Firebase Console → Authentication → Apple:**
 
-### Firebase Console
+| Field | Value |
+|-------|--------|
+| **Services ID** | **`com.trevoratkin.FocuShift`** (bundle ID — **not** `.firebase`) |
+| **Team ID** | `A88DZ5BB6U` |
+| **Key ID** | Your Sign in with Apple key |
+| **Private key** | Same `.p8` file as before |
 
-1. **Authentication** → **Sign-in method** → **Apple** → **Enable**.
-2. For **web**, set **Services ID** to your web Services ID (e.g. `com.trevoratkin.FocuShift.firebase`) — **not** the iOS bundle ID.
-3. Fill **Team ID**, **Key ID**, and upload the **`.p8` private key** (same key as iOS is fine).
-4. OAuth code flow configuration should list return URL `https://focushift-eeb60.firebaseapp.com/__/auth/handler` (Firebase usually shows this).
+If Services ID is set to `com.trevoratkin.FocuShift.firebase`, **iOS Apple Sign In fails** (error 17004 / invalid credential). If you changed it for web, **change it back** to the bundle ID above.
 
-**Check:** `/login/` shows **Continue with Apple**; tapping it opens Apple’s sign-in (popup or redirect). Same Firebase user as iOS when using the same Apple ID.
+### Apple Developer (keep web Services ID for later)
+
+You can still create/configure the **web** Services ID (`com.trevoratkin.FocuShift.firebase`) with Return URL  
+`https://focushift-eeb60.firebaseapp.com/__/auth/handler` — but **do not** put that ID in Firebase until Firebase supports multiple audiences (or you drop native iOS Apple).
+
+### Web sign-in today
+
+Because of the single-ID limit, **Continue with Apple on the web is disabled** in the login UI. On the web use:
+
+- **Email/password** or **Google**
+- Same account as iOS (your admin, Stripe plan, and library follow that uid)
+
+Use **Sign in with Apple on the iOS app** for Apple login. Linking Apple from the web app is also disabled for the same reason.
+
+**Check:** iOS Apple Sign In works after Firebase Services ID = `com.trevoratkin.FocuShift`. Web `/login/` shows email + Google (no Apple button).
 
 ---
 
@@ -193,7 +206,8 @@ Full copy-paste flow is also in **`DEPLOY_CHEATSHEET.md`**.
 | **Permission denied** in browser console on Firestore | Rules not deployed (Part D) or user not signed in. |
 | Email sign-in works on iOS but not web | Wrong Firebase **project** in `firebase-config.js` or provider not enabled (Part B). |
 | Apple: **operation-not-allowed** | Enable Apple in Firebase (Part B2). |
-| Apple: **invalid client** / redirect error | Services ID + Return URL in Apple Developer must match Firebase handler URL (Part B2). |
+| Apple iOS: **17004** / invalid credential | Firebase Services ID must be **`com.trevoratkin.FocuShift`**, not `.firebase`. |
+| Apple web popup fails | Expected while Firebase allows only one Services ID; use email/Google on web. |
 | Apple: **account exists with different credential** | User already signed up with email/Google; sign in that way first (same email). |
 | `firebase deploy` errors | Run from **`/Users/trevoratkin/Desktop/FocuShift`**, not `website/`. |
 
