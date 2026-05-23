@@ -2143,6 +2143,7 @@
       '        <p class="app-muted account-subscription-desc" id="account-subscription-description">Limited features on the Free tier.</p>' +
       '        <p class="app-muted" style="margin:0.45rem 0 0;font-size:0.82rem;line-height:1.45;">iOS uses the App Store; <strong>web</strong> upgrades use Stripe Checkout (same Firebase account). Test card <code style="font-size:0.85em;">4242&nbsp;4242&nbsp;4242&nbsp;4242</code>.</p>' +
       '        <button type="button" class="app-btn app-btn-secondary account-view-plans-btn" id="account-btn-view-plans" aria-expanded="false" aria-controls="account-plans-panel">View plans &amp; upgrade</button>' +
+      '        <button type="button" class="app-btn app-btn-secondary account-manage-billing-btn" id="account-btn-manage-billing" hidden>Manage billing</button>' +
       '        <div id="account-plans-panel" class="account-plans-panel" hidden>' +
       '          <p class="app-muted" style="margin:0 0 0.55rem;font-size:0.82rem;line-height:1.45;">Choose a billing period. You will be redirected to Stripe Checkout.</p>' +
       '          <div class="account-plans-grid">' +
@@ -2714,6 +2715,12 @@
       this.setAttribute("aria-expanded", willShow ? "true" : "false");
       this.textContent = willShow ? "Hide plans" : "View plans & upgrade";
     });
+    var accountManageBillingBtn = document.getElementById("account-btn-manage-billing");
+    if (accountManageBillingBtn) {
+      accountManageBillingBtn.addEventListener("click", function () {
+        postStripeBillingPortal();
+      });
+    }
     document.getElementById("account-manage-devices").addEventListener("click", function () {
       refreshAccountInsightsFromCloud().then(function () {
         setAccountMessage(
@@ -6190,6 +6197,18 @@
     return formatInsightsInt(used) + " / " + formatInsightsLimit(limit);
   }
 
+  function formatSubscriptionTierSourceLabel(profile) {
+    if (!profile) return "Not set";
+    var src = String(profile.subscriptionTierSource || profile.subscriptionSource || "")
+      .trim()
+      .toLowerCase();
+    if (src === "stripe") return "Web (Stripe)";
+    if (src === "store") return "App Store";
+    if (src === "manual") return "Complimentary";
+    if (src) return src.charAt(0).toUpperCase() + src.slice(1);
+    return "Not set";
+  }
+
   function formatInsightsInt(n) {
     var num = Number(n);
     if (!isFinite(num)) return "-";
@@ -6389,12 +6408,7 @@
       '<section class="account-insight-card">' +
       "<h4>Subscription plan</h4>" +
       row("Current plan", plan || "Plan not set") +
-      row(
-        "Plan source",
-        currentUserProfile && currentUserProfile.subscriptionSource
-          ? String(currentUserProfile.subscriptionSource)
-          : "Firebase profile"
-      ) +
+      row("Plan source", formatSubscriptionTierSourceLabel(currentUserProfile)) +
       "</section>" +
       '<section class="account-insight-card">' +
       "<h4>Devices and sharing</h4>" +
@@ -6435,6 +6449,21 @@
     return "Your plan: " + subscriptionTierDisplayName();
   }
 
+  function profileUsesStripeBilling() {
+    if (!currentUserProfile) return false;
+    var src = String(currentUserProfile.subscriptionTierSource || currentUserProfile.subscriptionSource || "")
+      .trim()
+      .toLowerCase();
+    if (src === "stripe") return true;
+    if (currentUserProfile.stripeCustomerId) return true;
+    return false;
+  }
+
+  function syncAccountBillingButtons() {
+    var manageBtn = document.getElementById("account-btn-manage-billing");
+    if (manageBtn) manageBtn.hidden = !profileUsesStripeBilling();
+  }
+
   function syncAccountSubscriptionHeadline() {
     var headlineEl = document.getElementById("account-subscription-headline");
     var descEl = document.getElementById("account-subscription-description");
@@ -6444,6 +6473,7 @@
     var tier = resolvedSubscriptionTier();
     headlineEl.classList.remove("tier-free", "tier-starter", "tier-creator");
     headlineEl.classList.add("tier-" + tier);
+    syncAccountBillingButtons();
   }
 
   function resetAccountPlansPanel() {
@@ -9290,6 +9320,80 @@
       });
   }
 
+  function postStripeBillingPortal() {
+    if (!currentUser) return;
+    setAccountMessage("Opening Stripe billing portal…", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return backendRequest("/stripe/create-portal-session", token, {});
+      })
+      .then(function (json) {
+        if (json && json.ok && json.url) {
+          window.location.assign(json.url);
+          return;
+        }
+        throw new Error((json && json.error) || "Billing portal failed");
+      })
+      .catch(function (err) {
+        setAccountMessage(err.message || "Could not open billing portal.", "error");
+      });
+  }
+
+  function handleStripeAndAccountQueryParams() {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      var changed = false;
+
+      var stripeCheckout = params.get("stripe_checkout");
+      if (stripeCheckout === "success" || stripeCheckout === "cancel") {
+        params.delete("stripe_checkout");
+        changed = true;
+        if (stripeCheckout === "success") {
+          setMessage(
+            "Stripe checkout finished. Your plan updates when the webhook runs (usually within a minute). Refresh if quotas do not change.",
+            "success"
+          );
+        } else {
+          setMessage("Checkout was canceled — no billing changes.", "");
+        }
+      }
+
+      var portalReturn = params.get("stripe_portal");
+      if (portalReturn === "return") {
+        params.delete("stripe_portal");
+        changed = true;
+        setMessage("Billing portal closed. Your plan may take a moment to update.", "success");
+        if (currentUser) {
+          db.collection("users")
+            .doc(currentUser.uid)
+            .get()
+            .then(function (snap) {
+              currentUserProfile = snap.exists ? snap.data() || {} : currentUserProfile;
+              syncAccountSubscriptionHeadline();
+            })
+            .catch(function () {});
+        }
+      }
+
+      var openParam = params.get("open");
+      if (openParam === "account") {
+        params.delete("open");
+        changed = true;
+        setTimeout(function () {
+          openAccountModal();
+          setAccountModalTab("settings");
+        }, 0);
+      }
+
+      if (changed) {
+        var qs = params.toString();
+        var path = window.location.pathname + (qs ? "?" + qs : "") + (window.location.hash || "");
+        window.history.replaceState({}, "", path);
+      }
+    } catch (_e) {}
+  }
+
   function generateAudioForScript(script) {
     if (!currentUser) return;
     var text = (script.text || "").trim();
@@ -11041,24 +11145,7 @@
         if (isAdmin) {
           adminModeEnabled = readAdminModeEnabled();
           renderAdminShell(user.email, user.displayName);
-          try {
-            var stripeParams = new URLSearchParams(window.location.search || "");
-            var stripeCheckout = stripeParams.get("stripe_checkout");
-            if (stripeCheckout === "success" || stripeCheckout === "cancel") {
-              stripeParams.delete("stripe_checkout");
-              var stripeQs = stripeParams.toString();
-              var stripePath = window.location.pathname + (stripeQs ? "?" + stripeQs : "") + (window.location.hash || "");
-              window.history.replaceState({}, "", stripePath);
-              if (stripeCheckout === "success") {
-                setMessage(
-                  "Stripe checkout finished. Your plan updates when the webhook runs (usually within a minute). Refresh if quotas do not change.",
-                  "success"
-                );
-              } else {
-                setMessage("Checkout was canceled — no billing changes.", "");
-              }
-            }
-          } catch (_stripeRet) {}
+          handleStripeAndAccountQueryParams();
           subscribeScripts(user.uid);
           subscribePlaylists(user.uid);
           subscribePremade();
