@@ -24,11 +24,8 @@
       <div class="auth-banner auth-banner--setup" id="setup-banner" role="alert"></div>
       <div class="auth-banner auth-banner--error" id="error-banner" role="alert"></div>
 
-      <div class="auth-banner auth-banner--setup is-visible" id="apple-web-unavailable-banner" role="status">
-        Sign in with Apple on the web is unavailable while iOS uses the same Firebase Apple config (one Services ID). Use <strong>email</strong> or <strong>Google</strong> here, or Apple Sign In on the iOS app.
-      </div>
+      <!-- Apple web OAuth disabled: Firebase allows only one Apple Services ID (iOS bundle ID wins).
 
-      <!-- Hidden until Firebase supports web + iOS Apple Services IDs in one project.
       <button type="button" class="auth-btn auth-btn-apple" id="btn-apple" disabled>
         <span class="auth-spinner" aria-hidden="true"></span>
         <span class="auth-btn-icon" aria-hidden="true">
@@ -116,6 +113,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="auth.js?v=5"></script>
+  <script src="auth.js?v=6"></script>
 </body>
 </html>

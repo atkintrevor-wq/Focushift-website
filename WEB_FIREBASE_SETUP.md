@@ -93,6 +93,24 @@ Use **Sign in with Apple on the iOS app** for Apple login. Linking Apple from th
 
 ---
 
+## Part B3 — Google Sign-In on iOS
+
+**Goal:** “Continue with Google” on iOS uses the **same Firebase project** as the web app.
+
+1. Firebase Console → **Project settings** → **Your apps** → select the **iOS** app (`com.trevoratkin.FocuShift`).
+2. Click **Download GoogleService-Info.plist** and replace **`FocuShift/GoogleService-Info.plist`** in Xcode.  
+   The file **must** include **`CLIENT_ID`** and **`REVERSED_CLIENT_ID`** (your current plist may be missing these).
+3. Open the downloaded plist and copy **`REVERSED_CLIENT_ID`** (looks like `com.googleusercontent.apps.1234567890-abcdef`).
+4. In Xcode → **FocuShift** target → **Info** → **URL Types** → **+**:
+   - **Identifier:** `GoogleSignIn`
+   - **URL Schemes:** paste **`REVERSED_CLIENT_ID`** (exact value from the plist)
+5. Ensure **Authentication → Sign-in method → Google** is **Enabled** (same as web).
+6. From the repo root, run **`pod install`**, open **`FocuShift.xcworkspace`**, build and run on a device or simulator.
+
+**Check:** Login screen shows **Continue with Google**; tapping it opens Google’s account picker and signs into the same uid as web Google when the email matches (or after linking under Account → Security).
+
+---
+
 ## Part C — Firebase: authorized domains (fixes “popup blocked / unauthorized domain”)
 
 **Goal:** Allow sign-in from your real site and from your computer.
