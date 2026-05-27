@@ -138,6 +138,11 @@
   var publishTitleDirty = false;
   var editingPremadeId = null;
   var inlineScriptEditorOpenById = {};
+  var sectionSearchOpen = { library: false, playlists: false, voices: false, audio: false };
+  var sectionSearchQuery = { library: "", playlists: "", voices: "", audio: "" };
+  var aiTextEditContext = null;
+  var aiTextEditPreview = null;
+  var aiTextEditProcessing = false;
   var expandedScriptAudioControlsById = {};
   var scriptsRenderGeneration = 0;
   var CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebCardAudioControls_";
@@ -1797,6 +1802,181 @@
     );
   }
 
+  function sectionSearchMagnifierSvg() {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>' +
+      "</svg>"
+    );
+  }
+
+  function sectionSearchCloseSvg() {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+      '<circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/>' +
+      "</svg>"
+    );
+  }
+
+  function sectionSearchWrapHtml(section, placeholder) {
+    return (
+      '<div id="section-search-wrap-' +
+      section +
+      '" class="section-search-wrap" hidden>' +
+      '  <div class="section-search-field">' +
+      '    <span class="section-search-field-icon" aria-hidden="true">' +
+      sectionSearchMagnifierSvg() +
+      "</span>" +
+      '    <input type="search" id="section-search-input-' +
+      section +
+      '" class="section-search-input" placeholder="' +
+      escapeHtml(placeholder) +
+      '" autocomplete="off" />' +
+      '    <button type="button" class="section-search-clear" id="section-search-clear-' +
+      section +
+      '" aria-label="Clear search" hidden>×</button>' +
+      "  </div>" +
+      "</div>"
+    );
+  }
+
+  function normalizeSectionSearchQuery(q) {
+    return String(q || "").trim().toLowerCase();
+  }
+
+  function textMatchesSectionSearch(text, query) {
+    if (!query) return true;
+    return String(text || "").toLowerCase().indexOf(query) >= 0;
+  }
+
+  function filteredScriptsForDisplay(scripts) {
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
+    if (!q || activeLibraryTab !== "my-library") return scripts;
+    return scripts.filter(function (s) {
+      return textMatchesSectionSearch(s.title, q) || textMatchesSectionSearch(s.text, q);
+    });
+  }
+
+  function filteredPremadesForDisplay(premades) {
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
+    if (!q || activeLibraryTab !== "app-library") return premades;
+    return premades.filter(function (p) {
+      return (
+        textMatchesSectionSearch(p.title, q) ||
+        textMatchesSectionSearch(p.scriptText, q) ||
+        textMatchesSectionSearch(p.description, q)
+      );
+    });
+  }
+
+  function filteredPlaylistsForDisplay(playlists) {
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.playlists);
+    if (!q) return playlists;
+    return playlists.filter(function (p) {
+      return textMatchesSectionSearch(p.name, q);
+    });
+  }
+
+  function filteredVoicesForDisplay(voices) {
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.voices);
+    if (!q) return voices;
+    return voices.filter(function (v) {
+      return textMatchesSectionSearch(v.name, q) || textMatchesSectionSearch(v.description, q);
+    });
+  }
+
+  function filteredBackgroundsForDisplay(backgrounds) {
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.audio);
+    if (!q) return backgrounds;
+    return backgrounds.filter(function (b) {
+      return textMatchesSectionSearch(b.name, q);
+    });
+  }
+
+  function syncSectionSearchUi(section) {
+    var wrap = document.getElementById("section-search-wrap-" + section);
+    var btn = document.getElementById("section-search-toggle-" + section);
+    var input = document.getElementById("section-search-input-" + section);
+    var clearBtn = document.getElementById("section-search-clear-" + section);
+    var open = sectionSearchOpen[section] === true;
+    if (wrap) {
+      wrap.hidden = !open;
+      wrap.classList.toggle("is-open", open);
+    }
+    if (btn) {
+      btn.classList.toggle("is-active", open);
+      btn.innerHTML = open ? sectionSearchCloseSvg() : sectionSearchMagnifierSvg();
+      btn.setAttribute("aria-label", open ? "Hide search" : "Show search");
+      btn.setAttribute("title", open ? "Hide search" : "Search");
+    }
+    if (clearBtn && input) {
+      clearBtn.hidden = !String(input.value || "").length;
+    }
+    if (input && open) {
+      requestAnimationFrame(function () {
+        try {
+          input.focus();
+        } catch (_e) {}
+      });
+    }
+  }
+
+  function rerenderForSectionSearch(section) {
+    if (section === "library") {
+      if (activeLibraryTab === "my-library") renderScripts(currentScripts);
+      else renderPremade();
+    } else if (section === "playlists") {
+      renderPlaylists(currentPlaylists);
+    } else if (section === "voices") {
+      renderVoices();
+    } else if (section === "audio") {
+      renderAudioPage();
+    }
+  }
+
+  function toggleSectionSearch(section) {
+    sectionSearchOpen[section] = !sectionSearchOpen[section];
+    if (!sectionSearchOpen[section]) sectionSearchQuery[section] = "";
+    var input = document.getElementById("section-search-input-" + section);
+    if (input) input.value = "";
+    syncSectionSearchUi(section);
+    rerenderForSectionSearch(section);
+  }
+
+  function bindSectionSearchControls() {
+    ["library", "playlists", "voices", "audio"].forEach(function (section) {
+      var btn = document.getElementById("section-search-toggle-" + section);
+      var input = document.getElementById("section-search-input-" + section);
+      var clearBtn = document.getElementById("section-search-clear-" + section);
+      if (btn) {
+        btn.addEventListener("click", function () {
+          toggleSectionSearch(section);
+        });
+      }
+      if (input) {
+        input.addEventListener("input", function () {
+          sectionSearchQuery[section] = input.value || "";
+          if (clearBtn) clearBtn.hidden = !String(input.value || "").length;
+          rerenderForSectionSearch(section);
+        });
+      }
+      if (clearBtn) {
+        clearBtn.addEventListener("click", function () {
+          sectionSearchQuery[section] = "";
+          if (input) input.value = "";
+          clearBtn.hidden = true;
+          rerenderForSectionSearch(section);
+          if (input) {
+            try {
+              input.focus();
+            } catch (_e) {}
+          }
+        });
+      }
+      syncSectionSearchUi(section);
+    });
+  }
+
   function helpIconForSectionTitle(title) {
     var t = (title || "").toLowerCase();
     if (t.indexOf("script") >= 0 || t.indexOf("affirmation") >= 0 || t.indexOf("library") >= 0) return "📝";
@@ -1970,7 +2150,13 @@
       '    <div class="library-toolbar-actions" id="library-app-only-toolbar" style="display:none">' +
       '      <button type="button" class="library-chevron-btn" id="premade-expand-all-audio" aria-label="Expand or collapse audio controls on all premade cards">▼</button>' +
       "    </div>" +
+      '    <div class="library-toolbar-actions library-search-toolbar">' +
+      '      <button type="button" class="library-chevron-btn section-search-toggle" id="section-search-toggle-library" aria-label="Show search" title="Search">' +
+      sectionSearchMagnifierSvg() +
+      "</button>" +
+      "    </div>" +
       "  </div>" +
+      sectionSearchWrapHtml("library", "Search my library…") +
       '  <input id="script-import-audio-input" type="file" accept="audio/*" style="display:none" />' +
       '  <div id="library-sub-my">' +
       '<div id="scripts-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
@@ -2010,10 +2196,16 @@
       '  <div id="playlists-list-view">' +
       '    <div class="app-section-title-row playlist-list-title-row">' +
       "      <h2>Playlists</h2>" +
+      '      <div class="library-toolbar-actions playlist-list-toolbar-actions">' +
+      '        <button type="button" class="library-chevron-btn section-search-toggle" id="section-search-toggle-playlists" aria-label="Show search" title="Search">' +
+      sectionSearchMagnifierSvg() +
+      "</button>" +
       '      <div class="library-dual-btn playlist-add-dual playlist-list-new-dual" role="group" aria-label="Create playlist">' +
       '        <button type="button" class="library-dual-btn-main" id="btn-create-playlist">+ New Playlist</button>' +
       "      </div>" +
+      "      </div>" +
       "    </div>" +
+      sectionSearchWrapHtml("playlists", "Search playlists…") +
       '    <div id="playlists-list"><p class="app-muted">Loading playlists...</p></div>' +
       "  </div>" +
       '  <div id="playlists-detail-view" hidden>' +
@@ -2031,11 +2223,19 @@
       '<section id="section-voices" class="app-section">' +
       '<section class="app-card" aria-label="Voice settings">' +
       '  <div class="voices-toolbar-row">' +
+      '    <div class="voices-toolbar-inner">' +
       '    <div class="app-tabs voice-segmented-tabs" id="voices-segmented-tabs">' +
       '      <button type="button" class="app-tab-btn" id="voices-tab-my" data-voices-tab="my-voices">My Voices</button>' +
       '      <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
       "    </div>" +
+      '    <div class="library-toolbar-actions">' +
+      '      <button type="button" class="library-chevron-btn section-search-toggle" id="section-search-toggle-voices" aria-label="Show search" title="Search">' +
+      sectionSearchMagnifierSvg() +
+      "</button>" +
+      "    </div>" +
+      "    </div>" +
       "  </div>" +
+      sectionSearchWrapHtml("voices", "Search voices…") +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Upload Voice Audio</button>' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Clone Voice</button>' +
@@ -2090,7 +2290,13 @@
       '    <div class="library-toolbar-actions" id="audio-my-only-toolbar">' +
       '      <button type="button" class="app-btn app-btn-secondary" id="btn-audio-import">Import audio</button>' +
       "    </div>" +
+      '    <div class="library-toolbar-actions library-search-toolbar">' +
+      '      <button type="button" class="library-chevron-btn section-search-toggle" id="section-search-toggle-audio" aria-label="Show search" title="Search">' +
+      sectionSearchMagnifierSvg() +
+      "</button>" +
+      "    </div>" +
       "  </div>" +
+      sectionSearchWrapHtml("audio", "Search background audio…") +
       '  <input id="audio-import-input" type="file" accept="audio/*" style="display:none" />' +
       '  <p class="app-muted" style="margin-top:0.05rem;margin-bottom:0.5rem;">Set default background audio for new scripts and generation. Custom imports stay only in this browser.</p>' +
       '  <div id="audio-sub-my">' +
@@ -2596,6 +2802,38 @@
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="voice-mic-help-close">Close</button>' +
       '      <button type="button" class="app-btn app-btn-primary" id="voice-mic-help-retry">Try Again</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="ai-text-edit-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal ai-text-edit-modal" role="dialog" aria-modal="true" aria-labelledby="ai-text-edit-title">' +
+      '    <div class="ai-text-edit-hero">' +
+      '      <span class="ai-text-edit-hero-icon" aria-hidden="true">✨</span>' +
+      '      <h3 id="ai-text-edit-title">AI Text Editor</h3>' +
+      '      <p class="app-muted" style="margin:0;">Tell AI how to improve or modify your text</p>' +
+      "    </div>" +
+      '    <label for="ai-text-edit-instructions">What would you like AI to do?</label>' +
+      '    <textarea id="ai-text-edit-instructions" rows="4" placeholder="Describe how to edit your script…"></textarea>' +
+      '    <div class="ai-text-edit-quick-actions" aria-label="Quick edit suggestions">' +
+      '      <button type="button" class="app-btn app-btn-ghost ai-text-edit-quick" data-ai-instructions="Make this text shorter and more concise">Make shorter</button>' +
+      '      <button type="button" class="app-btn app-btn-ghost ai-text-edit-quick" data-ai-instructions="Expand and elaborate on this text">Make longer</button>' +
+      '      <button type="button" class="app-btn app-btn-ghost ai-text-edit-quick" data-ai-instructions="Make this text more positive and uplifting">More positive</button>' +
+      '      <button type="button" class="app-btn app-btn-ghost ai-text-edit-quick" data-ai-instructions="Fix any grammar or spelling errors">Fix grammar</button>' +
+      '      <button type="button" class="app-btn app-btn-ghost ai-text-edit-quick" data-ai-instructions="Improve the flow and readability of this text">Improve flow</button>' +
+      "    </div>" +
+      '    <div id="ai-text-edit-busy" class="ai-text-edit-busy" hidden role="status">' +
+      '      <div class="ai-text-edit-spinner" aria-hidden="true"></div>' +
+      "      <span>AI is editing your text…</span>" +
+      "    </div>" +
+      '    <div id="ai-text-edit-error" class="app-inline-msg" role="alert" aria-live="polite"></div>' +
+      '    <div id="ai-text-edit-preview-wrap" class="ai-text-edit-preview-wrap" hidden>' +
+      "      <label>Preview</label>" +
+      '      <div id="ai-text-edit-preview" class="ai-text-edit-preview"></div>' +
+      "    </div>" +
+      '    <div class="app-modal-actions ai-text-edit-actions">' +
+      '      <button type="button" class="app-btn" id="ai-text-edit-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn app-btn-secondary" id="ai-text-edit-try-again" hidden>Try Again</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="ai-text-edit-primary">Edit with AI</button>' +
       "    </div>" +
       "  </div>" +
       "</div>";
@@ -3157,6 +3395,8 @@
         closeVoiceMicHelpModal();
       }
     });
+    bindSectionSearchControls();
+    bindAITextEditModal();
     ["stability", "similarity", "style"].forEach(function (k) {
       var el = document.getElementById("voice-adjust-" + k);
       if (!el) return;
@@ -3664,6 +3904,14 @@
     syncLibrarySegmentedPill();
     if (activeLibraryTab === "my-library") updateLibraryExpandAllToggleUi();
     if (activeLibraryTab === "app-library") updatePremadeExpandAllToggleUi();
+    var librarySearchInput = document.getElementById("section-search-input-library");
+    if (librarySearchInput) {
+      librarySearchInput.placeholder =
+        activeLibraryTab === "app-library" ? "Search app library…" : "Search my library…";
+    }
+    if (sectionSearchOpen.library && normalizeSectionSearchQuery(sectionSearchQuery.library)) {
+      rerenderForSectionSearch("library");
+    }
     requestAnimationFrame(function () {
       syncSubnavStickyOffset();
     });
@@ -4259,8 +4507,11 @@
         })
       );
     var sourceVoices = activeVoicesTab === "my-voices" ? myVoices : availableVoices;
+    sourceVoices = filteredVoicesForDisplay(sourceVoices);
     if (!sourceVoices.length) {
-      list.innerHTML = '<div class="app-empty-hint">No voices here yet. Save from App Voices or create a cloned voice.</div>';
+      list.innerHTML = normalizeSectionSearchQuery(sectionSearchQuery.voices)
+        ? '<div class="app-empty-hint">No voices match your search.</div>'
+        : '<div class="app-empty-hint">No voices here yet. Save from App Voices or create a cloned voice.</div>';
       return;
     }
 
@@ -5630,12 +5881,14 @@
   function renderAudioAppList() {
     var list = document.getElementById("audio-app-list");
     if (!list) return;
+    var audioSearchQuery = normalizeSectionSearchQuery(sectionSearchQuery.audio);
     var grouped = {};
     backgroundCategoryOrder.forEach(function (cid) {
       grouped[cid] = [];
     });
     availableBackgrounds.forEach(function (b) {
       if (b.id === "bg-none") return;
+      if (audioSearchQuery && !textMatchesSectionSearch(b.name, audioSearchQuery)) return;
       var cid = (b.categoryID && String(b.categoryID).trim()) || "general";
       if (!grouped[cid]) grouped[cid] = [];
       grouped[cid].push(b);
@@ -5643,6 +5896,9 @@
     var none = availableBackgrounds.find(function (b) {
       return b.id === "bg-none";
     });
+    if (none && audioSearchQuery && !textMatchesSectionSearch(none.name, audioSearchQuery)) {
+      none = null;
+    }
     var sections = backgroundCategoryOrder
       .map(function (cid) {
         var items = grouped[cid] || [];
@@ -5677,6 +5933,11 @@
         );
       })
       .join("");
+    if (audioSearchQuery && !none && !sections.replace(/\s/g, "")) {
+      list.innerHTML =
+        '<p class="app-muted audio-app-lede">No background audio matches your search.</p>';
+      return;
+    }
     list.innerHTML =
       '<p class="app-muted audio-app-lede">' +
       "Premade background tracks for generation and mixing — same catalog as App Audio on iOS. Pin tracks to My Audio for quick access." +
@@ -5689,13 +5950,21 @@
   function renderAudioMyList() {
     var list = document.getElementById("audio-my-list");
     if (!list) return;
+    var audioSearchQuery = normalizeSectionSearchQuery(sectionSearchQuery.audio);
     var none = availableBackgrounds.find(function (b) {
       return b.id === "bg-none";
     });
-    var users = loadUserBackgroundMetaList();
+    if (none && audioSearchQuery && !textMatchesSectionSearch(none.name, audioSearchQuery)) {
+      none = null;
+    }
+    var users = loadUserBackgroundMetaList().filter(function (m) {
+      if (!m || !m.id) return false;
+      return !audioSearchQuery || textMatchesSectionSearch(m.name, audioSearchQuery);
+    });
     var savedMap = loadSavedAppBackgroundIdSet();
     var pinned = availableBackgrounds.filter(function (b) {
-      return b.id !== "bg-none" && savedMap[b.id];
+      if (b.id === "bg-none" || !savedMap[b.id]) return false;
+      return !audioSearchQuery || textMatchesSectionSearch(b.name, audioSearchQuery);
     });
     var parts = [];
     parts.push("<p class=\"app-muted audio-my-lede\">");
@@ -5723,7 +5992,9 @@
     }
     if (!users.length && !pinned.length) {
       parts.push(
-        '<div class="app-empty-hint" style="margin-top:0.5rem;">Use <strong>Import audio</strong> above, or open <strong>App Audio</strong> and tap <strong>Add to My Audio</strong> on a track.</div>'
+        audioSearchQuery
+          ? '<div class="app-empty-hint" style="margin-top:0.5rem;">No background audio matches your search.</div>'
+          : '<div class="app-empty-hint" style="margin-top:0.5rem;">Use <strong>Import audio</strong> above, or open <strong>App Audio</strong> and tap <strong>Add to My Audio</strong> on a track.</div>'
       );
     }
     list.innerHTML = parts.join("");
@@ -8485,6 +8756,12 @@
           (showFmtPref ? " checked" : "") +
           '> Show formatting <span class="app-muted">(TTS tags)</span></label>';
       }
+      var canEditTextBody = !(hasAudioTagsInScript && !showFmtPref);
+      var aiEditBtnHtml = canEditTextBody
+        ? '<button type="button" class="app-btn app-btn-secondary script-inline-ai-edit" data-action="ai-edit-script" data-script-id="' +
+          escapeHtml(script.id) +
+          '">✨ Edit with AI</button>'
+        : "";
       inlineEditorHtml =
         '<div class="script-inline-editor">' +
         '<label class="script-inline-field-label">Title</label>' +
@@ -8493,6 +8770,7 @@
         '" data-script-inline-field="title">' +
         '<div class="script-inline-toolbar">' +
         formatToggleHtml +
+        aiEditBtnHtml +
         "</div>" +
         '<label class="script-inline-field-label">Script</label>' +
         bodyHtml +
@@ -8617,6 +8895,222 @@
     );
   }
 
+  function isWebPaidTierForAI() {
+    var tier = resolvedSubscriptionTier();
+    return tier === "starter" || tier === "creator";
+  }
+
+  function setAITextEditError(message, kind) {
+    var el = document.getElementById("ai-text-edit-error");
+    if (!el) return;
+    el.textContent = message || "";
+    el.className = "app-inline-msg" + (kind ? " is-" + kind : "");
+  }
+
+  function syncAITextEditModalUi() {
+    var busyEl = document.getElementById("ai-text-edit-busy");
+    var previewWrap = document.getElementById("ai-text-edit-preview-wrap");
+    var previewEl = document.getElementById("ai-text-edit-preview");
+    var primary = document.getElementById("ai-text-edit-primary");
+    var tryAgain = document.getElementById("ai-text-edit-try-again");
+    var instructions = document.getElementById("ai-text-edit-instructions");
+    var quickBtns = document.querySelectorAll(".ai-text-edit-quick");
+    if (busyEl) busyEl.hidden = !aiTextEditProcessing;
+    if (previewWrap) previewWrap.hidden = !aiTextEditPreview;
+    if (previewEl && aiTextEditPreview) previewEl.textContent = aiTextEditPreview;
+    if (instructions) instructions.disabled = aiTextEditProcessing;
+    quickBtns.forEach(function (btn) {
+      btn.disabled = aiTextEditProcessing;
+    });
+    if (primary) {
+      if (aiTextEditProcessing) {
+        primary.textContent = "Processing…";
+        primary.disabled = true;
+      } else if (aiTextEditPreview) {
+        primary.textContent = "Apply Changes";
+        primary.disabled = false;
+      } else {
+        primary.textContent = "Edit with AI";
+        primary.disabled = !instructions || !String(instructions.value || "").trim();
+      }
+    }
+    if (tryAgain) tryAgain.hidden = !aiTextEditPreview || aiTextEditProcessing;
+  }
+
+  function resetAITextEditModalState() {
+    aiTextEditPreview = null;
+    aiTextEditProcessing = false;
+    var instructions = document.getElementById("ai-text-edit-instructions");
+    if (instructions) instructions.value = "";
+    setAITextEditError("", "");
+    syncAITextEditModalUi();
+  }
+
+  function getInlineScriptEditorText(scriptId) {
+    var list = document.getElementById("scripts-list");
+    if (!list || !scriptId) return "";
+    var card = null;
+    var cards = list.querySelectorAll(".library-script-card");
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute("data-script-id") === scriptId) {
+        card = cards[i];
+        break;
+      }
+    }
+    if (!card) return "";
+    var ta = card.querySelector(".script-inline-textarea");
+    if (ta) return ta.value || "";
+    var script = currentScripts.find(function (s) {
+      return s.id === scriptId;
+    });
+    return script && script.text ? String(script.text) : "";
+  }
+
+  function applyAITextEditToInlineEditor(text) {
+    if (!aiTextEditContext || !aiTextEditContext.scriptId) return;
+    var list = document.getElementById("scripts-list");
+    if (!list) return;
+    var card = null;
+    var cards = list.querySelectorAll(".library-script-card");
+    for (var i = 0; i < cards.length; i++) {
+      if (cards[i].getAttribute("data-script-id") === aiTextEditContext.scriptId) {
+        card = cards[i];
+        break;
+      }
+    }
+    if (!card) return;
+    var ta = card.querySelector(".script-inline-textarea");
+    if (ta) ta.value = text;
+  }
+
+  function closeAITextEditModal() {
+    var backdrop = document.getElementById("ai-text-edit-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    aiTextEditContext = null;
+    resetAITextEditModalState();
+  }
+
+  function openAITextEditModal(scriptId) {
+    if (!scriptId) return;
+    var text = getInlineScriptEditorText(scriptId);
+    if (!String(text || "").trim()) {
+      setMessage("Add script text before using AI edit.", "error");
+      return;
+    }
+    aiTextEditContext = { scriptId: scriptId };
+    resetAITextEditModalState();
+    var backdrop = document.getElementById("ai-text-edit-backdrop");
+    if (backdrop) backdrop.hidden = false;
+    var instructions = document.getElementById("ai-text-edit-instructions");
+    if (instructions) {
+      requestAnimationFrame(function () {
+        try {
+          instructions.focus();
+        } catch (_e) {}
+      });
+    }
+  }
+
+  function runAITextEditRequest() {
+    if (!aiTextEditContext || !currentUser) return;
+    if (aiTextEditProcessing) return;
+    if (aiTextEditPreview) {
+      applyAITextEditToInlineEditor(aiTextEditPreview);
+      closeAITextEditModal();
+      setMessage("AI edits applied. Tap Save to keep changes.", "success");
+      return;
+    }
+    if (!isWebPaidTierForAI()) {
+      setAITextEditError("AI text editing is available on Starter and Creator.", "error");
+      return;
+    }
+    var instructionsEl = document.getElementById("ai-text-edit-instructions");
+    var instructions = instructionsEl ? String(instructionsEl.value || "").trim() : "";
+    if (!instructions) {
+      setAITextEditError("Please provide instructions for how to edit the text.", "error");
+      return;
+    }
+    var text = getInlineScriptEditorText(aiTextEditContext.scriptId);
+    if (!String(text || "").trim()) {
+      setAITextEditError("Script text is empty.", "error");
+      return;
+    }
+    aiTextEditProcessing = true;
+    setAITextEditError("", "");
+    syncAITextEditModalUi();
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return backendRequest("/edit-text", token, {
+          text: text,
+          instructions: instructions,
+        });
+      })
+      .then(function (json) {
+        var content = json && json.content ? String(json.content) : "";
+        if (!content.trim()) throw new Error("AI returned empty text.");
+        aiTextEditPreview = content;
+        aiTextEditProcessing = false;
+        syncAITextEditModalUi();
+      })
+      .catch(function (e) {
+        aiTextEditProcessing = false;
+        var msg = e.message || "Could not edit text.";
+        if (msg.indexOf("Starter or Creator") >= 0 || msg.indexOf("requires a Starter") >= 0) {
+          setAITextEditError("AI text editing is available on Starter and Creator.", "error");
+        } else {
+          setAITextEditError(msg, "error");
+        }
+        syncAITextEditModalUi();
+      });
+  }
+
+  function retryAITextEdit() {
+    aiTextEditPreview = null;
+    setAITextEditError("", "");
+    syncAITextEditModalUi();
+    var instructions = document.getElementById("ai-text-edit-instructions");
+    if (instructions) {
+      try {
+        instructions.focus();
+      } catch (_e) {}
+    }
+  }
+
+  function bindAITextEditModal() {
+    var cancel = document.getElementById("ai-text-edit-cancel");
+    var primary = document.getElementById("ai-text-edit-primary");
+    var tryAgain = document.getElementById("ai-text-edit-try-again");
+    var instructions = document.getElementById("ai-text-edit-instructions");
+    var backdrop = document.getElementById("ai-text-edit-backdrop");
+    if (cancel) cancel.addEventListener("click", closeAITextEditModal);
+    if (primary) primary.addEventListener("click", runAITextEditRequest);
+    if (tryAgain) tryAgain.addEventListener("click", retryAITextEdit);
+    if (instructions) {
+      instructions.addEventListener("input", function () {
+        if (!aiTextEditPreview && !aiTextEditProcessing) syncAITextEditModalUi();
+      });
+    }
+    document.querySelectorAll(".ai-text-edit-quick").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (aiTextEditProcessing) return;
+        var next = btn.getAttribute("data-ai-instructions") || "";
+        if (instructions) instructions.value = next;
+        aiTextEditPreview = null;
+        setAITextEditError("", "");
+        syncAITextEditModalUi();
+        try {
+          instructions.focus();
+        } catch (_e) {}
+      });
+    });
+    if (backdrop) {
+      backdrop.addEventListener("click", function (ev) {
+        if (ev.target && ev.target.id === "ai-text-edit-backdrop") closeAITextEditModal();
+      });
+    }
+  }
+
   function bindScriptListFormattingToggle() {
     var list = document.getElementById("scripts-list");
     if (!list || list.dataset.scriptFormatToggleBound === "1") return;
@@ -8714,6 +9208,8 @@
           renderScripts(currentScripts);
         } else if (action === "save-inline-script") {
           saveInlineScript(script);
+        } else if (action === "ai-edit-script") {
+          openAITextEditModal(script.id);
         } else if (action === "toggle-controls") {
           toggleScriptControlsExpanded(script.id);
         } else if (action === "delete") {
@@ -9033,30 +9529,35 @@
     var list = document.getElementById("scripts-list");
     if (!list) return;
     bindScriptListFormattingToggle();
-    if (!scripts.length) {
-      list.innerHTML =
-        '<div class="app-empty-hint">No scripts yet. Use <strong>New</strong> or <strong>Import Audio</strong> in the toolbar, or use the <strong>Home</strong> tab flow to generate a personalized mental script and auto-save it here.</div>';
+    var displayScripts = scripts;
+    if (scripts === currentScripts && activeLibraryTab === "my-library") {
+      displayScripts = filteredScriptsForDisplay(scripts);
+    }
+    if (!displayScripts.length) {
+      list.innerHTML = scripts.length && normalizeSectionSearchQuery(sectionSearchQuery.library) && activeLibraryTab === "my-library"
+        ? '<div class="app-empty-hint">No scripts match your search.</div>'
+        : '<div class="app-empty-hint">No scripts yet. Use <strong>New</strong> or <strong>Import Audio</strong> in the toolbar, or use the <strong>Home</strong> tab flow to generate a personalized mental script and auto-save it here.</div>';
       updateLibraryExpandAllToggleUi();
       return;
     }
     var gen = ++scriptsRenderGeneration;
     var nextExpanded = {};
-    scripts.forEach(function (s) {
+    displayScripts.forEach(function (s) {
       if (inlineScriptEditorOpenById[s.id] === true) nextExpanded[s.id] = true;
     });
     inlineScriptEditorOpenById = nextExpanded;
     Promise.all(
-      scripts.map(function (s) {
+      displayScripts.map(function (s) {
         return scriptContentSha256Hex(scriptDigestSourceFromScript(s));
       })
     ).then(function (hashes) {
       if (gen !== scriptsRenderGeneration) return;
-      list.innerHTML = scripts
+      list.innerHTML = displayScripts
         .map(function (s, i) {
           return scriptCardHtml(s, hashes[i]);
         })
         .join("");
-      bindScriptCardActions(scripts);
+      bindScriptCardActions(displayScripts);
       updateLibraryExpandAllToggleUi();
       if (scrollScriptIdIntoView) {
         var sid = scrollScriptIdIntoView;
@@ -10362,14 +10863,16 @@
   function renderPlaylists(playlists) {
     var list = document.getElementById("playlists-list");
     if (!list) return;
-    if (!playlists.length) {
-      list.innerHTML =
-        '<div class="app-empty-hint">No playlists yet. Tap <strong>+ New Playlist</strong>, then open a playlist to add audio, or add from <strong>My Library</strong> with <em>Add to Playlist</em>.</div>';
+    var displayPlaylists = filteredPlaylistsForDisplay(playlists);
+    if (!displayPlaylists.length) {
+      list.innerHTML = playlists.length && normalizeSectionSearchQuery(sectionSearchQuery.playlists)
+        ? '<div class="app-empty-hint">No playlists match your search.</div>'
+        : '<div class="app-empty-hint">No playlists yet. Tap <strong>+ New Playlist</strong>, then open a playlist to add audio, or add from <strong>My Library</strong> with <em>Add to Playlist</em>.</div>';
       updatePlaylistSectionVisibility();
       renderSelectedPlaylistDetail();
       return;
     }
-    list.innerHTML = playlists
+    list.innerHTML = displayPlaylists
       .map(function (p) {
         var selected = p.id === selectedPlaylistId && playlistDetailVisible;
         return (
@@ -11200,7 +11703,14 @@
   function renderPremade() {
     var list = document.getElementById("premade-list");
     if (!list) return;
-    if (!currentPremade.length) {
+    var displayPremade = filteredPremadesForDisplay(currentPremade);
+    if (!displayPremade.length) {
+      if (currentPremade.length && normalizeSectionSearchQuery(sectionSearchQuery.library)) {
+        list.innerHTML = '<p class="app-muted" style="margin:0 0 0.85rem;">No premade scripts match your search.</p>';
+        bindPremadeCategoryActions();
+        updatePremadeExpandAllToggleUi();
+        return;
+      }
       list.innerHTML =
         '<p class="app-muted" style="margin:0 0 0.85rem;">No premade items in Firestore yet. iOS can also read bundled premade audio; web lists published docs from <code>premadeAudio</code>. When you publish items, they appear in the categories below.</p>' +
         PREMADE_LIBRARY_CATEGORY_ORDER.map(function (c) {
@@ -11211,7 +11721,7 @@
       return;
     }
     var gen = ++premadeRenderGeneration;
-    var grouped = groupPremadesByLibraryCategory(currentPremade);
+    var grouped = groupPremadesByLibraryCategory(displayPremade);
     var flatForHash = flatPremadesForHashOrder(grouped);
     Promise.all(
       flatForHash.map(function (p) {
