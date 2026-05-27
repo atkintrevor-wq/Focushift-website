@@ -58,7 +58,14 @@
     storageBytes: null,
     loading: false,
     error: null,
+    /** From POST /usage/refresh (Firestore config/app.freeStepUpEnabled). */
+    freeStepUpEnabled: true,
   };
+  /** When true, open Account and scroll to usage add-on after insights load. */
+  var accountOpenFocusUsageAddOn = false;
+  var AUDIO_JOB_WAIT_MS = 300000;
+  var STEP_UP_WORDS_BONUS = 2000;
+  var STEP_UP_TTS_BONUS = 10000;
   /** Mirrors iOS @AppStorage("adminModeEnabled"); gates catalog publish/edit on web. */
   var PREF_ADMIN_MODE_KEY = "focusshiftWebAdminModeEnabled";
   var PREF_APP_THEME_KEY = "focusshiftWebAppTheme";
@@ -1973,7 +1980,7 @@
       '      <span class="audio-generation-overlay-title">Generating audio</span>' +
       '      <button type="button" class="audio-generation-overlay-dismiss" id="audio-generation-overlay-dismiss" aria-label="Hide panel (generation continues)">\u00d7</button>' +
       "    </div>" +
-      '    <p class="audio-generation-overlay-detail">This can take up to 3 minutes. You can keep using the app while we work.</p>' +
+      '    <p class="audio-generation-overlay-detail">Long scripts can take up to 5 minutes. You can keep using the app while we work.</p>' +
       '    <p id="audio-generation-overlay-script" class="audio-generation-overlay-script"></p>' +
       '    <p id="audio-generation-overlay-elapsed" class="audio-generation-overlay-elapsed">Elapsed: 0:00</p>' +
       "  </div>" +
@@ -2157,6 +2164,12 @@
       "          </div>" +
       '          <p class="app-muted" style="margin:0.55rem 0 0;font-size:0.78rem;line-height:1.45;">Live checkout needs the four <code>STRIPE_PRICE_*</code> env vars on your API function.</p>' +
       "        </div>" +
+      "      </section>" +
+      '      <section id="account-usage-addon-section" class="account-section-card" hidden>' +
+      '        <h4 class="account-section-card__title">Usage add-on</h4>' +
+      '        <p id="account-usage-addon-lede" class="app-muted account-section-card__text" style="margin-top:0;">Extra words and TTS characters for this billing period.</p>' +
+      '        <button type="button" class="app-btn app-btn-primary" id="account-usage-addon-action" hidden>Add usage pack</button>' +
+      '        <p id="account-usage-addon-note" class="app-muted" style="margin:0.45rem 0 0;font-size:0.82rem;line-height:1.45;"></p>' +
       "      </section>" +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Devices &amp; sharing</h4>' +
@@ -2700,6 +2713,15 @@
       var accountBackdrop = document.getElementById("account-modal-backdrop");
       if (accountBackdrop) {
         accountBackdrop.addEventListener("click", function (ev) {
+          var stepBtn =
+            ev.target && ev.target.closest && ev.target.closest("#account-usage-addon-action");
+          if (stepBtn && accountBackdrop.contains(stepBtn)) {
+            ev.preventDefault();
+            applyComplimentaryStepUp().catch(function (e) {
+              setAccountMessage((e && e.message) || "Could not apply usage add-on.", "error");
+            });
+            return;
+          }
           var btn = ev.target && ev.target.closest && ev.target.closest("button[data-stripe-plan]");
           if (!btn || !accountBackdrop.contains(btn)) return;
           var key = (btn.getAttribute("data-stripe-plan") || "").trim();
@@ -3529,14 +3551,22 @@
     }
   }
 
-  function openAccountModal() {
+  function openAccountModal(options) {
+    options = options || {};
+    if (options.focusUsageAddOn) accountOpenFocusUsageAddOn = true;
     var bd = document.getElementById("account-modal-backdrop");
     if (!bd) return;
     resetAccountPlansPanel();
     syncAccountPreferencesForm();
     syncAccountAppleLinkUI();
     renderAccountInsights();
-    refreshAccountInsightsFromCloud();
+    renderUsageAddOnSection();
+    refreshAccountInsightsFromCloud().then(function () {
+      if (accountOpenFocusUsageAddOn) {
+        accountOpenFocusUsageAddOn = false;
+        scrollToUsageAddOnSection();
+      }
+    });
     setAccountModalTab("settings");
     bd.hidden = false;
     var btn = document.getElementById("btn-account-menu");
@@ -5975,10 +6005,17 @@
       })
       .catch(function (e) {
         if (confirmBtn) confirmBtn.disabled = false;
-        var msg = (e && e.message) || (e && e.code) || "Account deletion failed.";
-        if (e && e.code === "functions/not-found") {
+        var code = (e && e.code) || "";
+        var msg = (e && e.message) || code || "Account deletion failed.";
+        if (code === "functions/not-found") {
           msg =
             "Server step not found. Deploy the deleteOwnAccount Cloud Function (see functions/index.js), then try again.";
+        } else if (
+          code === "auth/requires-recent-login" ||
+          String(msg).toLowerCase().indexOf("recent login") >= 0
+        ) {
+          msg =
+            "For security, sign out and sign back in, then try deleting again within a few minutes.";
         }
         if (errEl) {
           errEl.style.display = "block";
@@ -6291,6 +6328,124 @@
     return "Not set";
   }
 
+  function formatBillingIntervalLabel(profile) {
+    if (!profile) return "";
+    var raw = String(profile.subscriptionBillingInterval || "")
+      .trim()
+      .toLowerCase();
+    if (raw === "monthly" || raw === "month") return "Monthly";
+    if (raw === "yearly" || raw === "year" || raw === "annual") return "Yearly";
+    return "";
+  }
+
+  function isQuotaLimitError(error) {
+    var msg = String((error && error.message) || error || "").toLowerCase();
+    return (
+      msg.indexOf("word limit") >= 0 ||
+      msg.indexOf("tts limit") >= 0 ||
+      msg.indexOf("monthly script quota") >= 0 ||
+      msg.indexOf("step-up") >= 0 ||
+      msg.indexOf("usage add-on") >= 0 ||
+      msg.indexOf("usage pack") >= 0 ||
+      msg.indexOf("quota reached") >= 0
+    );
+  }
+
+  function handleQuotaLimitError(message) {
+    if (!isQuotaLimitError(message)) return false;
+    showAppBanner(
+      "Usage limit reached",
+      "Add a usage pack in Account Settings to keep creating scripts and voice audio this billing period.",
+      "info",
+      { duration: 7000 }
+    );
+    openAccountModal({ focusUsageAddOn: true });
+    return true;
+  }
+
+  function scrollToUsageAddOnSection() {
+    var section = document.getElementById("account-usage-addon-section");
+    if (!section || section.hidden) return;
+    setAccountModalTab("settings");
+    setTimeout(function () {
+      section.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }, 120);
+  }
+
+  function renderUsageAddOnSection() {
+    var section = document.getElementById("account-usage-addon-section");
+    var lede = document.getElementById("account-usage-addon-lede");
+    var action = document.getElementById("account-usage-addon-action");
+    var note = document.getElementById("account-usage-addon-note");
+    if (!section || !lede || !action || !note) return;
+
+    var tier = resolvedSubscriptionTier();
+    if (tier !== "starter" && tier !== "creator") {
+      section.hidden = true;
+      return;
+    }
+    section.hidden = false;
+
+    var wordsLabel = STEP_UP_WORDS_BONUS.toLocaleString();
+    var ttsLabel = STEP_UP_TTS_BONUS.toLocaleString();
+    var freeStepUp = accountInsightsSnapshot.freeStepUpEnabled !== false;
+
+    if (freeStepUp) {
+      lede.textContent =
+        "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
+      action.textContent = "Add " + wordsLabel + " words & " + ttsLabel + " TTS";
+      action.hidden = false;
+      note.textContent = "Complimentary while beta top-ups are enabled (same as iOS).";
+    } else {
+      lede.textContent =
+        "Need more words or TTS this period? Paid usage add-ons are purchased in the iOS app (App Store).";
+      action.hidden = true;
+      note.textContent =
+        "Web billing covers your subscription plan. One-time usage packs use in-app purchase on iPhone or iPad.";
+    }
+  }
+
+  function applyComplimentaryStepUp() {
+    if (!currentUser) return Promise.reject(new Error("Sign in required."));
+    var tier = resolvedSubscriptionTier();
+    if (tier !== "starter" && tier !== "creator") {
+      return Promise.reject(new Error("Usage add-ons require Starter or Creator."));
+    }
+    if (accountInsightsSnapshot.freeStepUpEnabled === false) {
+      return Promise.reject(new Error("Complimentary top-ups are disabled. Use the iOS app to buy a usage add-on."));
+    }
+    var btn = document.getElementById("account-usage-addon-action");
+    if (btn) btn.disabled = true;
+    return currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/usage/stepup", {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + token,
+            "Content-Type": "application/json",
+          },
+          body: "{}",
+        }).then(function (resp) {
+          return resp.json().then(function (json) {
+            if (!resp.ok) {
+              throw new Error((json && json.error) || "Could not apply usage add-on.");
+            }
+            return json;
+          });
+        });
+      })
+      .then(function () {
+        setAccountMessage("Usage add-on applied for this billing period.", "success");
+        showAppBanner("Usage add-on applied", "Your word and TTS limits were increased for this period.", "success");
+        return refreshAccountInsightsFromCloud();
+      })
+      .finally(function () {
+        if (btn) btn.disabled = false;
+        renderUsageAddOnSection();
+      });
+  }
+
   function formatInsightsInt(n) {
     var num = Number(n);
     if (!isFinite(num)) return "-";
@@ -6323,9 +6478,21 @@
             "Content-Type": "application/json",
           },
           body: "{}",
-        }).catch(function () {
-          return null;
-        });
+        })
+          .then(function (resp) {
+            if (!resp || !resp.ok) return null;
+            return resp.json().catch(function () {
+              return null;
+            });
+          })
+          .then(function (json) {
+            if (json && typeof json.freeStepUpEnabled === "boolean") {
+              accountInsightsSnapshot.freeStepUpEnabled = json.freeStepUpEnabled;
+            }
+          })
+          .catch(function () {
+            return null;
+          });
       })
       .then(function () {
         return registerWebDeviceRecord(uid);
@@ -6357,6 +6524,7 @@
         accountInsightsSnapshot.loading = false;
         accountInsightsSnapshot.error = null;
         renderAccountInsights();
+        renderUsageAddOnSection();
       })
       .catch(function (e) {
         accountInsightsSnapshot.loading = false;
@@ -6457,6 +6625,8 @@
     var sharingValue =
       tier === "creator" ? formatUsageRatio(sharingCount || 0, shareCap) : "Requires Creator plan";
 
+    var billingInterval = formatBillingIntervalLabel(currentUserProfile);
+
     var aiSection = "";
     if (tier === "free") {
       aiSection =
@@ -6490,6 +6660,7 @@
       '<section class="account-insight-card">' +
       "<h4>Subscription plan</h4>" +
       row("Current plan", plan || "Plan not set") +
+      (billingInterval && tier !== "free" ? row("Billing period", billingInterval) : "") +
       row("Plan source", formatSubscriptionTierSourceLabel(currentUserProfile)) +
       "</section>" +
       '<section class="account-insight-card">' +
@@ -6511,6 +6682,7 @@
       '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">Total size of hosted audio files in Firebase Storage.</p>' +
       "</section>";
     syncAccountSubscriptionHeadline();
+    renderUsageAddOnSection();
   }
 
   function subscriptionTierDisplayName() {
@@ -6528,7 +6700,12 @@
   }
 
   function subscriptionPlanHeadlineWeb() {
-    return "Your plan: " + subscriptionTierDisplayName();
+    var name = subscriptionTierDisplayName();
+    var tier = resolvedSubscriptionTier();
+    if (tier === "free") return "Your plan: " + name;
+    var interval = formatBillingIntervalLabel(currentUserProfile);
+    if (interval) return "Your plan: " + name + " (" + interval + ")";
+    return "Your plan: " + name;
   }
 
   function profileUsesStripeBilling() {
@@ -6992,7 +7169,7 @@
     generationMessage("", "");
     showScriptWorkOverlay({
       title: "Generating your script...",
-      detail: "Can take up to 3 minutes.",
+      detail: "Long scripts can take up to 5 minutes.",
     });
     postGenerateScriptRequest(payload)
       .then(function (json) {
@@ -7052,7 +7229,8 @@
           });
       })
       .catch(function (e) {
-        generationMessage(e.message || "Could not generate script.", "error");
+        var msg = e.message || "Could not generate script.";
+        if (!handleQuotaLimitError(msg)) generationMessage(msg, "error");
       })
       .finally(function () {
         stopScriptWorkOverlay();
@@ -7095,7 +7273,8 @@
         setHomeFlowStep("clarify", f.displayName);
       })
       .catch(function (e) {
-        generationMessage(e.message || "Could not load clarifying question.", "error");
+        var msg = e.message || "Could not load clarifying question.";
+        if (!handleQuotaLimitError(msg)) generationMessage(msg, "error");
         homeClarifyFlow = null;
         setHomeFlowStep("survey", f.displayName);
       })
@@ -8070,7 +8249,7 @@
       '<div class="script-work-overlay-card" role="status">' +
       '<div class="script-work-overlay-spinner" aria-hidden="true"></div>' +
       '<p id="script-work-overlay-title" class="script-work-overlay-title">Generating your script...</p>' +
-      '<p id="script-work-overlay-detail" class="script-work-overlay-detail">Can take up to 3 minutes.</p>' +
+      '<p id="script-work-overlay-detail" class="script-work-overlay-detail">Long scripts can take up to 5 minutes.</p>' +
       '<p id="script-work-overlay-elapsed" class="script-work-overlay-elapsed">0:00</p>' +
       "</div>";
     document.body.appendChild(overlay);
@@ -8089,7 +8268,7 @@
     options = options || {};
     var title = options.title || "Generating your script...";
     var detail =
-      options.detail != null ? options.detail : "Can take up to 3 minutes.";
+      options.detail != null ? options.detail : "Long scripts can take up to 5 minutes.";
     var showTimer = options.showTimer !== false;
 
     var overlay = ensureScriptWorkOverlay();
@@ -9548,7 +9727,8 @@
           });
         })
         .catch(function (e) {
-          setMessage(e.message || "Audio generation failed.", "error");
+          var msg = e.message || "Audio generation failed.";
+          if (!handleQuotaLimitError(msg)) setMessage(msg, "error");
         })
         .finally(function () {
           setScriptBusy(script.id, false);
@@ -9692,7 +9872,8 @@
           });
         })
         .catch(function (e) {
-          setPremadeMessage(e.message || "Audio generation failed.", "error");
+          var msg = e.message || "Audio generation failed.";
+          if (!handleQuotaLimitError(msg)) setPremadeMessage(msg, "error");
         })
         .finally(function () {
           setPremadeBusy(premade.id, false);
@@ -9708,8 +9889,12 @@
       var mixStarted = false;
       var timeout = setTimeout(function () {
         cleanup();
-        reject(new Error("Audio generation timed out. Please try again."));
-      }, 240000);
+        reject(
+          new Error(
+            "Audio generation is taking longer than expected. The job may still finish — check your library in a moment, or try again with a shorter script."
+          )
+        );
+      }, AUDIO_JOB_WAIT_MS);
       var unsub = db
         .collection("users")
         .doc(currentUser.uid)
