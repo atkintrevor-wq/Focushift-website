@@ -21,6 +21,9 @@
   var authTitle = document.getElementById("auth-title");
   var btnForgot = document.getElementById("btn-forgot");
   var rememberCheckbox = document.getElementById("remember-me");
+  var btnClearEmail = document.getElementById("btn-clear-email");
+  var btnTogglePassword = document.getElementById("btn-toggle-password");
+  var btnTogglePassword2 = document.getElementById("btn-toggle-password2");
   var appleLinkPanel = document.getElementById("apple-link-panel");
   var appleLinkEmailEl = document.getElementById("apple-link-email");
   var appleLinkPasswordInput = document.getElementById("apple-link-password");
@@ -159,6 +162,7 @@
     pendingAppleLinkEmail = (email || "").trim();
     if (appleLinkEmailEl) appleLinkEmailEl.textContent = pendingAppleLinkEmail || "your account";
     if (emailInput && pendingAppleLinkEmail) emailInput.value = pendingAppleLinkEmail;
+    syncEmailClearButton();
     if (appleLinkPasswordInput) appleLinkPasswordInput.value = "";
     if (appleLinkPanel) appleLinkPanel.hidden = false;
     setMode(false);
@@ -236,6 +240,41 @@
     showError("");
   }
 
+  function syncEmailClearButton() {
+    if (!btnClearEmail || !emailInput) return;
+    btnClearEmail.hidden = !String(emailInput.value || "").trim();
+  }
+
+  function bindPasswordVisibilityToggle(button, input, labelShow, labelHide) {
+    if (!button || !input) return;
+    button.addEventListener("click", function () {
+      var show = input.type === "password";
+      input.type = show ? "text" : "password";
+      button.classList.toggle("is-visible", show);
+      button.setAttribute("aria-pressed", show ? "true" : "false");
+      button.setAttribute("aria-label", show ? labelHide : labelShow);
+      button.setAttribute("title", show ? labelHide : labelShow);
+    });
+  }
+
+  function resetPasswordVisibilityToggles() {
+    [btnTogglePassword, btnTogglePassword2].forEach(function (btn) {
+      if (!btn) return;
+      btn.classList.remove("is-visible");
+      btn.setAttribute("aria-pressed", "false");
+    });
+    if (passwordInput) passwordInput.type = "password";
+    if (password2Input) password2Input.type = "password";
+    if (btnTogglePassword) {
+      btnTogglePassword.setAttribute("aria-label", "Show password");
+      btnTogglePassword.setAttribute("title", "Show password");
+    }
+    if (btnTogglePassword2) {
+      btnTogglePassword2.setAttribute("aria-label", "Show confirm password");
+      btnTogglePassword2.setAttribute("title", "Show password");
+    }
+  }
+
   try {
     if (rememberCheckbox) {
       var rem = localStorage.getItem(REMEMBER_STORAGE_KEY);
@@ -244,6 +283,27 @@
       if (last && rememberCheckbox.checked) emailInput.value = last;
     }
   } catch (_e) {}
+  syncEmailClearButton();
+  if (emailInput) {
+    emailInput.addEventListener("input", syncEmailClearButton);
+    emailInput.addEventListener("change", syncEmailClearButton);
+  }
+  if (btnClearEmail && emailInput) {
+    btnClearEmail.addEventListener("click", function () {
+      emailInput.value = "";
+      syncEmailClearButton();
+      try {
+        emailInput.focus();
+      } catch (_focus) {}
+    });
+  }
+  bindPasswordVisibilityToggle(btnTogglePassword, passwordInput, "Show password", "Hide password");
+  bindPasswordVisibilityToggle(
+    btnTogglePassword2,
+    password2Input,
+    "Show confirm password",
+    "Hide confirm password"
+  );
   if (rememberCheckbox) {
     rememberCheckbox.addEventListener("change", function () {
       try {
@@ -254,6 +314,7 @@
 
   btnToggleMode.addEventListener("click", function () {
     setMode(!isSignUp);
+    resetPasswordVisibilityToggles();
   });
 
   btnGoogle.disabled = false;

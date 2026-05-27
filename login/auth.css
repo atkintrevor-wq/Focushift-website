@@ -61,6 +61,67 @@
   font-size: 1rem;
 }
 
+.auth-input-wrap {
+  position: relative;
+}
+
+.auth-input-wrap input {
+  padding-right: 2.75rem;
+}
+
+.auth-input-clear,
+.auth-input-toggle {
+  position: absolute;
+  top: 50%;
+  right: 0.4rem;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted, #8b9bb4);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.auth-input-clear:hover,
+.auth-input-toggle:hover {
+  color: var(--text, #e8edf7);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.auth-input-clear[hidden] {
+  display: none !important;
+}
+
+.auth-input-clear span {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.auth-input-toggle .auth-eye-hide {
+  display: none;
+}
+
+.auth-input-toggle.is-visible .auth-eye-show {
+  display: none;
+}
+
+.auth-input-toggle.is-visible .auth-eye-hide {
+  display: block;
+}
+
+.auth-input-toggle:focus-visible,
+.auth-input-clear:focus-visible {
+  outline: 2px solid rgba(79, 140, 255, 0.85);
+  outline-offset: 2px;
+}
+
 .auth-row-actions {
   display: flex;
   flex-wrap: wrap;
