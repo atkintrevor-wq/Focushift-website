@@ -1139,10 +1139,23 @@ html.fs-app[data-app-theme="light"] .script-card-play-btn:hover:not(:disabled) {
 }
 .script-inline-editor {
   margin: 0.5rem 0 0;
-  padding: 0.65rem 0.75rem 0.75rem;
+  padding: 0;
   border-radius: var(--app-radius-sm, 12px);
   border: 1px solid rgba(148, 163, 184, 0.28);
   background: rgba(0, 0, 0, 0.12);
+  max-height: min(72vh, 40rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.script-inline-editor-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding: 0.65rem 0.75rem 0.55rem;
 }
 html.fs-app[data-app-theme="light"] .script-inline-editor {
   border-color: rgba(100, 116, 139, 0.35);
@@ -1199,6 +1212,7 @@ html.fs-app[data-app-theme="light"] .script-inline-title-input {
   box-sizing: border-box;
   margin-top: 0.35rem;
   min-height: 9rem;
+  max-height: min(50vh, 28rem);
   border-radius: 8px;
   border: 1px solid rgba(148, 163, 184, 0.38);
   background: rgba(255, 255, 255, 0.05);
@@ -1208,6 +1222,10 @@ html.fs-app[data-app-theme="light"] .script-inline-title-input {
   line-height: 1.52;
   font-family: inherit;
   resize: vertical;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 html.fs-app[data-app-theme="light"] .script-inline-textarea {
   background: rgba(255, 255, 255, 0.88);
@@ -1228,11 +1246,18 @@ html.fs-app[data-app-theme="light"] .script-inline-textarea {
   line-height: 1.52;
 }
 .script-inline-save-row {
-  margin-top: 0.65rem;
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 0.65rem 0.75rem 0.75rem;
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
   align-items: center;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: inherit;
+}
+html.fs-app[data-app-theme="light"] .script-inline-save-row {
+  border-top-color: rgba(15, 23, 42, 0.1);
 }
 .script-card-audio-section {
   margin-top: 0.5rem;
@@ -2137,9 +2162,20 @@ html.fs-app[data-app-theme="light"] .section-search-field {
 html.fs-app[data-app-theme="light"] .ai-text-edit-actions {
   border-top-color: rgba(15, 23, 42, 0.1);
 }
+html.fs-app.fs-modal-scroll-lock,
 body.fs-app-body.fs-modal-scroll-lock {
   overflow: hidden;
   overscroll-behavior: none;
+}
+#ai-text-edit-backdrop.app-modal-backdrop:not([hidden]) {
+  align-items: flex-start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+#ai-text-edit-backdrop .ai-text-edit-modal {
+  margin: auto;
+  flex-shrink: 0;
 }
 .ai-text-edit-hero {
   text-align: center;

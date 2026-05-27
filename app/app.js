@@ -144,6 +144,8 @@
   var aiTextEditPreview = null;
   var aiTextEditProcessing = false;
   var appBodyScrollLockCount = 0;
+  var appBodyScrollLockY = 0;
+  var aiTextEditTouchBlockHandler = null;
   var expandedScriptAudioControlsById = {};
   var scriptsRenderGeneration = 0;
   var CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebCardAudioControls_";
@@ -8767,6 +8769,7 @@
         : "";
       inlineEditorHtml =
         '<div class="script-inline-editor">' +
+        '<div class="script-inline-editor-scroll">' +
         '<label class="script-inline-field-label">Title</label>' +
         '<input type="text" class="script-inline-title-input" maxlength="120" value="' +
         escapeHtml(script.title || "") +
@@ -8777,6 +8780,7 @@
         "</div>" +
         '<label class="script-inline-field-label">Script</label>' +
         bodyHtml +
+        "</div>" +
         '<div class="script-inline-save-row">' +
         '<button type="button" class="app-btn app-btn-primary" data-action="save-inline-script" data-script-id="' +
         escapeHtml(script.id) +
@@ -8898,18 +8902,65 @@
     );
   }
 
+  function isScrollableOverflow(el) {
+    if (!el) return false;
+    return el.scrollHeight > el.clientHeight + 1;
+  }
+
   function lockAppBodyScroll() {
     appBodyScrollLockCount += 1;
     if (appBodyScrollLockCount === 1) {
+      appBodyScrollLockY = window.scrollY || window.pageYOffset || 0;
+      document.documentElement.classList.add("fs-modal-scroll-lock");
       document.body.classList.add("fs-modal-scroll-lock");
+      document.body.style.position = "fixed";
+      document.body.style.top = "-" + appBodyScrollLockY + "px";
+      document.body.style.left = "0";
+      document.body.style.right = "0";
+      document.body.style.width = "100%";
     }
   }
 
   function unlockAppBodyScroll() {
     appBodyScrollLockCount = Math.max(0, appBodyScrollLockCount - 1);
     if (appBodyScrollLockCount === 0) {
+      document.documentElement.classList.remove("fs-modal-scroll-lock");
       document.body.classList.remove("fs-modal-scroll-lock");
+      document.body.style.position = "";
+      document.body.style.top = "";
+      document.body.style.left = "";
+      document.body.style.right = "";
+      document.body.style.width = "";
+      window.scrollTo(0, appBodyScrollLockY);
     }
+  }
+
+  function bindAITextEditScrollTrap() {
+    if (aiTextEditTouchBlockHandler) return;
+    aiTextEditTouchBlockHandler = function (ev) {
+      var backdrop = document.getElementById("ai-text-edit-backdrop");
+      if (!backdrop || backdrop.hidden) return;
+      var target = ev.target;
+      if (!backdrop.contains(target)) {
+        ev.preventDefault();
+        return;
+      }
+      var scrollEl = backdrop.querySelector(".ai-text-edit-modal-scroll");
+      var previewEl = backdrop.querySelector(".ai-text-edit-preview");
+      var scrollTarget = null;
+      if (scrollEl && (scrollEl === target || scrollEl.contains(target))) scrollTarget = scrollEl;
+      else if (previewEl && (previewEl === target || previewEl.contains(target))) scrollTarget = previewEl;
+      if (scrollTarget && isScrollableOverflow(scrollTarget)) return;
+      if (target.closest && target.closest("textarea, input, button, label, .ai-text-edit-quick")) return;
+      ev.preventDefault();
+    };
+    document.addEventListener("touchmove", aiTextEditTouchBlockHandler, { passive: false });
+  }
+
+  function unbindAITextEditScrollTrap() {
+    if (!aiTextEditTouchBlockHandler) return;
+    document.removeEventListener("touchmove", aiTextEditTouchBlockHandler);
+    aiTextEditTouchBlockHandler = null;
   }
 
   function isWebPaidTierForAI() {
@@ -9010,11 +9061,27 @@
     if (!card) return;
     var ta = card.querySelector(".script-inline-textarea");
     if (ta) ta.value = text;
+    requestAnimationFrame(function () {
+      var saveRow = card.querySelector(".script-inline-save-row");
+      if (saveRow) {
+        try {
+          saveRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } catch (_e) {
+          saveRow.scrollIntoView({ block: "nearest" });
+        }
+      }
+      if (ta) {
+        try {
+          ta.focus();
+        } catch (_focus) {}
+      }
+    });
   }
 
   function closeAITextEditModal() {
     var backdrop = document.getElementById("ai-text-edit-backdrop");
     if (backdrop) backdrop.hidden = true;
+    unbindAITextEditScrollTrap();
     unlockAppBodyScroll();
     aiTextEditContext = null;
     resetAITextEditModalState();
@@ -9032,6 +9099,7 @@
     var backdrop = document.getElementById("ai-text-edit-backdrop");
     if (backdrop) backdrop.hidden = false;
     lockAppBodyScroll();
+    bindAITextEditScrollTrap();
     var instructions = document.getElementById("ai-text-edit-instructions");
     if (instructions) {
       requestAnimationFrame(function () {
@@ -9139,20 +9207,6 @@
       backdrop.addEventListener("click", function (ev) {
         if (ev.target && ev.target.id === "ai-text-edit-backdrop") closeAITextEditModal();
       });
-      backdrop.addEventListener(
-        "wheel",
-        function (ev) {
-          if (ev.target === backdrop) ev.preventDefault();
-        },
-        { passive: false }
-      );
-      backdrop.addEventListener(
-        "touchmove",
-        function (ev) {
-          if (ev.target === backdrop) ev.preventDefault();
-        },
-        { passive: false }
-      );
     }
   }
 
