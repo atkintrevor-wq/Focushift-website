@@ -145,7 +145,6 @@
   var aiTextEditProcessing = false;
   var appBodyScrollLockCount = 0;
   var appBodyScrollLockY = 0;
-  var aiTextEditTouchBlockHandler = null;
   var expandedScriptAudioControlsById = {};
   var scriptsRenderGeneration = 0;
   var CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebCardAudioControls_";
@@ -2811,6 +2810,7 @@
       '<div id="ai-text-edit-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal ai-text-edit-modal" role="dialog" aria-modal="true" aria-labelledby="ai-text-edit-title">' +
       '    <div class="ai-text-edit-modal-scroll">' +
+      '    <div id="ai-text-edit-setup-panel" class="ai-text-edit-setup-panel">' +
       '    <div class="ai-text-edit-hero">' +
       '      <span class="ai-text-edit-hero-icon" aria-hidden="true">✨</span>' +
       '      <h3 id="ai-text-edit-title">AI Text Editor</h3>' +
@@ -2825,14 +2825,16 @@
       '      <button type="button" class="app-btn app-btn-ghost ai-text-edit-quick" data-ai-instructions="Fix any grammar or spelling errors">Fix grammar</button>' +
       '      <button type="button" class="app-btn app-btn-ghost ai-text-edit-quick" data-ai-instructions="Improve the flow and readability of this text">Improve flow</button>' +
       "    </div>" +
+      "    </div>" +
       '    <div id="ai-text-edit-busy" class="ai-text-edit-busy" hidden role="status">' +
       '      <div class="ai-text-edit-spinner" aria-hidden="true"></div>' +
       "      <span>AI is editing your text…</span>" +
       "    </div>" +
       '    <div id="ai-text-edit-error" class="app-inline-msg" role="alert" aria-live="polite"></div>' +
-      '    <div id="ai-text-edit-preview-wrap" class="ai-text-edit-preview-wrap" hidden>' +
-      "      <label>Preview</label>" +
-      '      <div id="ai-text-edit-preview" class="ai-text-edit-preview"></div>' +
+      '    <div id="ai-text-edit-result-wrap" class="ai-text-edit-result-wrap" hidden>' +
+      '      <label for="ai-text-edit-result">Edited script</label>' +
+      '      <p class="app-muted ai-text-edit-result-hint">Review and edit the text below. Save when you are ready, or discard to keep your original.</p>' +
+      '      <textarea id="ai-text-edit-result" class="ai-text-edit-result" rows="14" maxlength="50000"></textarea>' +
       "    </div>" +
       "    </div>" +
       '    <div class="app-modal-actions ai-text-edit-actions">' +
@@ -8902,11 +8904,6 @@
     );
   }
 
-  function isScrollableOverflow(el) {
-    if (!el) return false;
-    return el.scrollHeight > el.clientHeight + 1;
-  }
-
   function lockAppBodyScroll() {
     appBodyScrollLockCount += 1;
     if (appBodyScrollLockCount === 1) {
@@ -8935,34 +8932,6 @@
     }
   }
 
-  function bindAITextEditScrollTrap() {
-    if (aiTextEditTouchBlockHandler) return;
-    aiTextEditTouchBlockHandler = function (ev) {
-      var backdrop = document.getElementById("ai-text-edit-backdrop");
-      if (!backdrop || backdrop.hidden) return;
-      var target = ev.target;
-      if (!backdrop.contains(target)) {
-        ev.preventDefault();
-        return;
-      }
-      var scrollEl = backdrop.querySelector(".ai-text-edit-modal-scroll");
-      var previewEl = backdrop.querySelector(".ai-text-edit-preview");
-      var scrollTarget = null;
-      if (scrollEl && (scrollEl === target || scrollEl.contains(target))) scrollTarget = scrollEl;
-      else if (previewEl && (previewEl === target || previewEl.contains(target))) scrollTarget = previewEl;
-      if (scrollTarget && isScrollableOverflow(scrollTarget)) return;
-      if (target.closest && target.closest("textarea, input, button, label, .ai-text-edit-quick")) return;
-      ev.preventDefault();
-    };
-    document.addEventListener("touchmove", aiTextEditTouchBlockHandler, { passive: false });
-  }
-
-  function unbindAITextEditScrollTrap() {
-    if (!aiTextEditTouchBlockHandler) return;
-    document.removeEventListener("touchmove", aiTextEditTouchBlockHandler);
-    aiTextEditTouchBlockHandler = null;
-  }
-
   function isWebPaidTierForAI() {
     var tier = resolvedSubscriptionTier();
     return tier === "starter" || tier === "creator";
@@ -8977,42 +8946,47 @@
 
   function syncAITextEditModalUi() {
     var busyEl = document.getElementById("ai-text-edit-busy");
-    var previewWrap = document.getElementById("ai-text-edit-preview-wrap");
-    var previewEl = document.getElementById("ai-text-edit-preview");
+    var setupPanel = document.getElementById("ai-text-edit-setup-panel");
+    var resultWrap = document.getElementById("ai-text-edit-result-wrap");
+    var resultEl = document.getElementById("ai-text-edit-result");
     var primary = document.getElementById("ai-text-edit-primary");
+    var cancel = document.getElementById("ai-text-edit-cancel");
     var tryAgain = document.getElementById("ai-text-edit-try-again");
     var instructions = document.getElementById("ai-text-edit-instructions");
     var quickBtns = document.querySelectorAll(".ai-text-edit-quick");
+    var hasResult = !!aiTextEditPreview;
     if (busyEl) busyEl.hidden = !aiTextEditProcessing;
-    if (previewWrap) previewWrap.hidden = !aiTextEditPreview;
-    if (previewEl && aiTextEditPreview) previewEl.textContent = aiTextEditPreview;
-    if (instructions) instructions.disabled = aiTextEditProcessing;
+    if (setupPanel) setupPanel.hidden = hasResult || aiTextEditProcessing;
+    if (resultWrap) resultWrap.hidden = !hasResult;
+    if (resultEl && hasResult && resultEl.getAttribute("data-ai-seeded") !== "1") {
+      resultEl.value = aiTextEditPreview;
+      resultEl.setAttribute("data-ai-seeded", "1");
+    }
+    if (instructions) instructions.disabled = aiTextEditProcessing || hasResult;
     quickBtns.forEach(function (btn) {
-      btn.disabled = aiTextEditProcessing;
+      btn.disabled = aiTextEditProcessing || hasResult;
     });
+    if (resultEl) resultEl.disabled = aiTextEditProcessing;
     if (primary) {
       if (aiTextEditProcessing) {
         primary.textContent = "Processing…";
         primary.disabled = true;
-      } else if (aiTextEditPreview) {
-        primary.textContent = "Apply Changes";
+      } else if (hasResult) {
+        primary.textContent = "Save to Library";
         primary.disabled = false;
       } else {
         primary.textContent = "Edit with AI";
         primary.disabled = !instructions || !String(instructions.value || "").trim();
       }
     }
-    if (tryAgain) tryAgain.hidden = !aiTextEditPreview || aiTextEditProcessing;
-    if (aiTextEditPreview && !aiTextEditProcessing) {
+    if (cancel) cancel.textContent = hasResult ? "Discard" : "Cancel";
+    if (tryAgain) tryAgain.hidden = !hasResult || aiTextEditProcessing;
+    if (hasResult && !aiTextEditProcessing && resultEl) {
       requestAnimationFrame(function () {
-        var scrollEl = document.querySelector(".ai-text-edit-modal-scroll");
-        var previewWrap = document.getElementById("ai-text-edit-preview-wrap");
-        if (scrollEl && previewWrap) {
-          scrollEl.scrollTop = scrollEl.scrollHeight;
-          try {
-            previewWrap.scrollIntoView({ block: "nearest" });
-          } catch (_e) {}
-        }
+        try {
+          resultEl.focus();
+          resultEl.setSelectionRange(0, 0);
+        } catch (_e) {}
       });
     }
   }
@@ -9021,69 +8995,114 @@
     aiTextEditPreview = null;
     aiTextEditProcessing = false;
     var instructions = document.getElementById("ai-text-edit-instructions");
+    var resultEl = document.getElementById("ai-text-edit-result");
     if (instructions) instructions.value = "";
+    if (resultEl) {
+      resultEl.value = "";
+      resultEl.removeAttribute("data-ai-seeded");
+    }
     setAITextEditError("", "");
     syncAITextEditModalUi();
   }
 
-  function getInlineScriptEditorText(scriptId) {
+  function getInlineScriptCard(scriptId) {
     var list = document.getElementById("scripts-list");
-    if (!list || !scriptId) return "";
-    var card = null;
+    if (!list || !scriptId) return null;
     var cards = list.querySelectorAll(".library-script-card");
     for (var i = 0; i < cards.length; i++) {
-      if (cards[i].getAttribute("data-script-id") === scriptId) {
-        card = cards[i];
-        break;
-      }
+      if (cards[i].getAttribute("data-script-id") === scriptId) return cards[i];
     }
-    if (!card) return "";
+    return null;
+  }
+
+  function getInlineScriptEditorText(scriptId) {
+    var card = getInlineScriptCard(scriptId);
+    if (!card) {
+      var script = currentScripts.find(function (s) {
+        return s.id === scriptId;
+      });
+      return script && script.text ? String(script.text) : "";
+    }
     var ta = card.querySelector(".script-inline-textarea");
     if (ta) return ta.value || "";
+    var scriptFallback = currentScripts.find(function (s) {
+      return s.id === scriptId;
+    });
+    return scriptFallback && scriptFallback.text ? String(scriptFallback.text) : "";
+  }
+
+  function getInlineScriptTitle(scriptId) {
+    var card = getInlineScriptCard(scriptId);
+    if (card) {
+      var titleEl = card.querySelector(".script-inline-title-input");
+      if (titleEl) return String(titleEl.value || "").trim();
+    }
     var script = currentScripts.find(function (s) {
       return s.id === scriptId;
     });
-    return script && script.text ? String(script.text) : "";
+    return script && script.title ? String(script.title).trim() : "";
   }
 
-  function applyAITextEditToInlineEditor(text) {
-    if (!aiTextEditContext || !aiTextEditContext.scriptId) return;
-    var list = document.getElementById("scripts-list");
-    if (!list) return;
-    var card = null;
-    var cards = list.querySelectorAll(".library-script-card");
-    for (var i = 0; i < cards.length; i++) {
-      if (cards[i].getAttribute("data-script-id") === aiTextEditContext.scriptId) {
-        card = cards[i];
-        break;
-      }
+  function getAITextEditResultText() {
+    var resultEl = document.getElementById("ai-text-edit-result");
+    if (resultEl) return String(resultEl.value || "");
+    return aiTextEditPreview ? String(aiTextEditPreview) : "";
+  }
+
+  function saveAITextEditToLibrary() {
+    if (!aiTextEditContext || !currentUser || !aiTextEditContext.scriptId) return;
+    var scriptId = aiTextEditContext.scriptId;
+    var text = getAITextEditResultText().trim();
+    var title = getInlineScriptTitle(scriptId);
+    if (!title) {
+      setAITextEditError("Title is required. Add a title in the script editor first.", "error");
+      return;
     }
-    if (!card) return;
-    var ta = card.querySelector(".script-inline-textarea");
-    if (ta) ta.value = text;
-    requestAnimationFrame(function () {
-      var saveRow = card.querySelector(".script-inline-save-row");
-      if (saveRow) {
-        try {
-          saveRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
-        } catch (_e) {
-          saveRow.scrollIntoView({ block: "nearest" });
+    if (!text) {
+      setAITextEditError("Script text is required.", "error");
+      return;
+    }
+    if (aiTextEditProcessing) return;
+    aiTextEditProcessing = true;
+    setAITextEditError("Saving to your library…", "");
+    syncAITextEditModalUi();
+    var uid = currentUser.uid;
+    scriptCollection(uid)
+      .doc(scriptId)
+      .set(
+        {
+          title: title,
+          text: text,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      .then(function () {
+        var ix = currentScripts.findIndex(function (s) {
+          return s.id === scriptId;
+        });
+        if (ix >= 0) {
+          currentScripts[ix].title = title;
+          currentScripts[ix].text = text;
         }
-      }
-      if (ta) {
-        try {
-          ta.focus();
-        } catch (_focus) {}
-      }
-    });
+        delete inlineScriptEditorOpenById[scriptId];
+        closeAITextEditModal();
+        setMessage("Script updated.", "success");
+        renderScripts(currentScripts);
+      })
+      .catch(function (e) {
+        aiTextEditProcessing = false;
+        setAITextEditError(e.message || "Could not save script.", "error");
+        syncAITextEditModalUi();
+      });
   }
 
   function closeAITextEditModal() {
     var backdrop = document.getElementById("ai-text-edit-backdrop");
     if (backdrop) backdrop.hidden = true;
-    unbindAITextEditScrollTrap();
     unlockAppBodyScroll();
     aiTextEditContext = null;
+    aiTextEditProcessing = false;
     resetAITextEditModalState();
   }
 
@@ -9099,7 +9118,6 @@
     var backdrop = document.getElementById("ai-text-edit-backdrop");
     if (backdrop) backdrop.hidden = false;
     lockAppBodyScroll();
-    bindAITextEditScrollTrap();
     var instructions = document.getElementById("ai-text-edit-instructions");
     if (instructions) {
       requestAnimationFrame(function () {
@@ -9114,9 +9132,7 @@
     if (!aiTextEditContext || !currentUser) return;
     if (aiTextEditProcessing) return;
     if (aiTextEditPreview) {
-      applyAITextEditToInlineEditor(aiTextEditPreview);
-      closeAITextEditModal();
-      setMessage("AI edits applied. Tap Save to keep changes.", "success");
+      saveAITextEditToLibrary();
       return;
     }
     if (!isWebPaidTierForAI()) {
@@ -9165,6 +9181,11 @@
   }
 
   function retryAITextEdit() {
+    var resultEl = document.getElementById("ai-text-edit-result");
+    if (resultEl) {
+      resultEl.value = "";
+      resultEl.removeAttribute("data-ai-seeded");
+    }
     aiTextEditPreview = null;
     setAITextEditError("", "");
     syncAITextEditModalUi();
