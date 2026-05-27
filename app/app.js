@@ -143,6 +143,7 @@
   var aiTextEditContext = null;
   var aiTextEditPreview = null;
   var aiTextEditProcessing = false;
+  var appBodyScrollLockCount = 0;
   var expandedScriptAudioControlsById = {};
   var scriptsRenderGeneration = 0;
   var CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebCardAudioControls_";
@@ -2807,6 +2808,7 @@
       "</div>" +
       '<div id="ai-text-edit-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal ai-text-edit-modal" role="dialog" aria-modal="true" aria-labelledby="ai-text-edit-title">' +
+      '    <div class="ai-text-edit-modal-scroll">' +
       '    <div class="ai-text-edit-hero">' +
       '      <span class="ai-text-edit-hero-icon" aria-hidden="true">✨</span>' +
       '      <h3 id="ai-text-edit-title">AI Text Editor</h3>' +
@@ -2829,6 +2831,7 @@
       '    <div id="ai-text-edit-preview-wrap" class="ai-text-edit-preview-wrap" hidden>' +
       "      <label>Preview</label>" +
       '      <div id="ai-text-edit-preview" class="ai-text-edit-preview"></div>' +
+      "    </div>" +
       "    </div>" +
       '    <div class="app-modal-actions ai-text-edit-actions">' +
       '      <button type="button" class="app-btn" id="ai-text-edit-cancel">Cancel</button>' +
@@ -8895,6 +8898,20 @@
     );
   }
 
+  function lockAppBodyScroll() {
+    appBodyScrollLockCount += 1;
+    if (appBodyScrollLockCount === 1) {
+      document.body.classList.add("fs-modal-scroll-lock");
+    }
+  }
+
+  function unlockAppBodyScroll() {
+    appBodyScrollLockCount = Math.max(0, appBodyScrollLockCount - 1);
+    if (appBodyScrollLockCount === 0) {
+      document.body.classList.remove("fs-modal-scroll-lock");
+    }
+  }
+
   function isWebPaidTierForAI() {
     var tier = resolvedSubscriptionTier();
     return tier === "starter" || tier === "creator";
@@ -8935,6 +8952,18 @@
       }
     }
     if (tryAgain) tryAgain.hidden = !aiTextEditPreview || aiTextEditProcessing;
+    if (aiTextEditPreview && !aiTextEditProcessing) {
+      requestAnimationFrame(function () {
+        var scrollEl = document.querySelector(".ai-text-edit-modal-scroll");
+        var previewWrap = document.getElementById("ai-text-edit-preview-wrap");
+        if (scrollEl && previewWrap) {
+          scrollEl.scrollTop = scrollEl.scrollHeight;
+          try {
+            previewWrap.scrollIntoView({ block: "nearest" });
+          } catch (_e) {}
+        }
+      });
+    }
   }
 
   function resetAITextEditModalState() {
@@ -8986,6 +9015,7 @@
   function closeAITextEditModal() {
     var backdrop = document.getElementById("ai-text-edit-backdrop");
     if (backdrop) backdrop.hidden = true;
+    unlockAppBodyScroll();
     aiTextEditContext = null;
     resetAITextEditModalState();
   }
@@ -9001,6 +9031,7 @@
     resetAITextEditModalState();
     var backdrop = document.getElementById("ai-text-edit-backdrop");
     if (backdrop) backdrop.hidden = false;
+    lockAppBodyScroll();
     var instructions = document.getElementById("ai-text-edit-instructions");
     if (instructions) {
       requestAnimationFrame(function () {
@@ -9108,6 +9139,20 @@
       backdrop.addEventListener("click", function (ev) {
         if (ev.target && ev.target.id === "ai-text-edit-backdrop") closeAITextEditModal();
       });
+      backdrop.addEventListener(
+        "wheel",
+        function (ev) {
+          if (ev.target === backdrop) ev.preventDefault();
+        },
+        { passive: false }
+      );
+      backdrop.addEventListener(
+        "touchmove",
+        function (ev) {
+          if (ev.target === backdrop) ev.preventDefault();
+        },
+        { passive: false }
+      );
     }
   }
 
