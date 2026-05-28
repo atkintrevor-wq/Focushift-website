@@ -726,6 +726,17 @@
   var surveyIntakeContextQuestion =
     "When or where does this matter most? (e.g., morning routine, before a game, bedtime, at work)";
 
+  var CLARIFY_TURN_GOALS = [
+    "First we'll explore what gets in the way — your inner critic, habit, or fear.",
+    "Next: when or where this matters most (morning, work, bedtime, before a game…).",
+    "Finally: one moment this was already true, or how it feels in your body at your best.",
+  ];
+
+  function clarifyingTurnGoal(step) {
+    var idx = Math.max(0, Math.min(step, CLARIFY_TURN_GOALS.length - 1));
+    return CLARIFY_TURN_GOALS[idx];
+  }
+
   var CATEGORY_MEDIA_RECOMMENDATIONS = {
     confidence: { voiceID: "rJ9XoWu8gbUhVKZnKY8X", backgroundID: "bg-calm-groove", voiceName: "Lori", backgroundName: "Calm Groove" },
     relationships: { voiceID: "l32B8XDoylOsZKiSdfhE", backgroundID: "bg-warm-melody", voiceName: "Carla", backgroundName: "Warm Melody" },
@@ -8551,12 +8562,16 @@
       generationMessage("", "");
       var cf = homeClarifyFlow;
       var pq = cf.pendingQuestion || "";
+      var turnHint = clarifyingTurnGoal(cf.currentIndex || 0);
       el.innerHTML =
         '<div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
-        '  <p class="app-muted" style="margin:0 0 0.5rem;">Clarifying question ' +
+        '  <p class="app-muted" style="margin:0 0 0.35rem;">Clarifying question ' +
         escapeHtml(String(cf.currentIndex + 1)) +
         " of " +
         escapeHtml(String(cf.requested)) +
+        "</p>" +
+        '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
+        escapeHtml(turnHint) +
         "</p>" +
         '  <p style="margin:0 0 0.65rem;font-weight:600;">' +
         escapeHtml(pq) +
