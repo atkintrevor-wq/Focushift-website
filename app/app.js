@@ -273,7 +273,7 @@
     { id: "bg-groove-bloom", name: "Groove Bloom", categoryID: "health-fitness", file: "Groove Bloom.mp3" },
     { id: "bg-joyful-fusion", name: "Joyful Fusion", categoryID: "health-fitness", file: "Joyful Fusion.mp3" },
     { id: "bg-mindful-drift", name: "Mindful Drift", categoryID: "health-fitness", file: "Mindful Drift.mp3" },
-    { id: "bg-recovery-glow", name: "Recovery Glow", categoryID: "health-fitness", file: "Recovery Glow .mp3" },
+    { id: "bg-recovery-glow", name: "Recovery Glow", categoryID: "health-fitness", file: "Recovery Glow.mp3" },
     { id: "bg-vitality-wave-rise", name: "Vitality Wave Rise", categoryID: "health-fitness", file: "Vitality Wave Rise.mp3" },
     // Mental Well-Being
     { id: "bg-clarity-sting-echo", name: "Clarity Sting Echo", categoryID: "mental-wellbeing", file: "Clarity Sting Echo.mp3" },
@@ -720,6 +720,36 @@
       ],
     },
   ];
+
+  var surveyIntakeObstacleQuestion =
+    "What's the main obstacle, inner critic, or habit that gets in the way? (e.g., self-doubt before meetings, racing thoughts at night)";
+  var surveyIntakeContextQuestion =
+    "When or where does this matter most? (e.g., morning routine, before a game, bedtime, at work)";
+
+  var CATEGORY_MEDIA_RECOMMENDATIONS = {
+    confidence: { voiceID: "rJ9XoWu8gbUhVKZnKY8X", backgroundID: "bg-calm-groove", voiceName: "Lori", backgroundName: "Calm Groove" },
+    relationships: { voiceID: "l32B8XDoylOsZKiSdfhE", backgroundID: "bg-warm-melody", voiceName: "Carla", backgroundName: "Warm Melody" },
+    "success-prosperity": { voiceID: "xctasy8XvGp2cVO9HL9k", backgroundID: "bg-momentum-desire", voiceName: "Samantha", backgroundName: "Momentum Desire" },
+    "mental-wellbeing": { voiceID: "BpjGufoPiobT79j2vtj4", backgroundID: "bg-inner-calm", voiceName: "Priyanka", backgroundName: "Inner Calm" },
+    "health-fitness": { voiceID: "l32B8XDoylOsZKiSdfhE", backgroundID: "bg-recovery-glow", voiceName: "Carla", backgroundName: "Recovery Glow" },
+    "sports-performance": { voiceID: "87tjwokZlpNU7QL3HaLP", backgroundID: "bg-relentless-edge-surge", voiceName: "Zane", backgroundName: "Relentless Edge Surge" },
+    "sleep-rest": { voiceID: "8LVfoRdkh4zgjr8v5ObE", backgroundID: "bg-theta-peace-drift", voiceName: "Clara", backgroundName: "Theta Peace Drift" },
+    "i-am": { voiceID: "rJ9XoWu8gbUhVKZnKY8X", backgroundID: "bg-kindness-melody", voiceName: "Lori", backgroundName: "Kindness Melody" },
+    other: { voiceID: "lnieQLGTodpbhjpZtg1k", backgroundID: "bg-meditation", voiceName: "Bill", backgroundName: "Meditation Background" },
+  };
+
+  function recommendedMediaForCategory(categoryId) {
+    if (!categoryId) return null;
+    return CATEGORY_MEDIA_RECOMMENDATIONS[String(categoryId).trim()] || null;
+  }
+
+  function applyCategoryMediaRecommendations(categoryId) {
+    var rec = recommendedMediaForCategory(categoryId);
+    if (!rec) return null;
+    if (!accountDefaultVoiceId() && rec.voiceID) selectedVoiceId = rec.voiceID;
+    if (!accountDefaultBackgroundId() && rec.backgroundID) selectedBackgroundId = rec.backgroundID;
+    return rec;
+  }
 
   function surveyAnswerPlaceholder() {
     return "Share as much as you like—the more specific, the better your script.";
@@ -4855,6 +4885,23 @@
     );
   }
 
+  function voiceSettingsForAudioJob(localVoiceId) {
+    var cloned = clonedVoiceById(localVoiceId);
+    if (!cloned || !cloned.settings) return null;
+    var s = cloned.settings;
+    function clamp01(n, fallback) {
+      var x = Number(n);
+      if (!isFinite(x)) return fallback;
+      return Math.max(0, Math.min(1, x));
+    }
+    return {
+      stability: clamp01(s.stability, 0.5),
+      similarity_boost: clamp01(s.similarity_boost != null ? s.similarity_boost : s.similarityBoost, 0.75),
+      style: clamp01(s.style, 0),
+      use_speaker_boost: s.use_speaker_boost !== false && s.useSpeakerBoost !== false,
+    };
+  }
+
   function beginVoiceUploadFlow(mode) {
     var input = document.getElementById("voice-upload-input");
     if (!input) return;
@@ -7935,6 +7982,9 @@
     var third = (ctx.perspective || "").toLowerCase().indexOf("third") !== -1;
     var answersMap = {};
     answersMap[cat.id] = [ctx.q1, ctx.q2];
+    var intakeAnswers = {};
+    if (ctx.intakeObstacle) intakeAnswers.obstacle = ctx.intakeObstacle;
+    if (ctx.intakeContext) intakeAnswers.context = ctx.intakeContext;
     return {
       categories: [
         {
@@ -7945,6 +7995,7 @@
       ],
       answers: answersMap,
       clarifyingAnswers: ctx.clarifyingAnswers || {},
+      intakeAnswers: intakeAnswers,
       tone: ctx.tone || "Calming",
       length: ctx.length || "Medium",
       clarifyCount: clarifyCount,
@@ -7984,6 +8035,8 @@
     var cat = selectedCategory();
     var q1 = (document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "";
     var q2 = (document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "";
+    var obstacleEl = document.getElementById("gen-intake-obstacle");
+    var contextEl = document.getElementById("gen-intake-context");
     var toneEl = document.getElementById("gen-tone");
     var lenRadio = document.querySelector('input[name="gen-length"]:checked');
     var persRadio = document.querySelector('input[name="gen-perspective"]:checked');
@@ -7992,6 +8045,8 @@
       cat: cat,
       q1: q1.trim(),
       q2: q2.trim(),
+      intakeObstacle: obstacleEl ? obstacleEl.value.trim() : "",
+      intakeContext: contextEl ? contextEl.value.trim() : "",
       tone: (toneEl && toneEl.value) || "Calming",
       length: (lenRadio && lenRadio.value) || "Medium",
       perspective: (persRadio && persRadio.value) || "First person",
@@ -8107,6 +8162,11 @@
         if (!json.content) throw new Error("Empty script response.");
         var title = uniqueScriptTitle(ctx.cat.name + " Script");
         var docRef = scriptCollection(currentUser.uid).doc();
+        var mediaRec = recommendedMediaForCategory(ctx.cat.id);
+        var saveVoiceId =
+          (selectedVoiceId || "").trim() || (mediaRec && mediaRec.voiceID) || accountDefaultVoiceId() || "";
+        var saveBgId =
+          (selectedBackgroundId || "").trim() || (mediaRec && mediaRec.backgroundID) || accountDefaultBackgroundId() || "";
         return scriptCollection(currentUser.uid)
           .doc(docRef.id)
           .set({
@@ -8115,8 +8175,8 @@
             createdAt: firebase.firestore.Timestamp.now(),
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             audioURL: "",
-            backgroundID: selectedBackgroundId,
-            voiceID: selectedVoiceId,
+            backgroundID: saveBgId,
+            voiceID: saveVoiceId,
             audioCreatedAt: null,
             categoryID: ctx.cat.id,
           })
@@ -8141,8 +8201,8 @@
                   title: title,
                   text: scriptText,
                   audioURL: "",
-                  voiceID: selectedVoiceId,
-                  backgroundID: selectedBackgroundId,
+                  voiceID: saveVoiceId,
+                  backgroundID: saveBgId,
                   categoryID: ctx.cat.id,
                   createdAt: now,
                   updatedAt: null,
@@ -8480,6 +8540,7 @@
         list.querySelectorAll("[data-home-category]").forEach(function (btn) {
           btn.addEventListener("click", function () {
             activeCategoryId = btn.getAttribute("data-home-category") || "confidence";
+            applyCategoryMediaRecommendations(activeCategoryId);
             setHomeFlowStep("survey", displayName);
           });
         });
@@ -8529,11 +8590,19 @@
         : "Clarifying questions are available on Starter and Creator. You can still generate from your answers below.";
     var ph0 = surveyAnswerPlaceholder();
     var ph1 = surveyAnswerPlaceholder();
+    var mediaRec = recommendedMediaForCategory(cat.id);
     el.innerHTML =
       '<form id="generate-form" class="app-form" style="margin:0;">' +
       '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
       escapeHtml(cat.name) +
       "</strong></p>" +
+      (mediaRec
+        ? '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">Suggested voice + background: <strong>' +
+          escapeHtml(mediaRec.voiceName) +
+          "</strong> + <strong>" +
+          escapeHtml(mediaRec.backgroundName) +
+          "</strong> (applied on save unless you set account defaults)</p>"
+        : "") +
       '  <label id="gen-q1-label" for="gen-q1" style="margin-top:0.2rem;">' +
       escapeHtml(cat.questions[0] || "Question 1") +
       "</label>" +
@@ -8548,6 +8617,14 @@
       '  <textarea id="gen-q2" class="gen-survey-textarea" required rows="6" placeholder="' +
       escapeHtml(ph1) +
       '"></textarea>' +
+      '  <label for="gen-intake-obstacle" style="margin-top:0.85rem;">' +
+      escapeHtml(surveyIntakeObstacleQuestion) +
+      "</label>" +
+      '  <textarea id="gen-intake-obstacle" class="gen-survey-textarea" rows="3" placeholder="Optional — helps the script address what gets in your way"></textarea>' +
+      '  <label for="gen-intake-context" style="margin-top:0.75rem;">' +
+      escapeHtml(surveyIntakeContextQuestion) +
+      "</label>" +
+      '  <textarea id="gen-intake-context" class="gen-survey-textarea" rows="3" placeholder="Optional — morning, bedtime, before a game, at work…"></textarea>' +
       '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
       '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
       '    <option value="Calming">Calming</option>' +
@@ -11080,17 +11157,20 @@
       currentUser
         .getIdToken(true)
         .then(function (token) {
+          var localVoiceId = effectiveVoiceIdForScript(script);
           var payload = {
             scriptId: script.id,
             text: text,
             scriptTitle: script.title || "Untitled Script",
-            voiceID: effectiveVoiceIdForScript(script),
+            voiceID: localVoiceId,
             backgroundID: effectiveBackgroundIdForScript(script),
             createdAt:
               script.createdAt && typeof script.createdAt.toDate === "function"
                 ? script.createdAt.toDate().getTime() / 1000
                 : Date.now() / 1000,
           };
+          var vs = voiceSettingsForAudioJob(localVoiceId);
+          if (vs) payload.voice_settings = vs;
           return backendRequest("/audio-jobs", token, payload).then(function (json) {
             if (!json || json.ok !== true || !json.jobId) {
               throw new Error("Audio job did not return a job id.");
@@ -11226,17 +11306,20 @@
       currentUser
         .getIdToken(true)
         .then(function (token) {
+          var premadeVoiceId = resolvePremadeVoiceSelection(premade);
           var payload = {
             scriptId: jobScriptId,
             text: text,
             scriptTitle: premade.title || "Premade",
-            voiceID: resolvePremadeVoiceSelection(premade),
+            voiceID: premadeVoiceId,
             backgroundID: resolvePremadeBackgroundSelection(premade) || "",
             createdAt:
               premade.createdAt && typeof premade.createdAt.toMillis === "function"
                 ? premade.createdAt.toMillis() / 1000
                 : Date.now() / 1000,
           };
+          var premadeVs = voiceSettingsForAudioJob(premadeVoiceId);
+          if (premadeVs) payload.voice_settings = premadeVs;
           return backendRequest("/audio-jobs", token, payload).then(function (json) {
             if (!json || json.ok !== true || !json.jobId) {
               throw new Error("Audio job did not return a job id.");
@@ -12709,6 +12792,7 @@
             name: data.name || data.voiceName || "Cloned Voice",
             description: data.description || "Cloned voice",
             elevenLabsVoiceID: data.elevenLabsVoiceID || "",
+            settings: data.settings || null,
           };
         });
         if (activeAdminTab === "voices") renderVoices();
