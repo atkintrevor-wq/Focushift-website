@@ -4,16 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Shared audio — Focus Shift</title>
-  <meta name="description" content="Open this link in the Focus Shift app to add shared audio to your library." />
+  <meta name="description" content="Open this link in Focus Shift to add shared audio to your library." />
   <!-- Link preview image (iMessage, Mail, WhatsApp, etc. read these when the URL is shared) -->
   <meta property="og:title" content="Shared audio — Focus Shift" />
-  <meta property="og:description" content="Open in the Focus Shift app on iPhone or iPad to listen and add this audio to My Library." />
+  <meta property="og:description" content="Sign in on iPhone, iPad, or the web app to listen and add this audio to My Library." />
   <meta property="og:type" content="website" />
   <meta property="og:image" content="https://focusshift.app/images/focus-shift-app-brand.png?v=7" />
   <meta property="og:image:alt" content="Focus Shift app" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="Shared audio — Focus Shift" />
-  <meta name="twitter:description" content="Open in the Focus Shift app to listen and add this audio to your library." />
+  <meta name="twitter:description" content="Sign in on iPhone, iPad, or the web app to add this audio to your library." />
   <meta name="twitter:image" content="https://focusshift.app/images/focus-shift-app-brand.png?v=7" />
   <link rel="icon" href="/images/logo.png?v=7" type="image/png" />
   <link rel="apple-touch-icon" href="/images/focus-shift-app-brand.png?v=7" />
@@ -34,30 +34,33 @@
   <div class="card">
     <img class="brand" src="/images/focus-shift-app-brand.png?v=7" width="1174" height="417" alt="Focus Shift" decoding="async" />
     <h1>Someone shared Focus Shift audio with you</h1>
-    <p id="lead">On an iPhone or iPad with the app installed, this link should open Focus Shift so you can add it to My Library.</p>
+    <p id="lead">Sign in to Focus Shift to add this audio to My Library and listen.</p>
     <p class="token" id="tokendisplay" hidden></p>
     <p>
-      <a class="button" id="openApp" href="#">Open in app</a>
-      <a class="button" href="https://testflight.apple.com/" style="background:#34c759">Get TestFlight</a>
+      <a class="button" id="openWeb" href="/login/">Sign in on web</a>
+      <a class="button" id="openApp" href="#">Open in iOS app</a>
     </p>
     <p><a class="secondary" href="/">Focus Shift home</a></p>
-    <p class="note">
-      If you opened this on a Mac or PC, install the app from TestFlight on your phone, then open the same link on that device (Messages, Mail, etc.).
+    <p class="note" id="platform-note">
+      On iPhone or iPad with the app installed, use <strong>Open in iOS app</strong>. On a computer, use <strong>Sign in on web</strong> (admin access required during beta).
     </p>
   </div>
   <script>
     (function () {
       var parts = location.pathname.split("/").filter(Boolean);
       var token = (parts[0] === "s" && parts[1]) ? parts[1] : null;
-      var openBtn = document.getElementById("openApp");
+      var openAppBtn = document.getElementById("openApp");
+      var openWebBtn = document.getElementById("openWeb");
       if (token) {
         var deep = "focushift://s/" + encodeURIComponent(token);
-        openBtn.href = deep;
+        openAppBtn.href = deep;
+        openWebBtn.href = "/login/?next=" + encodeURIComponent("/app/?share=" + encodeURIComponent(token));
         var td = document.getElementById("tokendisplay");
         td.hidden = false;
         td.textContent = "Link id: " + token;
       } else {
-        openBtn.href = "https://testflight.apple.com/";
+        openAppBtn.href = "https://testflight.apple.com/";
+        openWebBtn.href = "/login/";
         document.getElementById("lead").textContent =
           "This page is for shared listen links. Use the link from your message or email (it should contain /s/…).";
       }

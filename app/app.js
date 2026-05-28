@@ -3,6 +3,9 @@
 
   var root = document.getElementById("root");
   var scriptsUnsubscribe = null;
+  var incomingSharedUnsubscribe = null;
+  var ownedScripts = [];
+  var incomingSharedScripts = [];
   var playlistsUnsubscribe = null;
   var premadeUnsubscribe = null;
   var clonedVoicesUnsubscribe = null;
@@ -60,6 +63,17 @@
     error: null,
     /** From POST /usage/refresh (Firestore config/app.freeStepUpEnabled). */
     freeStepUpEnabled: true,
+    stepUpStripeConfigured: false,
+    stepUpStripePriceDisplay: null,
+  };
+  /** Pending share invite token from ?share= or /s/ redirect. */
+  var pendingShareClaimToken = null;
+  /** Creator share management rows loaded in Account. */
+  var shareManagementSnapshot = {
+    audience: [],
+    outgoing: [],
+    loading: false,
+    error: null,
   };
   /** When true, open Account and scroll to usage add-on after insights load. */
   var accountOpenFocusUsageAddOn = false;
@@ -908,6 +922,97 @@
       scriptsUnsubscribe();
       scriptsUnsubscribe = null;
     }
+    if (typeof incomingSharedUnsubscribe === "function") {
+      incomingSharedUnsubscribe();
+      incomingSharedUnsubscribe = null;
+    }
+    ownedScripts = [];
+    incomingSharedScripts = [];
+  }
+
+  function firestoreMillis(val) {
+    if (!val) return 0;
+    try {
+      if (typeof val.toMillis === "function") return val.toMillis();
+      if (val instanceof Date) return val.getTime();
+    } catch (_e) {}
+    return 0;
+  }
+
+  function scriptIsSharedListenOnly(script) {
+    return !!(script && script.sharedFrom);
+  }
+
+  function scriptFromIncomingDocument(doc) {
+    var d = doc.data() || {};
+    var creatorUid = d.creatorUid;
+    var title = d.title;
+    if (!creatorUid || !title) return null;
+    var token =
+      d.shareToken && String(d.shareToken).trim() ? String(d.shareToken).trim() : doc.id;
+    return {
+      id: "incoming_" + token,
+      title: title,
+      text: d.text || "",
+      audioURL: d.audioURL || "",
+      voiceID: d.voiceID || "",
+      backgroundID: d.backgroundID || "",
+      categoryID: "",
+      createdAt: d.claimedAt || null,
+      updatedAt: null,
+      audioCreatedAt: null,
+      audioContentHash: "",
+      audioVoiceID: "",
+      audioBackgroundID: "",
+      sharedFrom: {
+        senderUid: creatorUid,
+        senderDisplayName: d.creatorDisplayName || "Someone",
+        shareToken: token,
+        sourceScriptId: d.sourceScriptId || "",
+        claimedAt: d.claimedAt || null,
+      },
+    };
+  }
+
+  function mergeOwnedAndIncomingScripts(owned, incoming) {
+    var combined = (owned || []).concat(incoming || []);
+    combined.sort(function (a, b) {
+      return firestoreMillis(b.createdAt) - firestoreMillis(a.createdAt);
+    });
+    return combined;
+  }
+
+  function rebuildCurrentScriptsFromSources() {
+    currentScripts = mergeOwnedAndIncomingScripts(ownedScripts, incomingSharedScripts);
+    updateTabCounts();
+    renderScripts(currentScripts);
+    renderSelectedPlaylistDetail();
+    if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+  }
+
+  function filterEntitledIncomingScripts(uid, incomingScripts) {
+    if (!incomingScripts.length) return Promise.resolve([]);
+    return Promise.all(
+      incomingScripts.map(function (s) {
+        if (!s.sharedFrom || !s.sharedFrom.senderUid) return Promise.resolve(s);
+        return db
+          .collection("users")
+          .doc(s.sharedFrom.senderUid)
+          .collection("shareAudience")
+          .doc(uid)
+          .get()
+          .then(function (snap) {
+            return snap.exists ? s : null;
+          })
+          .catch(function () {
+            return s;
+          });
+      })
+    ).then(function (results) {
+      return results.filter(function (x) {
+        return !!x;
+      });
+    });
   }
 
   function teardownPlaylistsListener() {
@@ -2384,6 +2489,12 @@
       '        <p class="app-muted account-section-card__text">Counts sync from your account (same Firestore data as iOS). Remove extra devices in the iOS app if you are over your plan limit.</p>' +
       '        <button type="button" class="app-btn app-btn-secondary" id="account-manage-devices">Refresh device list</button>' +
       "      </section>" +
+      '      <section id="account-sharing-management-section" class="account-section-card" hidden>' +
+      '        <h4 class="account-section-card__title">Sharing management</h4>' +
+      '        <p class="app-muted account-section-card__text">Creator plan: manage who can listen to your shared audio and deactivate old share links.</p>' +
+      '        <div id="account-sharing-management-panel" class="account-sharing-management-panel"></div>' +
+      '        <button type="button" class="app-btn app-btn-secondary" id="account-refresh-sharing">Refresh sharing lists</button>' +
+      "      </section>" +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Library &amp; storage</h4>' +
       '        <p class="app-muted account-section-card__text">Library counts update from your scripts. Use Refresh in Usage &amp; statistics for cloud usage, devices, and storage.</p>' +
@@ -2843,6 +2954,18 @@
       '      <button type="button" class="app-btn app-btn-primary" id="ai-text-edit-primary">Edit with AI</button>' +
       "    </div>" +
       "  </div>" +
+      "</div>" +
+      '<div id="share-claim-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal share-claim-modal" role="dialog" aria-modal="true" aria-labelledby="share-claim-title">' +
+      '    <h3 id="share-claim-title">Shared audio</h3>' +
+      '    <p id="share-claim-lede" class="app-muted" style="margin-top:0;">Someone shared Focus Shift audio with you.</p>' +
+      '    <div id="share-claim-meta" class="share-claim-meta"></div>' +
+      '    <p id="share-claim-error" class="app-inline-msg error" role="alert" hidden></p>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="share-claim-dismiss">Not now</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="share-claim-accept">Add to My Library</button>' +
+      "    </div>" +
+      "  </div>" +
       "</div>";
 
     document.getElementById("btn-create-script").addEventListener("click", function () {
@@ -2962,9 +3085,14 @@
             ev.target && ev.target.closest && ev.target.closest("#account-usage-addon-action");
           if (stepBtn && accountBackdrop.contains(stepBtn)) {
             ev.preventDefault();
-            applyComplimentaryStepUp().catch(function (e) {
-              setAccountMessage((e && e.message) || "Could not apply usage add-on.", "error");
-            });
+            var stepMode = stepBtn.getAttribute("data-stepup-mode") || "complimentary";
+            if (stepMode === "stripe") {
+              postStripeStepUpCheckout();
+            } else {
+              applyComplimentaryStepUp().catch(function (e) {
+                setAccountMessage((e && e.message) || "Could not apply usage add-on.", "error");
+              });
+            }
             return;
           }
           var btn = ev.target && ev.target.closest && ev.target.closest("button[data-stripe-plan]");
@@ -3000,6 +3128,15 @@
         );
       });
     });
+    var accountRefreshSharingBtn = document.getElementById("account-refresh-sharing");
+    if (accountRefreshSharingBtn) {
+      accountRefreshSharingBtn.addEventListener("click", function () {
+        refreshShareManagementPanel().then(function () {
+          setAccountMessage("Sharing lists refreshed.", "success");
+        });
+      });
+    }
+    bindShareClaimModal();
     document.getElementById("account-refresh-library-stats").addEventListener("click", function () {
       refreshAccountInsightsFromCloud().then(function () {
         setAccountMessage("Usage and library statistics refreshed.", "success");
@@ -3808,12 +3945,14 @@
     syncAccountAppleLinkUI();
     renderAccountInsights();
     renderUsageAddOnSection();
+    syncAccountSharingManagementSection();
     refreshAccountInsightsFromCloud().then(function () {
       if (accountOpenFocusUsageAddOn) {
         accountOpenFocusUsageAddOn = false;
         scrollToUsageAddOnSection();
       }
     });
+    refreshShareManagementPanel();
     setAccountModalTab("settings");
     bd.hidden = false;
     var btn = document.getElementById("btn-account-menu");
@@ -6673,13 +6812,30 @@
         "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
       action.textContent = "Add " + wordsLabel + " words & " + ttsLabel + " TTS";
       action.hidden = false;
+      action.setAttribute("data-stepup-mode", "complimentary");
       note.textContent = "Complimentary while beta top-ups are enabled (same as iOS).";
+    } else if (profileUsesStripeBilling() && accountInsightsSnapshot.stepUpStripeConfigured) {
+      var priceLabel = accountInsightsSnapshot.stepUpStripePriceDisplay;
+      lede.textContent =
+        "Add +" +
+        wordsLabel +
+        " words and +" +
+        ttsLabel +
+        " TTS characters for this billing period.";
+      action.textContent = priceLabel
+        ? "Buy usage pack (" + priceLabel + ")"
+        : "Buy usage pack";
+      action.hidden = false;
+      action.setAttribute("data-stepup-mode", "stripe");
+      note.textContent =
+        "One-time purchase via Stripe Checkout. Your limits update right after payment (usually within a minute).";
     } else {
       lede.textContent =
-        "Need more words or TTS this period? Paid usage add-ons are purchased in the iOS app (App Store).";
+        "Need more words or TTS this period? Paid usage add-ons are purchased in the iOS app (App Store), or via Stripe when your subscription is billed on the web.";
       action.hidden = true;
+      action.removeAttribute("data-stepup-mode");
       note.textContent =
-        "Web billing covers your subscription plan. One-time usage packs use in-app purchase on iPhone or iPad.";
+        "App Store subscribers: buy usage packs in the iOS app. Web (Stripe) subscribers see a Buy button here when complimentary top-ups are off.";
     }
   }
 
@@ -6766,6 +6922,14 @@
           .then(function (json) {
             if (json && typeof json.freeStepUpEnabled === "boolean") {
               accountInsightsSnapshot.freeStepUpEnabled = json.freeStepUpEnabled;
+            }
+            if (json && typeof json.stepUpStripeConfigured === "boolean") {
+              accountInsightsSnapshot.stepUpStripeConfigured = json.stepUpStripeConfigured;
+            }
+            if (json && json.stepUpStripePriceDisplay) {
+              accountInsightsSnapshot.stepUpStripePriceDisplay = String(json.stepUpStripePriceDisplay);
+            } else if (json && json.stepUpStripeConfigured === false) {
+              accountInsightsSnapshot.stepUpStripePriceDisplay = null;
             }
           })
           .catch(function () {
@@ -6947,7 +7111,7 @@
       deviceRows +
       row("Shared listeners", sharingValue) +
       (tier === "creator"
-        ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">Manage listeners in the iOS app.</p>'
+        ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">Manage listeners and share links in Account → Sharing management.</p>'
         : "") +
       "</section>" +
       aiSection +
@@ -7123,6 +7287,391 @@
     return resolvedSubscriptionTier() === "creator";
   }
 
+  function parseShareTokenFromLocation() {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      var fromQuery = (params.get("share") || "").trim();
+      if (fromQuery) return fromQuery;
+    } catch (_e) {}
+    return null;
+  }
+
+  function clearShareTokenFromLocation() {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      if (!params.has("share")) return;
+      params.delete("share");
+      var qs = params.toString();
+      var path = window.location.pathname + (qs ? "?" + qs : "") + (window.location.hash || "");
+      window.history.replaceState({}, "", path);
+    } catch (_e2) {}
+  }
+
+  function shareClaimErrorMessage(code) {
+    if (code === "self") return "You cannot claim your own share link.";
+    if (code === "inactive") return "This share is no longer active.";
+    if (code === "missing") return "This link is invalid or expired.";
+    return "Could not load this share link.";
+  }
+
+  function closeShareClaimModal() {
+    var bd = document.getElementById("share-claim-backdrop");
+    if (bd) bd.hidden = true;
+    unlockAppBodyScroll();
+    pendingShareClaimToken = null;
+  }
+
+  function openShareClaimModal(token, inviteData) {
+    var bd = document.getElementById("share-claim-backdrop");
+    if (!bd || !token) return;
+    pendingShareClaimToken = token;
+    var titleEl = document.getElementById("share-claim-title");
+    var ledeEl = document.getElementById("share-claim-lede");
+    var metaEl = document.getElementById("share-claim-meta");
+    var errEl = document.getElementById("share-claim-error");
+    var acceptBtn = document.getElementById("share-claim-accept");
+    var data = inviteData || {};
+    var sender = (data.creatorDisplayName && String(data.creatorDisplayName).trim()) || "Someone";
+    var audioTitle = (data.title && String(data.title).trim()) || "Shared audio";
+    if (titleEl) titleEl.textContent = audioTitle;
+    if (ledeEl) {
+      ledeEl.textContent = sender + " shared Focus Shift audio with you.";
+    }
+    if (metaEl) {
+      metaEl.innerHTML =
+        '<p class="share-claim-meta-line"><strong>From:</strong> ' +
+        escapeHtml(sender) +
+        "</p>" +
+        (data.audioURL && String(data.audioURL).trim()
+          ? '<p class="share-claim-meta-line app-muted">Listen-only copy — added to My Library on this account.</p>'
+          : '<p class="share-claim-meta-line app-inline-msg error">No audio URL on this share yet.</p>');
+    }
+    if (errEl) {
+      errEl.hidden = true;
+      errEl.textContent = "";
+    }
+    if (acceptBtn) {
+      acceptBtn.disabled = !(data.active !== false && data.audioURL && String(data.audioURL).trim());
+    }
+    bd.hidden = false;
+    lockAppBodyScroll();
+  }
+
+  function loadShareInviteForClaim(token) {
+    if (!token || !currentUser) return Promise.resolve(null);
+    return db
+      .collection("shareInvites")
+      .doc(token)
+      .get()
+      .then(function (snap) {
+        if (!snap.exists) return { error: "missing" };
+        var data = snap.data() || {};
+        if (data.active === false) return { error: "inactive", data: data };
+        if (data.creatorUid && data.creatorUid === currentUser.uid) return { error: "self", data: data };
+        return { data: data };
+      });
+  }
+
+  function claimShareToken(token) {
+    if (!currentUser || !token) return Promise.reject(new Error("Sign in required."));
+    var recipientUid = currentUser.uid;
+    var inviteRef = db.collection("shareInvites").doc(token);
+    return inviteRef.get().then(function (inviteSnap) {
+      if (!inviteSnap.exists) throw new Error(shareClaimErrorMessage("missing"));
+      var data = inviteSnap.data() || {};
+      if (data.active === false) throw new Error(shareClaimErrorMessage("inactive"));
+      var creatorUid = data.creatorUid;
+      if (!creatorUid) throw new Error(shareClaimErrorMessage("missing"));
+      if (creatorUid === recipientUid) throw new Error(shareClaimErrorMessage("self"));
+
+      var audienceRef = db.collection("users").doc(creatorUid).collection("shareAudience").doc(recipientUid);
+      var incomingRef = db
+        .collection("users")
+        .doc(recipientUid)
+        .collection("incomingSharedScripts")
+        .doc(token);
+      var batch = db.batch();
+      batch.set(
+        audienceRef,
+        {
+          claimToken: token,
+          claimedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+      batch.set(
+        incomingRef,
+        {
+          creatorUid: creatorUid,
+          creatorDisplayName: data.creatorDisplayName || "Someone",
+          sourceScriptId: data.scriptId || "",
+          title: data.title || "Shared audio",
+          text: data.text || "",
+          audioURL: data.audioURL || "",
+          voiceID: data.voiceID || "",
+          backgroundID: data.backgroundID || "",
+          claimedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          shareToken: token,
+        },
+        { merge: true }
+      );
+      return batch.commit();
+    });
+  }
+
+  function maybePresentPendingShareClaim() {
+    var token = parseShareTokenFromLocation();
+    if (!token || !currentUser) return;
+    loadShareInviteForClaim(token)
+      .then(function (result) {
+        if (!result || result.error) {
+          setMessage(shareClaimErrorMessage((result && result.error) || "missing"), "error");
+          clearShareTokenFromLocation();
+          return;
+        }
+        openShareClaimModal(token, result.data);
+        clearShareTokenFromLocation();
+      })
+      .catch(function (e) {
+        setMessage((e && e.message) || "Could not load share link.", "error");
+        clearShareTokenFromLocation();
+      });
+  }
+
+  function bindShareClaimModal() {
+    var dismiss = document.getElementById("share-claim-dismiss");
+    var accept = document.getElementById("share-claim-accept");
+    var backdrop = document.getElementById("share-claim-backdrop");
+    if (dismiss) {
+      dismiss.addEventListener("click", function () {
+        closeShareClaimModal();
+      });
+    }
+    if (accept) {
+      accept.addEventListener("click", function () {
+        if (!pendingShareClaimToken) return;
+        accept.disabled = true;
+        claimShareToken(pendingShareClaimToken)
+          .then(function () {
+            closeShareClaimModal();
+            setMessage("Shared audio added to My Library.", "success");
+            showAppBanner("Shared audio added", "Find it in Library with a Shared badge.", "success");
+          })
+          .catch(function (e) {
+            var errEl = document.getElementById("share-claim-error");
+            if (errEl) {
+              errEl.hidden = false;
+              errEl.textContent = (e && e.message) || "Could not claim share.";
+            }
+          })
+          .finally(function () {
+            if (accept) accept.disabled = false;
+          });
+      });
+    }
+    if (backdrop) {
+      backdrop.addEventListener("click", function (ev) {
+        if (ev.target && ev.target.id === "share-claim-backdrop") closeShareClaimModal();
+      });
+    }
+  }
+
+  function syncAccountSharingManagementSection() {
+    var section = document.getElementById("account-sharing-management-section");
+    if (!section) return;
+    section.hidden = !isWebCreatorTier();
+  }
+
+  function renderShareManagementPanel() {
+    var panel = document.getElementById("account-sharing-management-panel");
+    if (!panel) return;
+    syncAccountSharingManagementSection();
+    if (panel.closest("#account-sharing-management-section") && panel.closest("#account-sharing-management-section").hidden) {
+      panel.innerHTML = "";
+      return;
+    }
+    if (shareManagementSnapshot.loading) {
+      panel.innerHTML = '<p class="app-muted" style="margin:0;">Loading sharing lists…</p>';
+      return;
+    }
+    if (shareManagementSnapshot.error) {
+      panel.innerHTML =
+        '<p class="app-inline-msg error" style="margin:0;">' +
+        escapeHtml(shareManagementSnapshot.error) +
+        "</p>";
+      return;
+    }
+    var audience = shareManagementSnapshot.audience || [];
+    var outgoing = shareManagementSnapshot.outgoing || [];
+    var audienceHtml =
+      audience.length === 0
+        ? '<p class="app-muted" style="margin:0 0 0.75rem;">No listeners yet.</p>'
+        : '<ul class="account-share-list">' +
+          audience
+            .map(function (m) {
+              var label =
+                (m.displayName && String(m.displayName).trim()) ||
+                (m.email && String(m.email).trim()) ||
+                m.recipientUid;
+              return (
+                '<li class="account-share-list-item">' +
+                '<span class="account-share-list-label">' +
+                escapeHtml(label) +
+                "</span>" +
+                '<button type="button" class="app-btn app-btn-secondary account-share-remove-listener" data-share-listener="' +
+                escapeHtml(m.recipientUid) +
+                '">Remove</button>' +
+                "</li>"
+              );
+            })
+            .join("") +
+          "</ul>";
+    var outgoingHtml =
+      outgoing.length === 0
+        ? '<p class="app-muted" style="margin:0;">No active share links.</p>'
+        : '<ul class="account-share-list">' +
+          outgoing
+            .map(function (o) {
+              var link = SHARE_UNIVERSAL_LINK_ORIGIN + o.token;
+              return (
+                '<li class="account-share-list-item account-share-list-item--stack">' +
+                '<div><strong>' +
+                escapeHtml(o.title || "Shared audio") +
+                "</strong>" +
+                '<div class="app-muted" style="font-size:0.78rem;word-break:break-all;">' +
+                escapeHtml(link) +
+                "</div></div>" +
+                '<button type="button" class="app-btn app-btn-secondary account-share-deactivate" data-share-token="' +
+                escapeHtml(o.token) +
+                '">Deactivate</button>' +
+                "</li>"
+              );
+            })
+            .join("") +
+          "</ul>";
+    panel.innerHTML =
+      "<h5>Listeners (" +
+      String(audience.length) +
+      " / 15)</h5>" +
+      audienceHtml +
+      '<h5 style="margin-top:1rem;">Active share links (' +
+      String(outgoing.length) +
+      ")</h5>" +
+      outgoingHtml;
+    panel.querySelectorAll(".account-share-remove-listener").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var uid = btn.getAttribute("data-share-listener");
+        if (!uid || !currentUser) return;
+        if (!window.confirm("Remove this listener? They will lose access to your shared audio.")) return;
+        btn.disabled = true;
+        db.collection("users")
+          .doc(currentUser.uid)
+          .collection("shareAudience")
+          .doc(uid)
+          .delete()
+          .then(function () {
+            setAccountMessage("Listener removed.", "success");
+            return refreshShareManagementPanel();
+          })
+          .catch(function (e) {
+            setAccountMessage((e && e.message) || "Could not remove listener.", "error");
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+    });
+    panel.querySelectorAll(".account-share-deactivate").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var token = btn.getAttribute("data-share-token");
+        if (!token || !currentUser) return;
+        if (!window.confirm("Deactivate this share link? New listeners cannot claim it.")) return;
+        btn.disabled = true;
+        var batch = db.batch();
+        batch.set(db.collection("shareInvites").doc(token), { active: false }, { merge: true });
+        batch.delete(db.collection("users").doc(currentUser.uid).collection("outgoingShares").doc(token));
+        batch
+          .commit()
+          .then(function () {
+            setAccountMessage("Share link deactivated.", "success");
+            return refreshShareManagementPanel();
+          })
+          .catch(function (e) {
+            setAccountMessage((e && e.message) || "Could not deactivate share.", "error");
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+    });
+  }
+
+  function refreshShareManagementPanel() {
+    if (!currentUser || !isWebCreatorTier()) {
+      shareManagementSnapshot = { audience: [], outgoing: [], loading: false, error: null };
+      renderShareManagementPanel();
+      return Promise.resolve();
+    }
+    var uid = currentUser.uid;
+    shareManagementSnapshot.loading = true;
+    shareManagementSnapshot.error = null;
+    renderShareManagementPanel();
+    return Promise.all([
+      db.collection("users").doc(uid).collection("shareAudience").get(),
+      db.collection("users").doc(uid).collection("outgoingShares").get(),
+    ])
+      .then(function (results) {
+        var audienceSnap = results[0];
+        var outgoingSnap = results[1];
+        return Promise.all(
+          audienceSnap.docs.map(function (doc) {
+            var memberUid = doc.documentID;
+            var claimedAt = (doc.data() || {}).claimedAt || null;
+            return db
+              .collection("users")
+              .doc(memberUid)
+              .get()
+              .then(function (profileSnap) {
+                var profile = profileSnap.exists ? profileSnap.data() || {} : {};
+                return {
+                  recipientUid: memberUid,
+                  claimedAt: claimedAt,
+                  displayName: profile.displayName || "",
+                  email: profile.email || "",
+                };
+              })
+              .catch(function () {
+                return { recipientUid: memberUid, claimedAt: claimedAt, displayName: "", email: "" };
+              });
+          })
+        ).then(function (audience) {
+          var outgoing = outgoingSnap.docs.map(function (doc) {
+            var d = doc.data() || {};
+            return {
+              token: doc.id,
+              title: d.title || "",
+              scriptId: d.scriptId || "",
+              createdAt: d.createdAt || null,
+            };
+          });
+          shareManagementSnapshot = {
+            audience: audience,
+            outgoing: outgoing,
+            loading: false,
+            error: null,
+          };
+          accountInsightsSnapshot.shareAudienceCount = audience.length;
+          renderShareManagementPanel();
+          renderAccountInsights();
+        });
+      })
+      .catch(function (e) {
+        shareManagementSnapshot.loading = false;
+        shareManagementSnapshot.error = (e && e.message) || "Could not load sharing lists.";
+        renderShareManagementPanel();
+      });
+  }
+
   function makeShareInviteToken() {
     var bytes = new Uint8Array(16);
     var c = window.crypto || window.msCrypto;
@@ -7157,7 +7706,7 @@
       .then(function (snap) {
         if (snap.size >= CREATOR_OUTGOING_SHARE_CAP) {
           setMessage(
-            "You’ve reached the maximum number of active shares. Remove an old share in the iOS app (or deactivate one) and try again.",
+            "You’ve reached the maximum number of active shares. Deactivate an old share in Account → Sharing management and try again.",
             "error"
           );
           return;
@@ -7206,7 +7755,10 @@
               var link = SHARE_UNIVERSAL_LINK_ORIGIN + token;
               if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
                 return navigator.clipboard.writeText(link).then(function () {
-                  setMessage("Share link copied. Anyone with the link can add it in the Focus Shift app while signed in.", "success");
+                  setMessage(
+                    "Share link copied. Recipients sign in on iPhone, iPad, or the web app and open the link to add this audio to My Library.",
+                    "success"
+                  );
                 });
               }
               window.prompt("Copy this share link:", link);
@@ -8628,6 +9180,29 @@
 
   function refreshOneScriptFromCloud(scriptId) {
     if (!currentUser || !scriptId) return;
+    var existing = currentScripts.find(function (s) {
+      return s.id === scriptId;
+    });
+    if (existing && scriptIsSharedListenOnly(existing)) {
+      var shareToken = existing.sharedFrom && existing.sharedFrom.shareToken;
+      if (!shareToken) return;
+      db.collection("users")
+        .doc(currentUser.uid)
+        .collection("incomingSharedScripts")
+        .doc(shareToken)
+        .get()
+        .then(function (snap) {
+          if (!snap.exists) {
+            setMessage("Shared audio is no longer available.", "error");
+            return;
+          }
+          setMessage("Shared script refreshed from the cloud.", "success");
+        })
+        .catch(function (e) {
+          setMessage(e.message || "Could not refresh shared script.", "error");
+        });
+      return;
+    }
     scriptCollection(currentUser.uid)
       .doc(scriptId)
       .get()
@@ -8679,6 +9254,7 @@
 
   function scriptCardHtml(script, contentHashHex) {
     var editorOpen = inlineScriptEditorOpenById[script.id] === true;
+    var isSharedListenOnly = scriptIsSharedListenOnly(script);
     var showFmtPref = readShowAudioTagsFormattingPreference();
     var isBusy = isScriptBusy(script.id);
     var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
@@ -8700,7 +9276,10 @@
     }
     var genDisabled = isBusy || !genEnabled;
     var chevChar = controlsExpanded ? "▲" : "▼";
-    var showShareLink = controlsExpanded && hasAudio && isWebCreatorTier();
+    var showShareLink = controlsExpanded && hasAudio && isWebCreatorTier() && !isSharedListenOnly;
+    if (isSharedListenOnly) {
+      editorOpen = false;
+    }
     var drift = scriptAudioSettingsDrifted(script, contentHashHex);
     var genTitle = "";
     if (!isBusy) {
@@ -8741,7 +9320,7 @@
       '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>';
 
     var inlineEditorHtml = "";
-    if (editorOpen) {
+    if (editorOpen && !isSharedListenOnly) {
       var bodyHtml;
       if (hasAudioTagsInScript && !showFmtPref) {
         bodyHtml =
@@ -8796,29 +9375,43 @@
 
     var audioSection = controlsExpanded
       ? '<div class="script-card-audio-section">' +
+        (isSharedListenOnly
+          ? '<p class="app-muted script-card-shared-note" style="margin:0 0 0.65rem;line-height:1.45;">Shared by ' +
+            escapeHtml((script.sharedFrom && script.sharedFrom.senderDisplayName) || "someone") +
+            ". Listen-only — you can play audio and add to playlists, but not edit or regenerate.</p>"
+          : "") +
         '<div class="script-card-voice-bg-grid">' +
-        '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
-        escapeHtml(script.id) +
-        '" data-script-media-field="voice">Voice: ' +
-        escapeHtml(voiceNameById(scriptVoiceID)) +
-        "</button>" +
-        '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
-        escapeHtml(script.id) +
-        '" data-script-media-field="background">Background: ' +
-        escapeHtml(backgroundNameById(scriptBackgroundID)) +
-        "</button>" +
+        (isSharedListenOnly
+          ? '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;">Voice: ' +
+            escapeHtml(voiceNameById(scriptVoiceID)) +
+            "</span>" +
+            '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;">Background: ' +
+            escapeHtml(backgroundNameById(scriptBackgroundID)) +
+            "</span>"
+          : '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
+            escapeHtml(script.id) +
+            '" data-script-media-field="voice">Voice: ' +
+            escapeHtml(voiceNameById(scriptVoiceID)) +
+            "</button>" +
+            '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
+            escapeHtml(script.id) +
+            '" data-script-media-field="background">Background: ' +
+            escapeHtml(backgroundNameById(scriptBackgroundID)) +
+            "</button>") +
         "</div>" +
         '<div class="app-card-actions script-card-actions-bar">' +
-        '  <button type="button" class="' +
-        genClasses +
-        '" data-action="generate-audio" data-script-id="' +
-        escapeHtml(script.id) +
-        '"' +
-        (genDisabled ? " disabled" : "") +
-        (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
-        ">" +
-        genLabel +
-        "</button>" +
+        (isSharedListenOnly
+          ? ""
+          : '  <button type="button" class="' +
+            genClasses +
+            '" data-action="generate-audio" data-script-id="' +
+            escapeHtml(script.id) +
+            '"' +
+            (genDisabled ? " disabled" : "") +
+            (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
+            ">" +
+            genLabel +
+            "</button>") +
         '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="add-to-playlist" data-script-id="' +
         escapeHtml(script.id) +
         '" title="Add to playlist"' +
@@ -8826,15 +9419,17 @@
         ' aria-label="Add to playlist">' +
         playlistIconSvg +
         "</button>" +
-        '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn script-card-actions-edit-btn' +
-        (editorOpen ? " is-active" : "") +
-        '" data-action="toggle-inline-script" data-script-id="' +
-        escapeHtml(script.id) +
-        '" title="' +
-        (editorOpen ? "Hide script editor" : "Show and edit script") +
-        '" aria-label="Edit script">' +
-        docIconSvg +
-        "</button>" +
+        (isSharedListenOnly
+          ? ""
+          : '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn script-card-actions-edit-btn' +
+            (editorOpen ? " is-active" : "") +
+            '" data-action="toggle-inline-script" data-script-id="' +
+            escapeHtml(script.id) +
+            '" title="' +
+            (editorOpen ? "Hide script editor" : "Show and edit script") +
+            '" aria-label="Edit script">' +
+            docIconSvg +
+            "</button>") +
         (showShareLink
           ? '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="share-audio" data-script-id="' +
             escapeHtml(script.id) +
@@ -8849,9 +9444,18 @@
         syncStatusHtml +
         '  <button type="button" class="script-card-icon-btn script-card-icon-btn-delete script-card-footer-delete" data-action="delete" data-script-id="' +
         escapeHtml(script.id) +
-        '" title="Delete script" aria-label="Delete">\u2715</button>' +
+        '" title="' +
+        (isSharedListenOnly ? "Remove from library" : "Delete script") +
+        '" aria-label="' +
+        (isSharedListenOnly ? "Remove" : "Delete") +
+        '">\u2715</button>' +
         "</div>"
       : "";
+    var libraryChip = isSharedListenOnly
+      ? '<span class="app-chip">Shared · ' +
+        escapeHtml((script.sharedFrom && script.sharedFrom.senderDisplayName) || "Someone") +
+        "</span>"
+      : '<span class="app-chip">My Library</span>';
     var cardClass =
       "app-card library-script-card" + (controlsExpanded ? "" : " library-script-card--collapsed");
     return (
@@ -8894,7 +9498,7 @@
       '<div class="app-card-meta">Created: ' +
       escapeHtml(formatDate(script.createdAt)) +
       "</div>" +
-      '<span class="app-chip">My Library</span>' +
+      libraryChip +
       "</div>" +
       regenHintHtml +
       inlineEditorHtml +
@@ -9108,6 +9712,13 @@
 
   function openAITextEditModal(scriptId) {
     if (!scriptId) return;
+    var scriptGuard = currentScripts.find(function (s) {
+      return s.id === scriptId;
+    });
+    if (scriptGuard && scriptIsSharedListenOnly(scriptGuard)) {
+      setMessage("Shared audio is listen-only and cannot be edited.", "info");
+      return;
+    }
     var text = getInlineScriptEditorText(scriptId);
     if (!String(text || "").trim()) {
       setMessage("Add script text before using AI edit.", "error");
@@ -9247,6 +9858,10 @@
 
   function saveInlineScript(script) {
     if (!currentUser || !script || !script.id) return;
+    if (scriptIsSharedListenOnly(script)) {
+      setMessage("Shared audio is listen-only and cannot be edited.", "info");
+      return;
+    }
     var list = document.getElementById("scripts-list");
     if (!list) return;
     var card = null;
@@ -9881,6 +10496,27 @@
 
   function deleteScript(script) {
     if (!currentUser) return;
+    if (scriptIsSharedListenOnly(script)) {
+      var token = script.sharedFrom && script.sharedFrom.shareToken;
+      if (!token) return;
+      var okShared = window.confirm(
+        'Remove "' + (script.title || "Shared audio") + '" from your library? This does not affect the sender’s copy.'
+      );
+      if (!okShared) return;
+      setMessage("Removing shared audio…", "");
+      db.collection("users")
+        .doc(currentUser.uid)
+        .collection("incomingSharedScripts")
+        .doc(token)
+        .delete()
+        .then(function () {
+          setMessage("Shared audio removed from your library.", "success");
+        })
+        .catch(function (e) {
+          setMessage(e.message || "Could not remove shared audio.", "error");
+        });
+      return;
+    }
     var ok = window.confirm('Delete "' + (script.title || "Untitled Script") + '"?');
     if (!ok) return;
     setMessage("Deleting...", "");
@@ -10202,6 +10838,26 @@
       });
   }
 
+  function postStripeStepUpCheckout() {
+    if (!currentUser) return;
+    setAccountMessage("Opening Stripe checkout for usage add-on…", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return backendRequest("/stripe/create-stepup-checkout-session", token, {});
+      })
+      .then(function (json) {
+        if (json && json.ok && json.url) {
+          window.location.assign(json.url);
+          return;
+        }
+        throw new Error((json && json.error) || "Checkout failed");
+      })
+      .catch(function (err) {
+        setAccountMessage(err.message || "Could not start usage add-on checkout.", "error");
+      });
+  }
+
   function postStripeBillingPortal() {
     if (!currentUser) return;
     setAccountMessage("Opening Stripe billing portal…", "");
@@ -10228,7 +10884,12 @@
       var changed = false;
 
       var stripeCheckout = params.get("stripe_checkout");
-      if (stripeCheckout === "success" || stripeCheckout === "cancel") {
+      if (
+        stripeCheckout === "success" ||
+        stripeCheckout === "cancel" ||
+        stripeCheckout === "stepup_success" ||
+        stripeCheckout === "stepup_cancel"
+      ) {
         params.delete("stripe_checkout");
         changed = true;
         if (stripeCheckout === "success") {
@@ -10236,6 +10897,19 @@
             "Stripe checkout finished. Your plan updates when the webhook runs (usually within a minute). Refresh if quotas do not change.",
             "success"
           );
+        } else if (stripeCheckout === "stepup_success") {
+          setMessage(
+            "Usage add-on payment received. Your word and TTS limits should increase within a minute.",
+            "success"
+          );
+          showAppBanner(
+            "Usage add-on purchased",
+            "Refresh Account → Usage if your limits do not update right away.",
+            "success"
+          );
+          refreshAccountInsightsFromCloud();
+        } else if (stripeCheckout === "stepup_cancel") {
+          setMessage("Usage add-on checkout was canceled — no charge.", "");
         } else {
           setMessage("Checkout was canceled — no billing changes.", "");
         }
@@ -10278,6 +10952,10 @@
 
   function generateAudioForScript(script) {
     if (!currentUser) return;
+    if (scriptIsSharedListenOnly(script)) {
+      setMessage("Shared audio is listen-only — playback uses the sender’s hosted file.", "info");
+      return;
+    }
     var text = (script.text || "").trim();
     if (!text) {
       setMessage("Script text is empty. Add text before generating audio.", "error");
@@ -11934,8 +12612,41 @@
     );
   }
 
+  function subscribeIncomingSharedScripts(uid) {
+    if (typeof incomingSharedUnsubscribe === "function") {
+      incomingSharedUnsubscribe();
+      incomingSharedUnsubscribe = null;
+    }
+    incomingSharedUnsubscribe = db
+      .collection("users")
+      .doc(uid)
+      .collection("incomingSharedScripts")
+      .onSnapshot(
+        function (snap) {
+          var incoming = snap.docs
+            .map(scriptFromIncomingDocument)
+            .filter(function (x) {
+              return !!x;
+            });
+          filterEntitledIncomingScripts(uid, incoming).then(function (entitled) {
+            incomingSharedScripts = entitled;
+            rebuildCurrentScriptsFromSources();
+          });
+        },
+        function (e) {
+          incomingSharedScripts = [];
+          rebuildCurrentScriptsFromSources();
+          setMessage(e.message || "Could not load shared scripts.", "error");
+        }
+      );
+  }
+
   function subscribeScripts(uid) {
-    teardownScriptsListener();
+    if (typeof scriptsUnsubscribe === "function") {
+      scriptsUnsubscribe();
+      scriptsUnsubscribe = null;
+    }
+    ownedScripts = [];
     scriptsUnsubscribe = scriptCollection(uid)
       .orderBy("createdAt", "desc")
       .onSnapshot(
@@ -11964,17 +12675,16 @@
             }
             ensureFrozenAudioSettingsCached(s);
           });
-          currentScripts = scripts;
-          updateTabCounts();
-          renderScripts(scripts);
-          renderSelectedPlaylistDetail();
-          if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+          ownedScripts = scripts;
+          rebuildCurrentScriptsFromSources();
         },
         function (e) {
+          ownedScripts = [];
+          rebuildCurrentScriptsFromSources();
           setMessage(e.message || "Could not load scripts.", "error");
-          renderScripts([]);
         }
       );
+    subscribeIncomingSharedScripts(uid);
   }
 
   auth.onAuthStateChanged(function (user) {
@@ -12048,6 +12758,7 @@
           subscribePremade();
           subscribeClonedVoices(user.uid);
           subscribeListeningStats(user.uid);
+          maybePresentPendingShareClaim();
         } else {
           renderNonAdmin(user.email, user.displayName);
         }

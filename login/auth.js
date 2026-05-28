@@ -218,8 +218,19 @@
     return syncUserProfile(cred.user, cred.additionalUserInfo).then(goApp);
   }
 
+  function resolvePostLoginUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search || "");
+      var next = (params.get("next") || "").trim();
+      if (next && next.charAt(0) === "/" && next.indexOf("//") !== 0) {
+        return next;
+      }
+    } catch (_e) {}
+    return "/app/";
+  }
+
   function goApp() {
-    window.location.href = "/app/";
+    window.location.href = resolvePostLoginUrl();
   }
 
   function applyAuthPersistence() {

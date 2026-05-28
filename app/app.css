@@ -3958,3 +3958,44 @@ html.fs-app[data-app-theme="light"] .mini-player-time {
   color: #fff;
   background: rgba(255, 255, 255, 0.12);
 }
+
+.share-claim-meta {
+  margin: 0.75rem 0 1rem;
+}
+.share-claim-meta-line {
+  margin: 0 0 0.35rem;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+.account-sharing-management-panel h5 {
+  margin: 0 0 0.45rem;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+.account-share-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.account-share-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--fs-border, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+}
+.account-share-list-item--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+.account-share-list-label {
+  font-size: 0.88rem;
+  line-height: 1.35;
+  min-width: 0;
+  word-break: break-word;
+}
