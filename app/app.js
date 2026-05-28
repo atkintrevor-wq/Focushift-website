@@ -7184,16 +7184,17 @@
 
   function resolveSubscriptionBillingChannel() {
     if (!currentUserProfile) return "unknown";
+    var tier = resolvedSubscriptionTier();
+    if (tier === "free") return "unknown";
     var src = String(
       currentUserProfile.subscriptionTierSource || currentUserProfile.subscriptionSource || ""
     )
       .trim()
       .toLowerCase();
-    // Explicit App Store source wins — do not send to Stripe because of an old stripeCustomerId.
     if (src === "store") return "store";
     if (src === "stripe") return "stripe";
     if (currentUserProfile.stripeCustomerId) return "stripe";
-    return "unknown";
+    return "store";
   }
 
   function profileUsesStripeBilling() {
