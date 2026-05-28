@@ -1803,6 +1803,49 @@
     return "https://us-central1-focushift-eeb60.cloudfunctions.net/api";
   }
 
+  var clientErrorReportingInstalled = false;
+  function reportClientError(message, feature, extra) {
+    if (!currentUser) return;
+    var text = message ? String(message).slice(0, 500) : "client error";
+    currentUser
+      .getIdToken(false)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/telemetry/client-error", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({
+            message: text,
+            platform: "web",
+            feature: feature || "general",
+            page: window.location.pathname + window.location.search,
+            extra: extra || null,
+          }),
+        });
+      })
+      .catch(function () {});
+  }
+
+  function installClientErrorReporting() {
+    if (clientErrorReportingInstalled) return;
+    clientErrorReportingInstalled = true;
+    window.addEventListener("error", function (ev) {
+      reportClientError(ev.message || "window error", "general", {
+        source: ev.filename || "",
+      });
+    });
+    window.addEventListener("unhandledrejection", function (ev) {
+      var msg =
+        ev.reason && ev.reason.message
+          ? ev.reason.message
+          : String(ev.reason || "unhandled rejection");
+      reportClientError(msg, "general");
+    });
+  }
+  installClientErrorReporting();
+
   function readAdminModeEnabled() {
     try {
       return localStorage.getItem(PREF_ADMIN_MODE_KEY) === "1";
@@ -10624,6 +10667,9 @@
     if (activeAudioScriptId === script.id && activeAudio) {
       if (activeAudio.paused) {
         activeAudio.play().catch(function () {
+          reportClientError("Could not play audio in browser.", "playback", {
+            script_id: script.id,
+          });
           setMessage("Could not play audio in browser.", "error");
         });
       } else {
@@ -10647,6 +10693,9 @@
         recordWebListen(activeAudioTitle, audioURL);
       })
       .catch(function () {
+        reportClientError("Could not play audio in browser.", "playback", {
+          script_id: script.id,
+        });
         setMessage("Could not play audio in browser.", "error");
         stopActiveAudio();
         renderScripts(currentScripts);
@@ -11085,6 +11134,7 @@
         })
         .catch(function (e) {
           var msg = e.message || "Audio generation failed.";
+          reportClientError(msg, "audio_generation", { script_id: script.id });
           if (!handleQuotaLimitError(msg)) setMessage(msg, "error");
         })
         .finally(function () {
