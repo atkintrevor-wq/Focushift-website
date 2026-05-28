@@ -61,8 +61,8 @@
     storageBytes: null,
     loading: false,
     error: null,
-    /** From POST /usage/refresh (Firestore config/app.freeStepUpEnabled). */
-    freeStepUpEnabled: true,
+    /** From POST /usage/refresh (Firestore config/app.freeStepUpEnabled). null = not loaded yet. */
+    freeStepUpEnabled: null,
     stepUpStripeConfigured: false,
     stepUpStripePriceDisplay: null,
   };
@@ -3088,6 +3088,8 @@
             var stepMode = stepBtn.getAttribute("data-stepup-mode") || "complimentary";
             if (stepMode === "stripe") {
               postStripeStepUpCheckout();
+            } else if (stepMode === "appstore") {
+              openAppStoreStepUpInstructions();
             } else {
               applyComplimentaryStepUp().catch(function (e) {
                 setAccountMessage((e && e.message) || "Could not apply usage add-on.", "error");
@@ -6805,7 +6807,17 @@
 
     var wordsLabel = STEP_UP_WORDS_BONUS.toLocaleString();
     var ttsLabel = STEP_UP_TTS_BONUS.toLocaleString();
-    var freeStepUp = accountInsightsSnapshot.freeStepUpEnabled !== false;
+    var freeStepUpKnown = accountInsightsSnapshot.freeStepUpEnabled !== null;
+    var freeStepUp = accountInsightsSnapshot.freeStepUpEnabled === true;
+    var billingChannel = resolveSubscriptionBillingChannel();
+
+    if (!freeStepUpKnown && accountInsightsSnapshot.loading) {
+      lede.textContent =
+        "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
+      action.hidden = true;
+      note.textContent = "Loading usage add-on options…";
+      return;
+    }
 
     if (freeStepUp) {
       lede.textContent =
@@ -6814,7 +6826,7 @@
       action.hidden = false;
       action.setAttribute("data-stepup-mode", "complimentary");
       note.textContent = "Complimentary while beta top-ups are enabled (same as iOS).";
-    } else if (profileUsesStripeBilling() && accountInsightsSnapshot.stepUpStripeConfigured) {
+    } else if (billingChannel === "stripe" && accountInsightsSnapshot.stepUpStripeConfigured) {
       var priceLabel = accountInsightsSnapshot.stepUpStripePriceDisplay;
       lede.textContent =
         "Add +" +
@@ -6828,14 +6840,34 @@
       action.hidden = false;
       action.setAttribute("data-stepup-mode", "stripe");
       note.textContent =
-        "One-time purchase via Stripe Checkout. Your limits update right after payment (usually within a minute).";
-    } else {
+        "One-time purchase via Stripe Checkout (your subscription is billed on the web). Limits update after payment.";
+    } else if (billingChannel === "store") {
       lede.textContent =
-        "Need more words or TTS this period? Paid usage add-ons are purchased in the iOS app (App Store), or via Stripe when your subscription is billed on the web.";
+        "Add +" +
+        wordsLabel +
+        " words and +" +
+        ttsLabel +
+        " TTS characters for this billing period.";
+      action.textContent = "Buy usage add-on (App Store)";
+      action.hidden = false;
+      action.setAttribute("data-stepup-mode", "appstore");
+      note.textContent =
+        "Your plan is billed through the App Store. Purchase the usage pack in the Focus Shift iOS app (Sandbox works for TestFlight testing).";
+    } else if (billingChannel === "stripe" && !accountInsightsSnapshot.stepUpStripeConfigured) {
+      lede.textContent =
+        "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
       action.hidden = true;
       action.removeAttribute("data-stepup-mode");
       note.textContent =
-        "App Store subscribers: buy usage packs in the iOS app. Web (Stripe) subscribers see a Buy button here when complimentary top-ups are off.";
+        "Stripe usage add-on checkout is not configured yet (set STRIPE_PRICE_STEPUP on the API function).";
+    } else {
+      lede.textContent =
+        "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
+      action.textContent = "Buy usage add-on";
+      action.hidden = false;
+      action.setAttribute("data-stepup-mode", "appstore");
+      note.textContent =
+        "If you subscribed on iPhone or iPad, buy the pack in the iOS app. If you subscribed on the web with Stripe, contact support if checkout is missing.";
     }
   }
 
@@ -7150,14 +7182,39 @@
     return "Your plan: " + name;
   }
 
-  function profileUsesStripeBilling() {
-    if (!currentUserProfile) return false;
-    var src = String(currentUserProfile.subscriptionTierSource || currentUserProfile.subscriptionSource || "")
+  function resolveSubscriptionBillingChannel() {
+    if (!currentUserProfile) return "unknown";
+    var src = String(
+      currentUserProfile.subscriptionTierSource || currentUserProfile.subscriptionSource || ""
+    )
       .trim()
       .toLowerCase();
-    if (src === "stripe") return true;
-    if (currentUserProfile.stripeCustomerId) return true;
-    return false;
+    // Explicit App Store source wins — do not send to Stripe because of an old stripeCustomerId.
+    if (src === "store") return "store";
+    if (src === "stripe") return "stripe";
+    if (currentUserProfile.stripeCustomerId) return "stripe";
+    return "unknown";
+  }
+
+  function profileUsesStripeBilling() {
+    return resolveSubscriptionBillingChannel() === "stripe";
+  }
+
+  function profileUsesAppStoreBilling() {
+    return resolveSubscriptionBillingChannel() === "store";
+  }
+
+  function openAppStoreStepUpInstructions() {
+    setAccountMessage(
+      "Usage add-ons on App Store plans are purchased in the Focus Shift iOS app. Open the app on iPhone or iPad → Account → Usage add-on. In TestFlight/Sandbox, sign in with your Sandbox Apple ID when prompted.",
+      "info"
+    );
+    showAppBanner(
+      "Purchase in the iOS app",
+      "Web checkout is for Stripe-billed plans only. App Store subscribers buy usage packs inside the iPhone/iPad app (Sandbox works for testing).",
+      "info",
+      { duration: 9000 }
+    );
   }
 
   function syncAccountBillingButtons() {
