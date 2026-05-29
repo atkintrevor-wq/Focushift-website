@@ -575,8 +575,8 @@
       title: "Home",
       content:
         "Create Personalized Mental Script — Tap to start the questionnaire and generate a personalized mental script (Starter and Creator). On Free, you'll be prompted to upgrade.\n\n" +
-        "Daily Spark — Tap to play today's short curated affirmation (Starter and Creator). A new spark appears after someone listens to the current one.\n\n" +
-        "Listen today — Set your playlist or library shortcut in Account → Preferences (same as iOS). Daily listening reminders are iOS-only today.\n\n" +
+        "Daily Spark — Tap to play today's short curated affirmation (Starter and Creator).\n\n" +
+        "Listen today — Tap to run your saved playlist or library shortcut. Set the target in Account → Preferences.\n\n" +
         "Listening activity — Your streak, plays (tap Plays to cycle week / month / year / all time), last played track, and milestones. Same Firestore fields as the iOS app.\n\n" +
         "Your library — Collapsible counts for scripts, audio-ready scripts, and playlists (synced from your account).\n\n" +
         "Account — Open the person icon (top right) for settings, plans, preferences, and usage.",
@@ -8604,6 +8604,8 @@
           : "";
       var dailySparkSub = escapeHtml(dailySparkSubtitleWeb());
       var dailySparkBusy = dailySparkState.loading || dailySparkState.playing;
+      var listenHead = hasPlayedTodayWeb(ls) ? "Listen again" : "Listen to an affirmation today";
+      var listenSub = escapeHtml(listenTodaySubtitleWeb(ls));
       var libDetailsOpen = readHomeLibrarySectionOpen() ? " open" : "";
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
@@ -8616,7 +8618,7 @@
         "    </div>" +
         '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
         "  </div>" +
-        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
+        '  <div class="app-card app-glass-card home-action-buttons-card" style="margin:0;padding:0.95rem 0.9rem;display:flex;flex-direction:column;gap:0.55rem;">' +
         '    <button type="button" class="home-daily-spark-row" id="home-daily-spark-row">' +
         '      <span class="home-daily-spark-icon" aria-hidden="true">' +
         '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4.5" fill="#fbbf24"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg></span>' +
@@ -8629,6 +8631,19 @@
         (dailySparkBusy
           ? '      <span class="home-daily-spark-spinner" aria-hidden="true"></span>'
           : '      <span class="home-daily-spark-play" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="#60a5fa"><path d="M8 5v14l11-7z"/></svg></span>') +
+        "    </button>" +
+        '    <button type="button" class="home-listen-today-row" id="home-listen-today-row">' +
+        '      <span class="home-listen-today-icon" aria-hidden="true">' +
+        '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#60a5fa" stroke-width="1.4"/><path d="M8 10c1.5 1.2 3.5 1.2 5 0M8 14h8" stroke="#93c5fd" stroke-width="1.3" stroke-linecap="round"/></svg></span>' +
+        '      <span class="home-listen-today-text">' +
+        '        <span class="home-listen-today-title">' +
+        escapeHtml(listenHead) +
+        "</span>" +
+        '        <span class="home-listen-today-sub">' +
+        listenSub +
+        "</span>" +
+        "      </span>" +
+        '      <span class="home-listen-today-chev" aria-hidden="true">›</span>' +
         "    </button>" +
         "  </div>" +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
@@ -8706,6 +8721,12 @@
       if (dailySparkRow) {
         dailySparkRow.addEventListener("click", function () {
           playDailySparkWeb();
+        });
+      }
+      var listenRow = document.getElementById("home-listen-today-row");
+      if (listenRow) {
+        listenRow.addEventListener("click", function () {
+          performListenTodayPrimaryAction();
         });
       }
       var playsPeriodBtn = document.getElementById("home-plays-period");
