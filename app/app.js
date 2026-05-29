@@ -50,6 +50,8 @@
   /** Display name when shortcut raw is playlist:<id> (same idea as iOS ListenTodayShortcut). */
   var PREF_LISTEN_SHORTCUT_PLAYLIST_NAME_KEY = "focusshiftWebPrefListenTodayPlaylistName";
   var PREF_LISTEN_SHORTCUT_SCRIPT_TITLE_KEY = "focusshiftWebPrefListenTodayScriptTitle";
+  /** Last Daily Spark sparkId we recorded a listen for (browser-local dedup). */
+  var PREF_DAILY_SPARK_LISTEN_KEY = "focusshiftWebDailySparkListenRecorded";
   /** "1" = Your library section expanded on home; "0" = collapsed. */
   var PREF_HOME_LIBRARY_OPEN_KEY = "focusshiftWebHomeLibraryOpen";
   var WEB_DEVICE_ID_KEY = "focusshiftWebDeviceId";
@@ -557,6 +559,15 @@
   var homeFlowStep = "landing";
   /** Set while asking Stripe-style follow-ups before final script (see iOS SurveyViewModel). */
   var homeClarifyFlow = null;
+  /** Cached Daily Spark payload + playback blob URL (Starter/Creator). */
+  var dailySparkState = {
+    spark: null,
+    loading: false,
+    playing: false,
+    error: null,
+    objectUrl: null,
+    lastFetchMs: 0,
+  };
 
   /** Per-tab help copy (matches iOS `ScreenHelpSheet` on Home, Library, Playlists, Voices, Audio). */
   var SCREEN_HELP = {
@@ -564,7 +575,8 @@
       title: "Home",
       content:
         "Create Personalized Mental Script — Tap to start the questionnaire and generate a personalized mental script (Starter and Creator). On Free, you'll be prompted to upgrade.\n\n" +
-        "Listen today — Tap the big row to play your saved shortcut (playlist or library track). Use Shortcuts & picks… or Account → Preferences to change what it does.\n\n" +
+        "Daily Spark — Tap to play today's short curated affirmation (Starter and Creator). A new spark appears after someone listens to the current one.\n\n" +
+        "Listen today — Set your playlist or library shortcut in Account → Preferences (same as iOS). Daily listening reminders are iOS-only today.\n\n" +
         "Listening activity — Your streak, plays (tap Plays to cycle week / month / year / all time), last played track, and milestones. Same Firestore fields as the iOS app.\n\n" +
         "Your library — Collapsible counts for scripts, audio-ready scripts, and playlists (synced from your account).\n\n" +
         "Account — Open the person icon (top right) for settings, plans, preferences, and usage.",
@@ -1382,7 +1394,7 @@
     if (mode === "playlists" || mode === "library") {
       writeListenShortcutTab(mode);
       syncListenShortcutPreferenceUi();
-      setAccountMessage("Listen today home-row shortcut updated.", "success");
+      setAccountMessage("Listen today shortcut updated.", "success");
       if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
       return;
     }
@@ -1397,7 +1409,7 @@
       writeListenShortcutPlaylist(pick.id, pick.name || "Playlist");
       syncListenShortcutPreferenceUi();
       setAccountMessage(
-        'Home row plays "' +
+        'Shortcut will play "' +
           (pick.name || "Playlist") +
           '". Pick another playlist below if you prefer.',
         "success"
@@ -1419,7 +1431,7 @@
       writeListenShortcutScript(spick.id, spick.title || "Script");
       syncListenShortcutPreferenceUi();
       setAccountMessage(
-        'Home row plays "' +
+        'Shortcut will play "' +
           (spick.title || "Script") +
           '". Pick another track below if you prefer.',
         "success"
@@ -1522,6 +1534,169 @@
     setAdminTab("playlists");
   }
 
+  function revokeDailySparkObjectUrl() {
+    if (dailySparkState.objectUrl) {
+      try {
+        URL.revokeObjectURL(dailySparkState.objectUrl);
+      } catch (_rev) {}
+      dailySparkState.objectUrl = null;
+    }
+  }
+
+  function readDailySparkListenRecorded() {
+    try {
+      return localStorage.getItem(PREF_DAILY_SPARK_LISTEN_KEY) || "";
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function writeDailySparkListenRecorded(sparkId) {
+    try {
+      localStorage.setItem(PREF_DAILY_SPARK_LISTEN_KEY, sparkId);
+    } catch (_e2) {}
+  }
+
+  function dailySparkSubtitleWeb() {
+    var spark = dailySparkState.spark;
+    if (spark) {
+      var media = [];
+      if (spark.voiceName) media.push(spark.voiceName);
+      if (spark.backgroundName) media.push(spark.backgroundName);
+      if (media.length) return media.join(" · ");
+      if (spark.scriptText) {
+        var line = String(spark.scriptText).trim().split("\n")[0];
+        if (line) return line.length > 80 ? line.slice(0, 77) + "\u2026" : line;
+      }
+    }
+    if (dailySparkState.loading) return "Loading today's spark\u2026";
+    if (dailySparkState.error) return dailySparkState.error;
+    var ls = webListeningStats || normalizeListeningDoc({});
+    var eff = effectiveStreakDisplayed(ls);
+    if (eff > 0) return "Keep your " + eff + "-day streak going.";
+    return "A short affirmation to start your day.";
+  }
+
+  function prepareDailySparkPlayback(spark) {
+    revokeDailySparkObjectUrl();
+    var ttsUrl = spark.ttsDownloadURL && String(spark.ttsDownloadURL).trim();
+    if (!ttsUrl) {
+      return Promise.reject(new Error("Daily Spark audio is not ready yet."));
+    }
+    return fetch(ttsUrl).then(function (r) {
+      if (!r.ok) throw new Error("Could not download Daily Spark audio.");
+      return r.arrayBuffer();
+    }).then(function (ttsAb) {
+      var bg = (spark.backgroundID && String(spark.backgroundID).trim()) || "";
+      if (!bg || bg === "bg-none") {
+        dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
+        return dailySparkState.objectUrl;
+      }
+      return mixTtsWithBackgroundToWavBlob(ttsAb, bg)
+        .then(function (wavBlob) {
+          dailySparkState.objectUrl = URL.createObjectURL(wavBlob);
+          return dailySparkState.objectUrl;
+        })
+        .catch(function () {
+          dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
+          return dailySparkState.objectUrl;
+        });
+    });
+  }
+
+  function fetchDailySparkCurrent(force) {
+    if (!currentUser || !isWebPaidTierForAI()) {
+      dailySparkState.spark = null;
+      return Promise.resolve(null);
+    }
+    if (dailySparkState.loading) return Promise.resolve(dailySparkState.spark);
+    if (
+      !force &&
+      dailySparkState.lastFetchMs &&
+      Date.now() - dailySparkState.lastFetchMs < 120000 &&
+      dailySparkState.spark
+    ) {
+      return Promise.resolve(dailySparkState.spark);
+    }
+    dailySparkState.loading = true;
+    dailySparkState.error = null;
+    return currentUser
+      .getIdToken(false)
+      .then(function (token) {
+        return backendGet("/daily-spark/current", token);
+      })
+      .then(function (json) {
+        dailySparkState.spark = (json && json.spark) || null;
+        dailySparkState.lastFetchMs = Date.now();
+        if (!dailySparkState.spark && json && json.message) {
+          dailySparkState.error = json.message;
+        }
+        return dailySparkState.spark;
+      })
+      .catch(function (e) {
+        dailySparkState.error = e.message || "Could not load Daily Spark.";
+        return null;
+      })
+      .finally(function () {
+        dailySparkState.loading = false;
+        if (activeAdminTab === "home" && homeFlowStep === "landing") {
+          renderHomeFlow((currentUser && currentUser.displayName) || "");
+        }
+      });
+  }
+
+  function recordDailySparkListen(sparkId) {
+    if (!currentUser || !sparkId || readDailySparkListenRecorded() === sparkId) {
+      return Promise.resolve();
+    }
+    return currentUser
+      .getIdToken(false)
+      .then(function (token) {
+        return backendRequest("/daily-spark/listen", token, { sparkId: sparkId });
+      })
+      .then(function () {
+        writeDailySparkListenRecorded(sparkId);
+      })
+      .catch(function () {});
+  }
+
+  function playDailySparkWeb() {
+    if (!isWebPaidTierForAI()) {
+      setMessage("Daily Spark requires Starter or Creator.", "info");
+      openAccountModal();
+      return;
+    }
+    if (dailySparkState.playing) return;
+    dailySparkState.playing = true;
+    fetchDailySparkCurrent(true)
+      .then(function (spark) {
+        if (!spark) {
+          throw new Error(dailySparkState.error || "Daily Spark is not ready yet.");
+        }
+        return prepareDailySparkPlayback(spark).then(function (url) {
+          var script = {
+            id: "daily_spark_" + spark.sparkId,
+            title: spark.title || "Daily Spark",
+            text: spark.scriptText || "",
+            audioURL: url,
+            voiceID: spark.voiceID,
+            backgroundID: spark.backgroundID,
+          };
+          togglePlayScriptAudio(script);
+          recordDailySparkListen(spark.sparkId);
+        });
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Could not play Daily Spark.", "error");
+      })
+      .finally(function () {
+        dailySparkState.playing = false;
+        if (activeAdminTab === "home" && homeFlowStep === "landing") {
+          renderHomeFlow((currentUser && currentUser.displayName) || "");
+        }
+      });
+  }
+
   function closeListenTodayModal() {
     var bd = document.getElementById("listen-today-backdrop");
     if (bd) bd.hidden = true;
@@ -1538,7 +1713,10 @@
     });
     var parts = [];
     parts.push(
-      '<p class="app-muted" style="margin:0 0 0.65rem;font-size:0.86rem;">Same idea as the iOS home card: tap the big row for your saved shortcut, or use the options below.</p>'
+      '<p class="app-muted" style="margin:0 0 0.65rem;font-size:0.86rem;">Manage your Listen Today shortcut (Account → Preferences). On iOS, this shortcut is used when a daily reminder fires; on web you can run it from here.</p>'
+    );
+    parts.push(
+      '<button type="button" class="app-btn app-btn-primary listen-today-block-btn" id="listen-today-run-shortcut">Run Listen Today shortcut now</button>'
     );
     parts.push('<div class="listen-today-modal-section"><strong>Replay</strong>');
     parts.push(
@@ -1565,7 +1743,7 @@
                 '">Play</button>' +
                 '<button type="button" class="app-btn app-btn-ghost listen-today-script-shortcut" data-listen-script-id="' +
                 escapeHtml(s.id) +
-                '">Home row</button>' +
+                '">Set shortcut</button>' +
                 "</span></div>"
               );
             })
@@ -1574,7 +1752,7 @@
       );
     }
     parts.push("</div>");
-    parts.push('<div class="listen-today-modal-section"><strong>Shortcut when you tap the home row</strong>');
+    parts.push('<div class="listen-today-modal-section"><strong>Listen Today shortcut target</strong>');
     parts.push(
       '<p class="app-muted" style="margin:0.25rem 0 0.45rem;font-size:0.8rem;">Saved in this browser. Fine-tune in <strong>Account → Preferences</strong> (playlist or library track).</p>'
     );
@@ -1608,6 +1786,13 @@
     }
     parts.push("</div>");
     host.innerHTML = parts.join("");
+    var runShortcut = document.getElementById("listen-today-run-shortcut");
+    if (runShortcut) {
+      runShortcut.addEventListener("click", function () {
+        closeListenTodayModal();
+        performListenTodayPrimaryAction();
+      });
+    }
     var replay = document.getElementById("listen-today-replay-last");
     if (replay) {
       replay.addEventListener("click", function () {
@@ -1642,7 +1827,7 @@
         syncListenShortcutPreferenceUi();
         if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
         generationMessage(
-          'Home row will play "' + (script.title || "Script") + '". Use Preferences to switch targets.',
+          'Shortcut will play "' + (script.title || "Script") + '". Use Preferences to switch targets.',
           "success"
         );
       });
@@ -1652,14 +1837,14 @@
       syncListenShortcutPreferenceUi();
       closeListenTodayModal();
       if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
-      generationMessage("Home row will open your Library tab.", "success");
+      generationMessage("Shortcut will open your Library tab.", "success");
     });
     document.getElementById("listen-today-shortcut-playlists").addEventListener("click", function () {
       writeListenShortcutTab("playlists");
       syncListenShortcutPreferenceUi();
       closeListenTodayModal();
       if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
-      generationMessage("Home row will open your Playlists tab.", "success");
+      generationMessage("Shortcut will open your Playlists tab.", "success");
     });
     host.querySelectorAll(".listen-today-set-playlist").forEach(function (btn) {
       btn.addEventListener("click", function () {
@@ -1669,7 +1854,7 @@
         closeListenTodayModal();
         syncListenShortcutPreferenceUi();
         if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
-        generationMessage('Shortcut set — tap "Listen today" on Home to play "' + nm + '".', "success");
+        generationMessage('Shortcut set — use Manage Listen Today shortcut to play "' + nm + '".', "success");
       });
     });
     bd.hidden = false;
@@ -2633,8 +2818,8 @@
       '        <h4 class="account-section-card__title">App preferences</h4>' +
       '        <p class="app-muted account-section-card__text">These options apply in this browser only.</p>' +
       '        <label class="account-pref-row"><input type="checkbox" id="pref-auto-play-next" /> Auto-Play Next</label>' +
-      '        <label class="account-pref-row" for="pref-listen-shortcut-mode">Listen today — home row</label>' +
-      '        <p class="app-muted account-section-card__text" style="margin-top:0.12rem;">Choose what happens when you tap the big listening row on Home (saved in this browser).</p>' +
+      '        <label class="account-pref-row" for="pref-listen-shortcut-mode">Listen today shortcut</label>' +
+      '        <p class="app-muted account-section-card__text" style="margin-top:0.12rem;">Choose a tab, playlist, or library track for your Listen Today shortcut (saved in this browser). Daily reminders are iOS-only; use Manage shortcut below to test it on web.</p>' +
       '        <select id="pref-listen-shortcut-mode" class="app-btn" style="width:100%;text-align:left;margin-top:0.35rem;">' +
       '          <option value="playlists">Open Playlists tab</option>' +
       '          <option value="library">Open Library tab</option>' +
@@ -2649,6 +2834,7 @@
       '          <label class="account-pref-row" for="pref-listen-shortcut-script-id">Library track</label>' +
       '          <select id="pref-listen-shortcut-script-id" class="app-btn" style="width:100%;text-align:left;margin-top:0.15rem;"></select>' +
       "        </div>" +
+      '        <button type="button" class="app-btn app-btn-secondary" id="account-pref-open-listen-today" style="margin-top:0.55rem;width:100%;">Manage Listen Today shortcut\u2026</button>' +
       "      </section>" +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Appearance</h4>' +
@@ -3334,7 +3520,7 @@
       var nm = opt ? opt.textContent.trim() : "Playlist";
       writeListenShortcutPlaylist(id, nm);
       syncListenShortcutPreferenceUi();
-      setAccountMessage('Home row will play playlist "' + nm + '".', "success");
+      setAccountMessage('Shortcut will play playlist "' + nm + '".', "success");
       if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
     });
     document.getElementById("pref-listen-shortcut-script-id").addEventListener("change", function () {
@@ -3344,9 +3530,16 @@
       var t = opt ? opt.textContent.trim() : "Library track";
       writeListenShortcutScript(id, t);
       syncListenShortcutPreferenceUi();
-      setAccountMessage('Home row will play "' + t + '".', "success");
+      setAccountMessage('Shortcut will play "' + t + '".', "success");
       if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
     });
+    var openListenTodayPrefBtn = document.getElementById("account-pref-open-listen-today");
+    if (openListenTodayPrefBtn) {
+      openListenTodayPrefBtn.addEventListener("click", function () {
+        closeAccountModal();
+        openListenTodayModal();
+      });
+    }
     ["pref-theme-system", "pref-theme-dark", "pref-theme-light"].forEach(function (id) {
       var el = document.getElementById(id);
       if (!el) return;
@@ -8409,8 +8602,8 @@
         bestStreak > 0
           ? '<div class="app-muted" style="font-size:0.72rem;margin-top:0.2rem;">Best streak: ' + escapeHtml(String(bestStreak)) + "</div>"
           : "";
-      var listenHead = hasPlayedTodayWeb(ls) ? "Listen again" : "Listen to an affirmation today";
-      var listenSub = escapeHtml(listenTodaySubtitleWeb(ls));
+      var dailySparkSub = escapeHtml(dailySparkSubtitleWeb());
+      var dailySparkBusy = dailySparkState.loading || dailySparkState.playing;
       var libDetailsOpen = readHomeLibrarySectionOpen() ? " open" : "";
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
@@ -8424,23 +8617,24 @@
         '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
         "  </div>" +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
-        '    <strong style="font-size:0.95rem;">Listening activity</strong>' +
-        '    <p class="app-muted" style="margin:0.3rem 0 0.65rem;font-size:0.82rem;">Streak, plays, last session, and milestones sync with the iOS app (same Firestore fields).</p>' +
-        '    <button type="button" class="home-listen-today-row" id="home-listen-today-row">' +
-        '      <span class="home-listen-today-icon" aria-hidden="true">' +
-        '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#60a5fa" stroke-width="1.4"/><path d="M8 10c1.5 1.2 3.5 1.2 5 0M8 14h8" stroke="#93c5fd" stroke-width="1.3" stroke-linecap="round"/></svg></span>' +
+        '    <button type="button" class="home-daily-spark-row" id="home-daily-spark-row">' +
+        '      <span class="home-daily-spark-icon" aria-hidden="true">' +
+        '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4.5" fill="#fbbf24"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg></span>' +
         '      <span class="home-listen-today-text">' +
-        '        <span class="home-listen-today-title">' +
-        escapeHtml(listenHead) +
-        "</span>" +
+        '        <span class="home-listen-today-title">Daily Spark</span>' +
         '        <span class="home-listen-today-sub">' +
-        listenSub +
+        dailySparkSub +
         "</span>" +
         "      </span>" +
-        '      <span class="home-listen-today-chev" aria-hidden="true">›</span>' +
+        (dailySparkBusy
+          ? '      <span class="home-daily-spark-spinner" aria-hidden="true"></span>'
+          : '      <span class="home-daily-spark-play" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="#60a5fa"><path d="M8 5v14l11-7z"/></svg></span>') +
         "    </button>" +
-        '    <button type="button" class="home-listen-today-manage" id="home-listen-today-manage">Shortcuts &amp; picks…</button>' +
-        '    <div class="home-listening-grid" style="margin-top:0.75rem;">' +
+        "  </div>" +
+        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
+        '    <strong style="font-size:0.95rem;">Listening activity</strong>' +
+        '    <p class="app-muted" style="margin:0.3rem 0 0.65rem;font-size:0.82rem;">Streak, plays, last session, and milestones sync with the iOS app (same Firestore fields).</p>' +
+        '    <div class="home-listening-grid" style="margin-top:0;">' +
         '      <div class="home-listen-stat">' +
         '        <div class="app-muted home-listen-label">Streak</div>' +
         '        <div class="home-listen-value">' +
@@ -8497,7 +8691,21 @@
       var startBtn = document.getElementById("home-start-create");
       if (startBtn) {
         startBtn.addEventListener("click", function () {
+          if (!isWebPaidTierForAI()) {
+            setMessage("AI script generation requires Starter or Creator.", "info");
+            openAccountModal();
+            return;
+          }
           setHomeFlowStep("category", displayName);
+        });
+      }
+      if (isWebPaidTierForAI()) {
+        fetchDailySparkCurrent(false);
+      }
+      var dailySparkRow = document.getElementById("home-daily-spark-row");
+      if (dailySparkRow) {
+        dailySparkRow.addEventListener("click", function () {
+          playDailySparkWeb();
         });
       }
       var playsPeriodBtn = document.getElementById("home-plays-period");
@@ -8506,19 +8714,6 @@
           ev.stopPropagation();
           cycleHomePlaysPeriod();
           renderHomeFlow(displayName);
-        });
-      }
-      var listenRow = document.getElementById("home-listen-today-row");
-      if (listenRow) {
-        listenRow.addEventListener("click", function () {
-          performListenTodayPrimaryAction();
-        });
-      }
-      var listenManage = document.getElementById("home-listen-today-manage");
-      if (listenManage) {
-        listenManage.addEventListener("click", function (ev) {
-          ev.preventDefault();
-          openListenTodayModal();
         });
       }
       var libDetails = document.getElementById("home-library-details");
@@ -10983,6 +11178,33 @@
         timeEl.textContent = cur;
       }
     }
+  }
+
+  function backendGet(path, token) {
+    return fetch(backendBaseURL() + path, {
+      method: "GET",
+      headers: {
+        Authorization: "Bearer " + token,
+      },
+    }).then(function (resp) {
+      return resp.text().then(function (text) {
+        var json = null;
+        if (text) {
+          try {
+            json = JSON.parse(text);
+          } catch (_e) {
+            json = null;
+          }
+        }
+        if (!resp.ok) {
+          throw new Error((json && json.error) || text || "Request failed (" + resp.status + ")");
+        }
+        if (json == null && text) {
+          throw new Error("Could not parse JSON from server.");
+        }
+        return json != null ? json : {};
+      });
+    });
   }
 
   function backendRequest(path, token, body) {

@@ -796,6 +796,7 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   gap: 0.35rem;
 }
 .home-milestone { font-size: 0.88rem; line-height: 1.35; }
+.home-daily-spark-row,
 .home-listen-today-row {
   display: flex;
   align-items: center;
@@ -807,7 +808,6 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   font: inherit;
   color: inherit;
   cursor: pointer;
-  /* Match .app-glass-card (Create Personalized Mental Script panel) */
   border: 1px solid var(--app-surface-card-border);
   border-radius: 14px;
   background: linear-gradient(180deg, var(--app-surface-glass-top), var(--app-surface-glass-bottom));
@@ -816,11 +816,17 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   -webkit-backdrop-filter: blur(12px);
   transition: border-color 0.12s ease, box-shadow 0.12s ease, filter 0.12s ease;
 }
+.home-daily-spark-row:hover {
+  border-color: rgba(251, 191, 36, 0.55);
+  box-shadow: var(--app-surface-card-shadow), 0 0 0 1px rgba(245, 158, 11, 0.22);
+  filter: brightness(1.06);
+}
 .home-listen-today-row:hover {
   border-color: rgba(96, 165, 250, 0.55);
   box-shadow: var(--app-surface-card-shadow), 0 0 0 1px rgba(59, 130, 246, 0.22);
   filter: brightness(1.06);
 }
+.home-daily-spark-icon,
 .home-listen-today-icon {
   flex-shrink: 0;
   display: flex;
@@ -843,6 +849,24 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   font-size: 0.82rem;
   line-height: 1.35;
   color: var(--muted, #9bb0d0);
+}
+.home-daily-spark-play,
+.home-daily-spark-spinner {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-daily-spark-spinner {
+  width: 1.35rem;
+  height: 1.35rem;
+  border: 2px solid rgba(96, 165, 250, 0.25);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: home-daily-spark-spin 0.75s linear infinite;
+}
+@keyframes home-daily-spark-spin {
+  to { transform: rotate(360deg); }
 }
 .home-listen-today-chev {
   flex-shrink: 0;
