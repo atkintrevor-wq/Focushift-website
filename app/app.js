@@ -1493,8 +1493,9 @@
         return p.id === pid;
       });
       if (pl) {
-        startPlaylistPlayback(pl, null);
         setAdminTab("playlists");
+        openPlaylistDetailView(pl.id);
+        startPlaylistPlayback(pl, null);
         return;
       }
       setAdminTab("playlists");
@@ -8618,7 +8619,8 @@
         "    </div>" +
         '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
         "  </div>" +
-        '  <div class="app-card app-glass-card home-action-buttons-card" style="margin:0;padding:0.95rem 0.9rem;display:flex;flex-direction:column;gap:0.55rem;">' +
+        '  <div class="app-card app-glass-card home-action-buttons-card">' +
+        '    <div class="home-action-buttons-grid">' +
         '    <button type="button" class="home-daily-spark-row" id="home-daily-spark-row">' +
         '      <span class="home-daily-spark-icon" aria-hidden="true">' +
         '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="4.5" fill="#fbbf24"/><path d="M12 2v2M12 20v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M2 12h2M20 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" stroke="#f59e0b" stroke-width="1.5" stroke-linecap="round"/></svg></span>' +
@@ -8645,6 +8647,7 @@
         "      </span>" +
         '      <span class="home-listen-today-chev" aria-hidden="true">›</span>' +
         "    </button>" +
+        "    </div>" +
         "  </div>" +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
         '    <strong style="font-size:0.95rem;">Listening activity</strong>' +

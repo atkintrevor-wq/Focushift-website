@@ -796,6 +796,28 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   gap: 0.35rem;
 }
 .home-milestone { font-size: 0.88rem; line-height: 1.35; }
+.home-action-buttons-card {
+  margin: 0;
+  padding: 0.95rem 0.9rem;
+}
+.home-action-buttons-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+@media (min-width: 640px) {
+  .home-action-buttons-grid {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .home-action-buttons-grid .home-daily-spark-row,
+  .home-action-buttons-grid .home-listen-today-row {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 100%;
+    min-height: 4.75rem;
+  }
+}
 .home-daily-spark-row,
 .home-listen-today-row {
   display: flex;
@@ -804,6 +826,7 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   width: 100%;
   margin: 0;
   padding: 0.75rem 0.65rem;
+  box-sizing: border-box;
   text-align: left;
   font: inherit;
   color: inherit;
@@ -844,11 +867,16 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.01em;
+  line-height: 1.25;
 }
 .home-listen-today-sub {
   font-size: 0.82rem;
   line-height: 1.35;
   color: var(--muted, #9bb0d0);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .home-daily-spark-play,
 .home-daily-spark-spinner {
