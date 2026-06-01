@@ -2494,7 +2494,7 @@
       '    <button type="button" class="app-tab-btn" data-admin-tab="library">Library <span class="app-tab-count" id="count-library">0</span></button>' +
       '    <button type="button" class="app-tab-btn" data-admin-tab="playlists">Playlists <span class="app-tab-count" id="count-playlists">0</span></button>' +
       '    <button type="button" class="app-tab-btn" data-admin-tab="voices">Voices</button>' +
-      '    <button type="button" class="app-tab-btn" data-admin-tab="audio">Audio</button>' +
+      '    <button type="button" class="app-tab-btn" data-admin-tab="audio">Sounds</button>' +
       "  </nav>" +
       "</div>" +
       "</div>" +
