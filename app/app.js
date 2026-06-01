@@ -515,6 +515,7 @@
   }
 
   function handleUserBackgroundImportSelected(ev) {
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.bgImport)) return;
     var input = ev && ev.target;
     var file = input && input.files && input.files[0] ? input.files[0] : null;
     if (input)
@@ -3252,6 +3253,7 @@
     });
     document.getElementById("library-dropdown-import").addEventListener("click", function () {
       closeLibraryCreateMenu();
+      if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.libraryImport)) return;
       var inp = document.getElementById("script-import-audio-input");
       if (inp) inp.click();
     });
@@ -3723,6 +3725,7 @@
     var audioImportInput = document.getElementById("audio-import-input");
     if (audioImportBtn && audioImportInput) {
       audioImportBtn.addEventListener("click", function () {
+        if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.bgImport)) return;
         setBackgroundsMessage("Choose an audio file (MP3, M4A, WAV, …). Stored only in this browser.", "");
         audioImportInput.click();
       });
@@ -3748,10 +3751,12 @@
       requestAnimationFrame(syncSubnavStickyOffset);
     });
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
+      if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceUpload)) return;
       setVoicesMessage("Choose a clear voice audio file to upload.", "");
       beginVoiceUploadFlow("clone");
     });
     document.getElementById("btn-voice-record").addEventListener("click", function () {
+      if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return;
       openCloneVoiceGuide();
     });
     document.getElementById("voice-upload-input").addEventListener("change", function (ev) {
@@ -3871,6 +3876,7 @@
     var sdkEl = document.getElementById("account-privacy-firebase-sdk");
     if (sdkEl) sdkEl.textContent = (firebase && firebase.SDK_VERSION) || "-";
     applyAdminModeUi();
+    syncPaidFeatureControls();
   }
 
   function openPlaylistPicker(script, onSuccess) {
@@ -5108,6 +5114,7 @@
   }
 
   function beginVoiceUploadFlow(mode) {
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceUpload)) return;
     var input = document.getElementById("voice-upload-input");
     if (!input) return;
     input.value = "";
@@ -5498,6 +5505,10 @@
   }
 
   function openCloneVoiceGuideInternal() {
+    if (!isWebPaidTierForAI()) {
+      promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.voiceClone);
+      return;
+    }
     setVoiceRecordingGuideVisible(true);
     setVoiceRecordButtonState(false);
     setVoicesMessage("Review the script, then tap Start Recording when ready.", "");
@@ -5512,6 +5523,7 @@
   }
 
   function openCloneVoiceGuide() {
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return;
     ensureVoiceCloneConsentThen(function () {
       openCloneVoiceGuideInternal();
     });
@@ -5768,6 +5780,7 @@
   function uploadVoiceSample(file, mode) {
     if (!currentUser) return;
     if (!file) return;
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return;
     if (!file.type || file.type.indexOf("audio/") !== 0) {
       setVoicesMessage("Please choose an audio file.", "error");
       return;
@@ -7528,6 +7541,7 @@
     headlineEl.classList.remove("tier-free", "tier-starter", "tier-creator");
     headlineEl.classList.add("tier-" + tier);
     syncAccountBillingButtons();
+    syncPaidFeatureControls();
   }
 
   function resetAccountPlansPanel() {
@@ -9953,6 +9967,47 @@
     return tier === "starter" || tier === "creator";
   }
 
+  var WEB_PAID_FEATURE_COPY = {
+    voiceClone:
+      "Voice cloning is available with Starter or Creator. Upgrade to clone your own voice.",
+    voiceUpload:
+      "Uploading custom voice audio is available with Starter or Creator. Upgrade to add your own voices.",
+    bgImport:
+      "Importing background audio is available with Starter or Creator. Upgrade to add your own sounds.",
+    libraryImport:
+      "Importing audio files is available with Starter or Creator. Upgrade to add your own audio.",
+  };
+
+  function promptWebPaidUpgrade(detail) {
+    showAppBanner("Paid feature", detail || "This feature requires Starter or Creator.", "info", {
+      duration: 7000,
+    });
+    openAccountModal();
+  }
+
+  function requireWebPaidTier(detail) {
+    if (isWebPaidTierForAI()) return true;
+    promptWebPaidUpgrade(detail);
+    return false;
+  }
+
+  function syncPaidFeatureControls() {
+    var paid = isWebPaidTierForAI();
+    var lockedClass = "is-tier-locked";
+    var controls = [
+      document.getElementById("btn-voice-clone"),
+      document.getElementById("btn-voice-record"),
+      document.getElementById("btn-audio-import"),
+      document.getElementById("library-dropdown-import"),
+    ];
+    controls.forEach(function (el) {
+      if (!el) return;
+      el.classList.toggle(lockedClass, !paid);
+      el.setAttribute("aria-disabled", paid ? "false" : "true");
+      el.title = paid ? "" : "Starter or Creator required";
+    });
+  }
+
   function setAITextEditError(message, kind) {
     var el = document.getElementById("ai-text-edit-error");
     if (!el) return;
@@ -11489,6 +11544,7 @@
 
   function importScriptAudioFromFile(file) {
     if (!currentUser || !file) return;
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.libraryImport)) return;
     if (typeof firebase.storage !== "function") {
       setMessage("Firebase Storage is not loaded. Refresh the page and try again.", "error");
       return;

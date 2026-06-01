@@ -36,6 +36,12 @@
   --app-empty-hint-fg: #c8d4e8;
   --app-empty-hint-strong: #e8eef8;
   --app-empty-hint-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 4px 20px rgba(0, 0, 0, 0.18);
+  --voice-script-bg: rgba(255, 255, 255, 0.03);
+  --voice-script-border: rgba(255, 255, 255, 0.12);
+  --voice-script-fg: var(--text, #e7eefc);
+  --voice-script-active-bg: rgba(59, 130, 246, 0.14);
+  --voice-script-active-fg: #f4f8ff;
+  --voice-script-active-border: rgba(147, 197, 253, 0.92);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -695,6 +701,22 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   opacity: 0.55;
   cursor: not-allowed;
   transform: none;
+}
+.app-btn.is-tier-locked,
+.library-dropdown-item.is-tier-locked {
+  opacity: 0.52;
+  filter: grayscale(0.12);
+  cursor: pointer;
+}
+.app-btn.is-tier-locked:hover,
+.library-dropdown-item.is-tier-locked:hover {
+  border-color: rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.05);
+}
+html.fs-app[data-app-theme="light"] .app-btn.is-tier-locked:hover,
+html.fs-app[data-app-theme="light"] .library-dropdown-item.is-tier-locked:hover {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.18);
 }
 .app-btn-danger { border-color: rgba(220,38,38,0.5); }
 .app-btn-primary {
@@ -2897,11 +2919,11 @@ body.fs-app-body.fs-modal-scroll-lock {
   white-space: pre-wrap;
   line-height: 1.48;
   font-size: 0.9rem;
-  color: #e7eefc;
-  border: 1px solid rgba(255,255,255,0.12);
+  color: var(--voice-script-fg, var(--text, #e7eefc));
+  border: 1px solid var(--voice-script-border, rgba(255, 255, 255, 0.12));
   border-radius: 12px;
   padding: 0.72rem;
-  background: rgba(255,255,255,0.03);
+  background: var(--voice-script-bg, rgba(255, 255, 255, 0.03));
 }
 .voice-adjust-modal {
   max-width: 560px;
@@ -3029,9 +3051,9 @@ body.fs-app-body.fs-modal-scroll-lock {
   margin-bottom: 0;
 }
 .voice-script-paragraph.is-active {
-  background: rgba(59, 130, 246, 0.14);
-  border-left-color: rgba(147, 197, 253, 0.92);
-  color: #f4f8ff;
+  background: var(--voice-script-active-bg, rgba(59, 130, 246, 0.14));
+  border-left-color: var(--voice-script-active-border, rgba(147, 197, 253, 0.92));
+  color: var(--voice-script-active-fg, #f4f8ff);
   border-radius: 8px;
   padding-left: 0.4rem;
 }
@@ -3593,6 +3615,12 @@ html.fs-app[data-app-theme="light"] {
   --app-empty-hint-fg: #334155;
   --app-empty-hint-strong: #0f172a;
   --app-empty-hint-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 12px rgba(15, 23, 42, 0.06);
+  --voice-script-bg: rgba(15, 23, 42, 0.04);
+  --voice-script-border: rgba(15, 23, 42, 0.12);
+  --voice-script-fg: #334155;
+  --voice-script-active-bg: rgba(37, 99, 235, 0.12);
+  --voice-script-active-fg: #0f172a;
+  --voice-script-active-border: rgba(37, 99, 235, 0.55);
 }
 
 html.fs-app[data-app-theme="light"] body.fs-app-body {
@@ -3659,6 +3687,12 @@ html.fs-app[data-app-theme="light"] .gen-clarify-field > label {
     --app-empty-hint-fg: #334155;
     --app-empty-hint-strong: #0f172a;
     --app-empty-hint-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 12px rgba(15, 23, 42, 0.06);
+    --voice-script-bg: rgba(15, 23, 42, 0.04);
+    --voice-script-border: rgba(15, 23, 42, 0.12);
+    --voice-script-fg: #334155;
+    --voice-script-active-bg: rgba(37, 99, 235, 0.12);
+    --voice-script-active-fg: #0f172a;
+    --voice-script-active-border: rgba(37, 99, 235, 0.55);
   }
 
   html.fs-app[data-app-theme="system"] body.fs-app-body {
