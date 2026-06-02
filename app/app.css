@@ -3639,11 +3639,36 @@ textarea.gen-survey-textarea:focus {
   font-weight: 700;
 }
 .gen-stepper-value {
-  min-width: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: 0.35rem 0.65rem;
   text-align: center;
   font-weight: 700;
-  font-size: 1.05rem;
-  color: #f1f5f9;
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--text, #f1f5f9);
+  background: var(--app-surface-inset, rgba(255, 255, 255, 0.12));
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.35));
+  border-radius: 10px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.gen-stepper-locked .gen-stepper-value,
+.gen-stepper-locked > span {
+  color: var(--text, #f1f5f9);
+}
+.gen-clarify-progress {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text, #f1f5f9);
+}
+.gen-clarify-progress strong {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 .gen-stepper-locked {
   opacity: 0.85;
@@ -3760,6 +3785,17 @@ html.fs-app[data-app-theme="light"] .gen-clarify-field > label {
   color: var(--muted, #64748b);
 }
 
+html.fs-app[data-app-theme="light"] .gen-stepper-value {
+  color: var(--text, #0f172a);
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+html.fs-app[data-app-theme="light"] .gen-clarify-progress {
+  color: var(--text, #0f172a);
+}
+
 @media (prefers-color-scheme: light) {
   html.fs-app[data-app-theme="system"] {
     --bg: #e8edf4;
@@ -3830,6 +3866,17 @@ html.fs-app[data-app-theme="light"] .gen-clarify-field > label {
   html.fs-app[data-app-theme="system"] .gen-field-label,
   html.fs-app[data-app-theme="system"] .gen-clarify-field > label {
     color: var(--muted, #64748b);
+  }
+
+  html.fs-app[data-app-theme="system"] .gen-stepper-value {
+    color: var(--text, #0f172a);
+    background: rgba(15, 23, 42, 0.06);
+    border-color: rgba(15, 23, 42, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  }
+
+  html.fs-app[data-app-theme="system"] .gen-clarify-progress {
+    color: var(--text, #0f172a);
   }
 
   html.fs-app[data-app-theme="system"] .library-toolbar-row,

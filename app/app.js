@@ -8963,11 +8963,11 @@
       var turnHint = clarifyingTurnGoal(cf.currentIndex || 0);
       el.innerHTML =
         '<div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
-        '  <p class="app-muted" style="margin:0 0 0.35rem;">Clarifying question ' +
+        '  <p class="gen-clarify-progress">Clarifying question <strong>' +
         escapeHtml(String(cf.currentIndex + 1)) +
-        " of " +
+        "</strong> of <strong>" +
         escapeHtml(String(cf.requested)) +
-        "</p>" +
+        "</strong></p>" +
         '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
         escapeHtml(turnHint) +
         "</p>" +
@@ -9084,7 +9084,7 @@
           '    <button type="button" class="app-btn gen-stepper-btn" id="gen-clarify-plus" aria-label="More questions">+</button>' +
           '    <input type="hidden" id="gen-clarify-count" value="0" />' +
           "  </div>"
-        : '  <div class="gen-stepper-row gen-stepper-locked"><span id="gen-clarify-display" class="app-muted">0</span></div>' +
+        : '  <div class="gen-stepper-row gen-stepper-locked"><span id="gen-clarify-display" class="gen-stepper-value">0</span></div>' +
           '  <input type="hidden" id="gen-clarify-count" value="0" />') +
       '  <p class="gen-pill-hint app-muted" style="margin-top:0.35rem;">' +
       escapeHtml(clarifyHint) +
