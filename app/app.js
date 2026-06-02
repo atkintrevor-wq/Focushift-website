@@ -767,6 +767,72 @@
     return CLARIFY_TURN_GOALS[idx];
   }
 
+  var DEFAULT_TONE_BY_CATEGORY = {
+    confidence: "Motivational",
+    "health-fitness": "Motivational",
+    "i-am": "Motivational",
+    "sports-performance": "Motivational",
+    "success-prosperity": "Assertive",
+    "mental-wellbeing": "Compassionate",
+    relationships: "Compassionate",
+    "sleep-rest": "Calming",
+    other: "Calming",
+  };
+
+  var TONE_VOICE_POOLS = {
+    confidence: {
+      Calming: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE"],
+      Motivational: ["xctasy8XvGp2cVO9HL9k", "rJ9XoWu8gbUhVKZnKY8X"],
+      Compassionate: ["l32B8XDoylOsZKiSdfhE", "BpjGufoPiobT79j2vtj4"],
+      Assertive: ["lnieQLGTodpbhjpZtg1k", "87tjwokZlpNU7QL3HaLP"],
+    },
+    "sports-performance": {
+      Calming: ["dPah2VEoifKnZT37774q", "lnieQLGTodpbhjpZtg1k"],
+      Motivational: ["87tjwokZlpNU7QL3HaLP", "EkK5I93UQWFDigLMpZcX"],
+      Compassionate: ["MFZUKuGQUsGJPQjTS4wC", "l32B8XDoylOsZKiSdfhE"],
+      Assertive: ["87tjwokZlpNU7QL3HaLP", "5F6a8n4ijdCrImoXgxM9"],
+    },
+    "sleep-rest": {
+      Calming: ["8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE"],
+      Motivational: ["8LVfoRdkh4zgjr8v5ObE", "BpjGufoPiobT79j2vtj4"],
+      Compassionate: ["8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE"],
+      Assertive: ["dPah2VEoifKnZT37774q", "lnieQLGTodpbhjpZtg1k"],
+    },
+    "i-am": {
+      Calming: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE"],
+      Motivational: ["xctasy8XvGp2cVO9HL9k", "rJ9XoWu8gbUhVKZnKY8X"],
+      Compassionate: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE"],
+      Assertive: ["lnieQLGTodpbhjpZtg1k", "87tjwokZlpNU7QL3HaLP"],
+    },
+  };
+
+  var TONE_BACKGROUND_OVERRIDES = {
+    confidence: {
+      Calming: "bg-calm-groove",
+      Motivational: "bg-momentum-desire",
+      Compassionate: "bg-warm-melody",
+      Assertive: "bg-relentless-edge-surge",
+    },
+    "sports-performance": {
+      Calming: "bg-meditation",
+      Motivational: "bg-relentless-edge-surge",
+      Compassionate: "bg-recovery-glow",
+      Assertive: "bg-relentless-edge-surge",
+    },
+    "sleep-rest": {
+      Calming: "bg-theta-peace-drift",
+      Motivational: "bg-inner-calm",
+      Compassionate: "bg-theta-peace-drift",
+      Assertive: "bg-inner-calm",
+    },
+    "i-am": {
+      Calming: "bg-kindness-melody",
+      Motivational: "bg-momentum-desire",
+      Compassionate: "bg-kindness-melody",
+      Assertive: "bg-momentum-desire",
+    },
+  };
+
   var CATEGORY_MEDIA_RECOMMENDATIONS = {
     confidence: { voiceID: "rJ9XoWu8gbUhVKZnKY8X", backgroundID: "bg-calm-groove", voiceName: "Lori", backgroundName: "Calm Groove" },
     relationships: { voiceID: "l32B8XDoylOsZKiSdfhE", backgroundID: "bg-warm-melody", voiceName: "Carla", backgroundName: "Warm Melody" },
@@ -779,13 +845,41 @@
     other: { voiceID: "lnieQLGTodpbhjpZtg1k", backgroundID: "bg-meditation", voiceName: "Bill", backgroundName: "Meditation Background" },
   };
 
-  function recommendedMediaForCategory(categoryId) {
-    if (!categoryId) return null;
-    return CATEGORY_MEDIA_RECOMMENDATIONS[String(categoryId).trim()] || null;
+  function defaultToneForCategory(categoryId) {
+    var id = String(categoryId || "").trim();
+    return DEFAULT_TONE_BY_CATEGORY[id] || "Calming";
   }
 
-  function applyCategoryMediaRecommendations(categoryId) {
-    var rec = recommendedMediaForCategory(categoryId);
+  function recommendedMediaForCategory(categoryId, tone) {
+    var id = String(categoryId || "").trim();
+    if (!id) return null;
+    var toneKey = tone || defaultToneForCategory(id);
+    var legacy = CATEGORY_MEDIA_RECOMMENDATIONS[id];
+    var pool =
+      TONE_VOICE_POOLS[id] && TONE_VOICE_POOLS[id][toneKey]
+        ? TONE_VOICE_POOLS[id][toneKey]
+        : legacy
+          ? [legacy.voiceID]
+          : [];
+    var voiceID = pool.length ? pool[0] : null;
+    if (!voiceID && legacy) voiceID = legacy.voiceID;
+    var backgroundID =
+      TONE_BACKGROUND_OVERRIDES[id] && TONE_BACKGROUND_OVERRIDES[id][toneKey]
+        ? TONE_BACKGROUND_OVERRIDES[id][toneKey]
+        : legacy
+          ? legacy.backgroundID
+          : "";
+    if (!voiceID || !backgroundID) return legacy || null;
+    return {
+      voiceID: voiceID,
+      backgroundID: backgroundID,
+      voiceName: voiceNameById(voiceID) || (legacy && legacy.voiceName) || "Voice",
+      backgroundName: backgroundNameById(backgroundID) || (legacy && legacy.backgroundName) || "Background",
+    };
+  }
+
+  function applyCategoryMediaRecommendations(categoryId, tone) {
+    var rec = recommendedMediaForCategory(categoryId, tone);
     if (!rec) return null;
     if (!accountDefaultVoiceId() && rec.voiceID) selectedVoiceId = rec.voiceID;
     if (!accountDefaultBackgroundId() && rec.backgroundID) selectedBackgroundId = rec.backgroundID;
@@ -8447,11 +8541,17 @@
         if (!json.content) throw new Error("Empty script response.");
         var title = uniqueScriptTitle(ctx.cat.name + " Script");
         var docRef = scriptCollection(currentUser.uid).doc();
-        var mediaRec = recommendedMediaForCategory(ctx.cat.id);
+        var mediaRec = recommendedMediaForCategory(ctx.cat.id, ctx.tone);
         var saveVoiceId =
-          (selectedVoiceId || "").trim() || (mediaRec && mediaRec.voiceID) || accountDefaultVoiceId() || "";
+          accountDefaultVoiceId() ||
+          (selectedVoiceId || "").trim() ||
+          (mediaRec && mediaRec.voiceID) ||
+          "";
         var saveBgId =
-          (selectedBackgroundId || "").trim() || (mediaRec && mediaRec.backgroundID) || accountDefaultBackgroundId() || "";
+          accountDefaultBackgroundId() ||
+          (selectedBackgroundId || "").trim() ||
+          (mediaRec && mediaRec.backgroundID) ||
+          "";
         return scriptCollection(currentUser.uid)
           .doc(docRef.id)
           .set({
@@ -8850,7 +8950,6 @@
         list.querySelectorAll("[data-home-category]").forEach(function (btn) {
           btn.addEventListener("click", function () {
             activeCategoryId = btn.getAttribute("data-home-category") || "confidence";
-            applyCategoryMediaRecommendations(activeCategoryId);
             setHomeFlowStep("survey", displayName);
           });
         });
@@ -8904,18 +9003,19 @@
         : "Clarifying questions are available on Starter and Creator. You can still generate from your answers below.";
     var ph0 = surveyAnswerPlaceholder();
     var ph1 = surveyAnswerPlaceholder();
-    var mediaRec = recommendedMediaForCategory(cat.id);
+    var defaultTone = defaultToneForCategory(cat.id);
+    var mediaRec = recommendedMediaForCategory(cat.id, defaultTone);
     el.innerHTML =
       '<form id="generate-form" class="app-form" style="margin:0;">' +
       '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
       escapeHtml(cat.name) +
       "</strong></p>" +
       (mediaRec
-        ? '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">Suggested voice + background: <strong>' +
+        ? '  <p class="app-muted" id="gen-media-hint" style="margin:0 0 0.5rem;font-size:0.85rem;">Listen match: <strong>' +
           escapeHtml(mediaRec.voiceName) +
           "</strong> + <strong>" +
           escapeHtml(mediaRec.backgroundName) +
-          "</strong> (applied on save unless you set account defaults)</p>"
+          "</strong> (updates when you change tone; confirm in My Library after save)</p>"
         : "") +
       '  <label id="gen-q1-label" for="gen-q1" style="margin-top:0.2rem;">' +
       escapeHtml(cat.questions[0] || "Question 1") +
@@ -8996,9 +9096,21 @@
     wirePerspectiveUseNameRow();
     wireGenLengthHint();
     wireClarifyStepper();
-    if (cat.id === "sports-performance") {
-      var tonePick = document.getElementById("gen-tone");
-      if (tonePick) tonePick.value = "Motivational";
+    var tonePick = document.getElementById("gen-tone");
+    if (tonePick) {
+      tonePick.value = defaultTone;
+      tonePick.addEventListener("change", function () {
+        var rec = applyCategoryMediaRecommendations(cat.id, tonePick.value);
+        var hint = document.getElementById("gen-media-hint");
+        if (hint && rec) {
+          hint.innerHTML =
+            "Listen match: <strong>" +
+            escapeHtml(rec.voiceName) +
+            "</strong> + <strong>" +
+            escapeHtml(rec.backgroundName) +
+            "</strong> (updates when you change tone; confirm in My Library after save)";
+        }
+      });
     }
     var form = document.getElementById("generate-form");
     if (form) {
