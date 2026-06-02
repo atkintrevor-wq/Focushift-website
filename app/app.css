@@ -2505,6 +2505,16 @@ body.fs-app-body.fs-modal-scroll-lock {
   box-shadow: none;
   color: var(--app-tab-active-fg, #f8fafc);
 }
+#voices-segmented-tabs .app-tab-btn.is-tier-locked,
+#audio-segmented-tabs .app-tab-btn.is-tier-locked {
+  opacity: 0.52;
+  filter: grayscale(0.12);
+  cursor: pointer;
+}
+#voices-segmented-tabs .app-tab-btn.is-tier-locked:not(.is-active),
+#audio-segmented-tabs .app-tab-btn.is-tier-locked:not(.is-active) {
+  color: var(--muted, #9fb0ca);
+}
 .app-section[hidden] { display: none !important; }
 .app-tab-count {
   font-size: 0.78rem;

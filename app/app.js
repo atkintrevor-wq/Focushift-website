@@ -212,7 +212,7 @@
     "I'm trying to sound natural and authentic, just like myself. This is important because I want my cloned voice to sound like the real me - with my unique tone, my way of speaking, and my personality.\n\n" +
     "I believe that affirmations work best when they sound like they're coming from within, from my own inner voice. That's why I'm taking the time to create this recording, so the voice that speaks my affirmations will truly feel like my own.\n\n" +
     "Thank you for listening. I hope this captures everything needed to create an accurate and authentic clone of my voice.";
-  var activeVoicesTab = "my-voices";
+  var activeVoicesTab = "app-voices";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
   var availableVoices = [
@@ -624,25 +624,24 @@
       content:
         "Choose the voice that speaks your affirmations when you generate audio.\n\n" +
         "My Voices\n" +
-        "• Your saved voices: cloned voices (Creator), added app voices, and uploaded custom voices.\n" +
-        "• Clone (Creator) records or uploads your voice to create a personalized clone.\n" +
-        "• Preview with the play control; apply a voice to a script from the library card.\n\n" +
+        "• Your saved voices: cloned voices (Creator), added app voices, and uploaded custom voices (Starter/Creator).\n" +
+        "• Clone (Starter/Creator) records or uploads your voice to create a personalized clone.\n\n" +
         "App Voices\n" +
-        "• Built-in voices included with the app. Add any voice to My Voices for quick access.\n" +
-        "• Voice availability depends on your plan; some require Starter or Creator.",
+        "• Built-in voices included with the app. Tap Preview to hear any voice.\n" +
+        "• Adding voices to My Voices requires Starter or Creator.\n" +
+        "• Applying voices when generating audio may require Starter or Creator for some voices.",
     },
     audio: {
       title: "Background Audio",
       content:
         "Choose background audio that plays behind your affirmations when you generate audio.\n\n" +
         "My Audio\n" +
-        "• Your saved tracks: uploaded files and app audio you've added (Starter or Creator for uploads).\n" +
-        "• Import adds files in this browser; they stay on this device until you use them in a script.\n" +
-        "• Preview with play; apply to a script from library voice/background controls.\n\n" +
+        "• Your saved tracks: uploaded files and app audio you've pinned (Starter/Creator for uploads).\n" +
+        "• Import adds files in this browser; they stay on this device until you use them in a script.\n\n" +
         "App Audio\n" +
-        "• Built-in background tracks. Use + or Add to save a track to My Audio.\n" +
-        "• Expand/collapse categories with the chevron on each section.\n" +
-        "• Some tracks require Starter or Creator.",
+        "• Built-in background tracks. Free accounts can preview any track here.\n" +
+        "• Pinning to My Audio or using backgrounds when generating requires Starter or Creator.\n" +
+        "• Expand/collapse categories with the chevron on each section.",
     },
   };
 
@@ -3711,13 +3710,23 @@
     });
     root.querySelectorAll("[data-voices-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        activeVoicesTab = btn.getAttribute("data-voices-tab") || "my-voices";
+        var tab = btn.getAttribute("data-voices-tab") || "app-voices";
+        if (tab === "my-voices" && !isWebPaidTierForAI()) {
+          promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.myVoices);
+          return;
+        }
+        activeVoicesTab = tab;
         renderVoices();
       });
     });
     root.querySelectorAll("[data-audio-page-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        activeAudioPageTab = btn.getAttribute("data-audio-page-tab") || "my-audio";
+        var tab = btn.getAttribute("data-audio-page-tab") || "my-audio";
+        if (tab === "my-audio" && !isWebPaidTierForAI()) {
+          promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.myAudio);
+          return;
+        }
+        activeAudioPageTab = tab;
         renderAudioPage();
       });
     });
@@ -4921,6 +4930,7 @@
     var tabApp = document.getElementById("voices-tab-app");
     if (tabMy) tabMy.classList.toggle("is-active", activeVoicesTab === "my-voices");
     if (tabApp) tabApp.classList.toggle("is-active", activeVoicesTab === "app-voices");
+    if (tabMy) tabMy.classList.toggle("is-tier-locked", !isWebPaidTierForAI());
     syncVoiceSegmentedPill();
 
     var savedAppVoiceIDs = Array.isArray((currentUserProfile || {}).savedAppVoiceIDs)
@@ -4951,7 +4961,7 @@
       .map(function (v) {
         var isSelected = v.id === selectedVoiceId;
         var inMyVoices = !!savedSet[v.id] || currentClonedVoices.some(function (cv) { return cv.id === v.id; });
-        var supportsSaveToggle = activeVoicesTab === "app-voices";
+        var supportsSaveToggle = activeVoicesTab === "app-voices" && isWebPaidTierForAI();
         var isCloned = isClonedVoiceOption(v);
         var supportsCloneActions = activeVoicesTab === "my-voices" && isCloned;
         return (
@@ -4995,6 +5005,10 @@
       btn.addEventListener("click", function () {
         var voiceID = btn.getAttribute("data-voice-id");
         if (!voiceID || voiceID === selectedVoiceId) return;
+        if (!isWebVoiceAvailableForGeneration(voiceID)) {
+          promptWebPaidUpgrade(webGenerationGateMessage("voice"));
+          return;
+        }
         selectedVoiceId = voiceID;
         setVoicesMessage("Saving default voice...", "");
         saveUserDefaults()
@@ -5009,6 +5023,7 @@
     });
     list.querySelectorAll("[data-voice-save-id]").forEach(function (btn) {
       btn.addEventListener("click", function () {
+        if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.myVoices)) return;
         var voiceID = btn.getAttribute("data-voice-save-id");
         if (!voiceID) return;
         var currentIDs = Array.isArray((currentUserProfile || {}).savedAppVoiceIDs)
@@ -6128,6 +6143,10 @@
       btn.addEventListener("click", function () {
         var backgroundID = btn.getAttribute("data-background-id");
         if (!backgroundID || backgroundID === selectedBackgroundId) return;
+        if (!isWebBackgroundAvailableForGeneration(backgroundID)) {
+          promptWebPaidUpgrade(webGenerationGateMessage("background"));
+          return;
+        }
         selectedBackgroundId = backgroundID;
         setBackgroundsMessage("Saving default background...", "");
         saveUserDefaults()
@@ -6189,6 +6208,7 @@
     });
     scopeRoot.querySelectorAll("[data-add-saved-bg]").forEach(function (btn) {
       btn.addEventListener("click", function () {
+        if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.myAudio)) return;
         var bid = btn.getAttribute("data-add-saved-bg");
         if (!bid) return;
         addSavedAppBackgroundId(bid);
@@ -6381,7 +6401,10 @@
           '<div class="app-bg-category-list">' +
           items
             .map(function (b) {
-              return audioBuiltinRowMarkup(b, { showPinToMy: true, playPauseTransport: true });
+              return audioBuiltinRowMarkup(b, {
+                showPinToMy: isWebPaidTierForAI(),
+                playPauseTransport: true,
+              });
             })
             .join("") +
           "</div>" +
@@ -6396,7 +6419,7 @@
     }
     list.innerHTML =
       '<p class="app-muted audio-app-lede">' +
-      "Premade background tracks for generation and mixing — same catalog as App Audio on iOS. Pin tracks to My Audio for quick access." +
+      "Premade background tracks for generation and mixing — same catalog as App Audio on iOS. Preview any track here; pin to My Audio with Starter or Creator." +
       "</p>" +
       (none ? '<div class="app-bg-none-row">' + audioBuiltinRowMarkup(none, { showPinToMy: false }) + "</div>" : "") +
       sections;
@@ -6479,6 +6502,7 @@
     var appPanel = document.getElementById("audio-sub-app");
     if (myBtn) myBtn.classList.toggle("is-active", activeAudioPageTab === "my-audio");
     if (appBtn) appBtn.classList.toggle("is-active", activeAudioPageTab === "app-audio");
+    if (myBtn) myBtn.classList.toggle("is-tier-locked", !isWebPaidTierForAI());
     if (myPanel) myPanel.hidden = activeAudioPageTab !== "my-audio";
     if (appPanel) appPanel.hidden = activeAudioPageTab !== "app-audio";
     var myTools = document.getElementById("audio-my-only-toolbar");
@@ -9681,6 +9705,8 @@
   function scriptCardHtml(script, contentHashHex) {
     var editorOpen = inlineScriptEditorOpenById[script.id] === true;
     var isSharedListenOnly = scriptIsSharedListenOnly(script);
+    var isFreeReadOnly = isWebFreeReadOnlyLibraryScript(script);
+    var controlsReadOnly = isSharedListenOnly || isFreeReadOnly;
     var showFmtPref = readShowAudioTagsFormattingPreference();
     var isBusy = isScriptBusy(script.id);
     var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
@@ -9700,10 +9726,13 @@
     } else {
       genClasses += " app-btn-generate-fresh";
     }
-    var genDisabled = isBusy || !genEnabled;
+    var genDisabled = isBusy || !genEnabled || controlsReadOnly || isWebFreeTier();
     var chevChar = controlsExpanded ? "▲" : "▼";
     var showShareLink = controlsExpanded && hasAudio && isWebCreatorTier() && !isSharedListenOnly;
     if (isSharedListenOnly) {
+      editorOpen = false;
+    }
+    if (isFreeReadOnly) {
       editorOpen = false;
     }
     var drift = scriptAudioSettingsDrifted(script, contentHashHex);
@@ -9746,7 +9775,7 @@
       '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>';
 
     var inlineEditorHtml = "";
-    if (editorOpen && !isSharedListenOnly) {
+    if (editorOpen && !controlsReadOnly) {
       var bodyHtml;
       if (hasAudioTagsInScript && !showFmtPref) {
         bodyHtml =
@@ -9805,9 +9834,11 @@
           ? '<p class="app-muted script-card-shared-note" style="margin:0 0 0.65rem;line-height:1.45;">Shared by ' +
             escapeHtml((script.sharedFrom && script.sharedFrom.senderDisplayName) || "someone") +
             ". Listen-only — you can play audio and add to playlists, but not edit or regenerate.</p>"
-          : "") +
+          : isFreeReadOnly
+            ? '<p class="app-muted script-card-shared-note" style="margin:0 0 0.65rem;line-height:1.45;">Free plan: play and add to playlists. Upgrade to Starter or Creator to edit, change voice/background, or generate new audio.</p>'
+            : "") +
         '<div class="script-card-voice-bg-grid">' +
-        (isSharedListenOnly
+        (controlsReadOnly
           ? '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;">Voice: ' +
             escapeHtml(voiceNameById(scriptVoiceID)) +
             "</span>" +
@@ -9826,18 +9857,24 @@
             "</button>") +
         "</div>" +
         '<div class="app-card-actions script-card-actions-bar">' +
-        (isSharedListenOnly
+        (controlsReadOnly
           ? ""
-          : '  <button type="button" class="' +
-            genClasses +
-            '" data-action="generate-audio" data-script-id="' +
-            escapeHtml(script.id) +
-            '"' +
-            (genDisabled ? " disabled" : "") +
-            (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
-            ">" +
-            genLabel +
-            "</button>") +
+          : isWebFreeTier()
+            ? '  <button type="button" class="app-btn app-btn-secondary is-tier-locked" data-action="generate-audio" data-script-id="' +
+              escapeHtml(script.id) +
+              '" title="Starter or Creator required">' +
+              genLabel +
+              "</button>"
+            : '  <button type="button" class="' +
+              genClasses +
+              '" data-action="generate-audio" data-script-id="' +
+              escapeHtml(script.id) +
+              '"' +
+              (genDisabled ? " disabled" : "") +
+              (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
+              ">" +
+              genLabel +
+              "</button>") +
         '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="add-to-playlist" data-script-id="' +
         escapeHtml(script.id) +
         '" title="Add to playlist"' +
@@ -9845,7 +9882,7 @@
         ' aria-label="Add to playlist">' +
         playlistIconSvg +
         "</button>" +
-        (isSharedListenOnly
+        (controlsReadOnly
           ? ""
           : '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn script-card-actions-edit-btn' +
             (editorOpen ? " is-active" : "") +
@@ -9967,6 +10004,43 @@
     return tier === "starter" || tier === "creator";
   }
 
+  var WEB_FREE_TIER_VOICE_IDS = {
+    lnieQLGTodpbhjpZtg1k: true,
+    "8LVfoRdkh4zgjr8v5ObE": true,
+    YgzytRZyVmEux6PCtJYB: true,
+  };
+
+  function isWebFreeTier() {
+    return resolvedSubscriptionTier() === "free";
+  }
+
+  function isWebVoiceAvailableForGeneration(voiceID) {
+    if (!isWebFreeTier()) return true;
+    return !!WEB_FREE_TIER_VOICE_IDS[(voiceID || "").trim()];
+  }
+
+  function isWebBackgroundAvailableForGeneration(backgroundID) {
+    if (!isWebFreeTier()) return true;
+    var id = (backgroundID || "").trim();
+    return !id || id === "bg-none";
+  }
+
+  function isWebFreeReadOnlyLibraryScript(script) {
+    if (!isWebFreeTier() || scriptIsSharedListenOnly(script)) return false;
+    var text = (script && script.text && String(script.text).trim()) || "";
+    return !!text;
+  }
+
+  function webGenerationGateMessage(field) {
+    if (field === "voice") {
+      return "This voice requires Starter or Creator when generating audio. Upgrade to unlock all voices.";
+    }
+    if (field === "background") {
+      return "Using background audio when generating requires Starter or Creator. Upgrade to unlock all backgrounds.";
+    }
+    return "This feature requires Starter or Creator.";
+  }
+
   var WEB_PAID_FEATURE_COPY = {
     voiceClone:
       "Voice cloning is available with Starter or Creator. Upgrade to clone your own voice.",
@@ -9976,6 +10050,14 @@
       "Importing background audio is available with Starter or Creator. Upgrade to add your own sounds.",
     libraryImport:
       "Importing audio files is available with Starter or Creator. Upgrade to add your own audio.",
+    myVoices:
+      "My Voices is available with Starter or Creator. Upgrade to save app voices here.",
+    myAudio:
+      "My Audio is available with Starter or Creator. Upgrade to import or pin your own sounds.",
+    generate:
+      "Generating or customizing audio requires Starter or Creator. Upgrade to create new audio.",
+    editScript:
+      "Upgrade to Starter or Creator to edit scripts, change voices, or generate new audio.",
   };
 
   function promptWebPaidUpgrade(detail) {
@@ -9999,6 +10081,8 @@
       document.getElementById("btn-voice-record"),
       document.getElementById("btn-audio-import"),
       document.getElementById("library-dropdown-import"),
+      document.getElementById("voices-tab-my"),
+      document.getElementById("audio-tab-my"),
     ];
     controls.forEach(function (el) {
       if (!el) return;
@@ -10006,6 +10090,10 @@
       el.setAttribute("aria-disabled", paid ? "false" : "true");
       el.title = paid ? "" : "Starter or Creator required";
     });
+    if (!paid) {
+      if (activeVoicesTab === "my-voices") activeVoicesTab = "app-voices";
+      if (activeAudioPageTab === "my-audio") activeAudioPageTab = "app-audio";
+    }
   }
 
   function setAITextEditError(message, kind) {
@@ -10186,6 +10274,10 @@
       setMessage("Shared audio is listen-only and cannot be edited.", "info");
       return;
     }
+    if (scriptGuard && isWebFreeReadOnlyLibraryScript(scriptGuard)) {
+      promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.editScript);
+      return;
+    }
     var text = getInlineScriptEditorText(scriptId);
     if (!String(text || "").trim()) {
       setMessage("Add script text before using AI edit.", "error");
@@ -10329,6 +10421,10 @@
       setMessage("Shared audio is listen-only and cannot be edited.", "info");
       return;
     }
+    if (isWebFreeReadOnlyLibraryScript(script)) {
+      promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.editScript);
+      return;
+    }
     var list = document.getElementById("scripts-list");
     if (!list) return;
     var card = null;
@@ -10402,6 +10498,10 @@
         });
         if (!script) return;
         if (action === "toggle-inline-script") {
+          if (isWebFreeReadOnlyLibraryScript(script)) {
+            promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.editScript);
+            return;
+          }
           var opening = inlineScriptEditorOpenById[script.id] !== true;
           inlineScriptEditorOpenById[script.id] = opening;
           renderScripts(currentScripts, opening ? script.id : null);
@@ -10417,6 +10517,7 @@
         } else if (action === "delete") {
           deleteScript(script);
         } else if (action === "generate-audio") {
+          if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
           generateAudioForScript(script);
         } else if (action === "play-audio") {
           togglePlayScriptAudio(script);
@@ -10434,6 +10535,14 @@
         var scriptId = btn.getAttribute("data-script-media-open");
         var field = btn.getAttribute("data-script-media-field");
         if (!scriptId || !field) return;
+        if (isWebFreeReadOnlyLibraryScript(
+          currentScripts.find(function (s) {
+            return s.id === scriptId;
+          })
+        )) {
+          promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.editScript);
+          return;
+        }
         openMediaPicker({
           kind: "script",
           id: scriptId,
@@ -10663,6 +10772,14 @@
         btn.addEventListener("click", function () {
           var selectedID = btn.getAttribute("data-media-option");
           if (!selectedID || !mediaPickerTarget) return;
+          if (mediaPickerTarget.field === "voice" && !isWebVoiceAvailableForGeneration(selectedID)) {
+            promptWebPaidUpgrade(webGenerationGateMessage("voice"));
+            return;
+          }
+          if (mediaPickerTarget.field === "background" && !isWebBackgroundAvailableForGeneration(selectedID)) {
+            promptWebPaidUpgrade(webGenerationGateMessage("background"));
+            return;
+          }
           if (mediaPickerTarget.kind === "account-default") {
             var accField = mediaPickerTarget.field;
             if (accField === "voice") {
@@ -11452,6 +11569,7 @@
 
   function generateAudioForScript(script) {
     if (!currentUser) return;
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
     if (scriptIsSharedListenOnly(script)) {
       setMessage("Shared audio is listen-only — playback uses the sender’s hosted file.", "info");
       return;
@@ -11605,6 +11723,7 @@
 
   function generateAudioForPremade(premade) {
     if (!currentUser || !premade) return;
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
     var text = (premade.scriptText || "").trim();
     if (!text) {
       setPremadeMessage("This premade has no script text to synthesize.", "error");
@@ -12852,6 +12971,7 @@
     var premadeVoiceID = resolvePremadeVoiceSelection(p);
     var premadeBackgroundID = resolvePremadeBackgroundSelection(p);
     var isBusy = isPremadeBusy(p.id);
+    var paid = isWebPaidTierForAI();
     var canGen = !!(p.scriptText && String(p.scriptText).trim());
     var genEnabled = canGen && shouldEnableGeneratePremadeFromHash(p, contentHashHex);
     var genLabel = isBusy ? "Generating audio..." : "Generate";
@@ -12865,7 +12985,7 @@
     } else {
       genClasses += " app-btn-generate-fresh";
     }
-    var genDisabled = isBusy || !canGen || !genEnabled;
+    var genDisabled = isBusy || !canGen || !genEnabled || !paid;
     var genTitle = !canGen
       ? "This premade has no script text to turn into audio."
       : !genEnabled && !isBusy
@@ -12876,17 +12996,27 @@
     var chipLabel = premadeLibraryCategoryDisplayName((p.categoryID || "").trim());
     var audioSection = audioControlsExpanded
       ? '<div class="premade-card-audio-section">' +
+        (!paid
+          ? '<p class="app-muted" style="margin:0 0 0.55rem;line-height:1.45;">Free plan: play, save to My Library, or add to a playlist. Upgrade to customize voice/background or generate new audio.</p>'
+          : "") +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
-        '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
-        escapeHtml(p.id) +
-        '" data-premade-media-field="voice" style="text-align:left;">Voice: ' +
-        escapeHtml(voiceNameById(premadeVoiceID)) +
-        "</button>" +
-        '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
-        escapeHtml(p.id) +
-        '" data-premade-media-field="background" style="text-align:left;">Background: ' +
-        escapeHtml(backgroundNameById(premadeBackgroundID)) +
-        "</button>" +
+        (paid
+          ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
+            escapeHtml(p.id) +
+            '" data-premade-media-field="voice" style="text-align:left;">Voice: ' +
+            escapeHtml(voiceNameById(premadeVoiceID)) +
+            "</button>" +
+            '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
+            escapeHtml(p.id) +
+            '" data-premade-media-field="background" style="text-align:left;">Background: ' +
+            escapeHtml(backgroundNameById(premadeBackgroundID)) +
+            "</button>"
+          : '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;text-align:left;">Voice: ' +
+            escapeHtml(voiceNameById(premadeVoiceID)) +
+            "</span>" +
+            '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;text-align:left;">Background: ' +
+            escapeHtml(backgroundNameById(premadeBackgroundID)) +
+            "</span>") +
         "</div>" +
         '<div class="app-card-actions">' +
         '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
@@ -12894,16 +13024,20 @@
         '">' +
         (isExpanded ? "Hide Text" : "Show Text") +
         "</button>" +
-        '  <button type="button" class="' +
-        genClasses +
-        '" data-premade-action="generate-audio" data-premade-id="' +
-        escapeHtml(p.id) +
-        '"' +
-        (genDisabled ? " disabled" : "") +
-        (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
-        ">" +
-        genLabel +
-        "</button>" +
+        (paid
+          ? '  <button type="button" class="' +
+            genClasses +
+            '" data-premade-action="generate-audio" data-premade-id="' +
+            escapeHtml(p.id) +
+            '"' +
+            (genDisabled ? " disabled" : "") +
+            (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
+            ">" +
+            genLabel +
+            "</button>"
+          : '  <button type="button" class="app-btn app-btn-secondary is-tier-locked" data-premade-action="generate-audio" data-premade-id="' +
+            escapeHtml(p.id) +
+            '" title="Starter or Creator required">Generate</button>') +
         '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
         escapeHtml(p.id) +
         '">Save to My Library</button>' +
@@ -12980,6 +13114,7 @@
         } else if (action === "toggle-controls") {
           togglePremadeCardAudioControls(premade.id);
         } else if (action === "generate-audio") {
+          if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
           generateAudioForPremade(premade);
         } else if (action === "save") {
           savePremadeToMyLibrary(premade);
@@ -12997,6 +13132,7 @@
         var pid = btn.getAttribute("data-premade-media-open");
         var field = btn.getAttribute("data-premade-media-field");
         if (!pid || !field) return;
+        if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
         openMediaPicker({
           kind: "premade",
           id: pid,
