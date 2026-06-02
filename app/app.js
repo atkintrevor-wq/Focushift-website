@@ -42,6 +42,8 @@
   var playlistTimerPlaylistId = null;
   var activeAdminTab = "home";
   var activeLibraryTab = "my-library";
+  /** null = category grid; otherwise category id (or __other__) for premade detail. */
+  var activePremadeCategoryId = null;
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
   var PREF_RESUME_ADMIN_KEY = "focusshiftWebPrefResumeAdmin";
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
@@ -169,14 +171,12 @@
   var frozenAudioSettingsByScriptId = {};
   var expandedPremadeTextById = {};
   var expandedPremadeAudioControlsById = {};
-  var expandedPremadeSectionById = {};
   var premadeVoiceOverrideById = {};
   var premadeBackgroundOverrideById = {};
   var premadeRenderGeneration = 0;
   var GENERATED_PREMADE_HASH_PREFIX = "generatedHashPremade_";
   var PREMADE_CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebPremadeCardAudio_";
-  var PREMADE_SECTION_EXPAND_STORAGE_PREFIX = "focusshiftWebPremadeSectionExpanded_";
-  /** Same seven categories as iOS bundled / cloud premade library (PremadeAudioManager). */
+  /** Same categories as iOS App Library (`quickScriptCategories` / PremadeAudioManager). */
   var PREMADE_LIBRARY_CATEGORY_ORDER = [
     { id: "confidence", name: "Confidence & Self-Worth" },
     { id: "relationships", name: "Relationships & Love" },
@@ -186,6 +186,24 @@
     { id: "sports-performance", name: "Sports Performance" },
     { id: "sleep-rest", name: "Sleep & Rest" },
   ];
+  var PREMADE_CATEGORY_ICON_SVGS = {
+    confidence:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.39 4.84L20 8.27l-4 3.9.94 5.5L12 15.9l-4.94 2.77.94-5.5-4-3.9 5.61-.43L12 2z"/></svg>',
+    relationships:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 21s-6.7-4.35-9.33-8.18C.87 9.36 2.16 6.4 5.07 5.5c1.95-.58 3.98.12 5.33 1.73 1.35-1.61 3.38-2.31 5.33-1.73 2.91.9 4.2 3.86 2.4 7.32C18.7 16.65 12 21 12 21z"/></svg>',
+    "success-prosperity":
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>',
+    "mental-wellbeing":
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/></svg>',
+    "health-fitness":
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="14" cy="4" r="2"/><path d="M6 22l3-7 4 1 3-6 3 6 4-1 3 7"/></svg>',
+    "sports-performance":
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 4v16M2 12h20"/></svg>',
+    "sleep-rest":
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+    __other__:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 10h4M10 8h4M18 12h4"/></svg>',
+  };
   var mediaPickerTarget = null;
   var editingVoiceSettingsId = null;
   var editingVoiceSettingsToken = "";
@@ -592,7 +610,7 @@
         "• Chevron (▼) on the toolbar expands or collapses voice/background controls on all cards at once.\n" +
         "• Scripts sync from Firebase across devices on the same account.\n" +
         "• A * after a title means it's a custom version of a premade script.\n\n" +
-        "App Library — Browse premade scripts by category. Play, save to My Library, or add audio to a playlist.",
+        "App Library — Pick a category card to browse premade scripts (same categories as iOS). Play, save to My Library, or add audio to a playlist.",
     },
     playlists: {
       title: "Playlists",
@@ -628,7 +646,7 @@
         "• Clone (Starter/Creator) records or uploads your voice to create a personalized clone.\n\n" +
         "App Voices\n" +
         "• Built-in voices included with the app. Tap Preview to hear any voice.\n" +
-        "• Adding voices to My Voices requires Starter or Creator.\n" +
+        "• Adding voices to My Voices and setting a default voice require Starter or Creator.\n" +
         "• Applying voices when generating audio may require Starter or Creator for some voices.",
     },
     audio: {
@@ -640,7 +658,7 @@
         "• Import adds files in this browser; they stay on this device until you use them in a script.\n\n" +
         "App Audio\n" +
         "• Built-in background tracks. Free accounts can preview any track here.\n" +
-        "• Pinning to My Audio or using backgrounds when generating requires Starter or Creator.\n" +
+        "• Setting a default background, pinning to My Audio, or using backgrounds when generating requires Starter or Creator.\n" +
         "• Expand/collapse categories with the chevron on each section.",
     },
   };
@@ -2799,7 +2817,7 @@
       '    <div id="account-tab-preferences" class="account-tab-panel account-tab-stack" hidden>' +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Listening defaults</h4>' +
-      '        <p class="app-muted account-section-card__text">Used for new scripts and when a script has no voice or background selected. Saved to your account (same idea as iOS).</p>' +
+      '        <p class="app-muted account-section-card__text">Used for new scripts and when a script has no voice or background selected. Saved to your account (same idea as iOS). Changing defaults requires Starter or Creator.</p>' +
       '        <div class="account-default-picker-row">' +
       '          <div class="account-default-picker-meta">' +
       '            <div class="account-default-picker-label">Default voice</div>' +
@@ -3572,9 +3590,11 @@
       }
     });
     document.getElementById("account-pref-pick-default-voice").addEventListener("click", function () {
+      if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.setDefault)) return;
       openMediaPicker({ kind: "account-default", field: "voice" });
     });
     document.getElementById("account-pref-pick-default-background").addEventListener("click", function () {
+      if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.setDefault)) return;
       openMediaPicker({ kind: "account-default", field: "background" });
     });
     var prefAdminMode = document.getElementById("pref-admin-mode");
@@ -3611,8 +3631,12 @@
     });
     root.querySelectorAll("[data-library-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        activeLibraryTab = btn.getAttribute("data-library-tab") || "my-library";
+        var nextTab = btn.getAttribute("data-library-tab") || "my-library";
+        if (nextTab !== "app-library") activePremadeCategoryId = null;
+        activeLibraryTab = nextTab;
         renderLibrarySubtab();
+        if (activeLibraryTab === "my-library") renderScripts(currentScripts);
+        else renderPremade();
       });
     });
     document.getElementById("mini-player-toggle").addEventListener("click", function () {
@@ -4204,6 +4228,14 @@
     var bEl = document.getElementById("account-pref-default-background-display");
     if (vEl) vEl.textContent = voiceNameById(selectedVoiceId);
     if (bEl) bEl.textContent = backgroundNameById(selectedBackgroundId);
+    var paid = isWebPaidTierForAI();
+    ["account-pref-pick-default-voice", "account-pref-pick-default-background"].forEach(function (id) {
+      var btn = document.getElementById(id);
+      if (!btn) return;
+      btn.hidden = !paid;
+      btn.disabled = !paid;
+      btn.title = paid ? "" : "Starter or Creator required";
+    });
   }
 
   function setAccountModalTab(tab) {
@@ -4989,13 +5021,15 @@
               escapeHtml(v.id) +
               '">Delete</button>'
             : "") +
-          '<button type="button" class="app-btn ' +
-          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-          '" data-voice-id="' +
-          escapeHtml(v.id) +
-          '">' +
-          (isSelected ? "Default" : "Set Default") +
-          "</button>" +
+          (isWebPaidTierForAI()
+            ? '<button type="button" class="app-btn ' +
+              (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+              '" data-voice-id="' +
+              escapeHtml(v.id) +
+              '">' +
+              (isSelected ? "Default" : "Set Default") +
+              "</button>"
+            : "") +
           "</div>" +
           "</div>"
         );
@@ -5003,6 +5037,7 @@
       .join("");
     list.querySelectorAll("[data-voice-id]").forEach(function (btn) {
       btn.addEventListener("click", function () {
+        if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.setDefault)) return;
         var voiceID = btn.getAttribute("data-voice-id");
         if (!voiceID || voiceID === selectedVoiceId) return;
         if (!isWebVoiceAvailableForGeneration(voiceID)) {
@@ -6141,6 +6176,7 @@
     });
     scopeRoot.querySelectorAll("[data-background-id]").forEach(function (btn) {
       btn.addEventListener("click", function () {
+        if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.setDefault)) return;
         var backgroundID = btn.getAttribute("data-background-id");
         if (!backgroundID || backgroundID === selectedBackgroundId) return;
         if (!isWebBackgroundAvailableForGeneration(backgroundID)) {
@@ -6275,13 +6311,15 @@
       "  </div>" +
       transportHtml +
       trailing +
-      '  <button type="button" class="app-btn ' +
-      (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-      '" data-background-id="' +
-      escapeHtml(b.id) +
-      '">' +
-      (isSelected ? "Default" : "Set Default") +
-      "</button>" +
+      (isWebPaidTierForAI()
+        ? '  <button type="button" class="app-btn ' +
+          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+          '" data-background-id="' +
+          escapeHtml(b.id) +
+          '">' +
+          (isSelected ? "Default" : "Set Default") +
+          "</button>"
+        : "") +
       "</div>"
     );
   }
@@ -6308,13 +6346,15 @@
       '<button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.78rem;" data-remove-saved-bg="' +
       escapeHtml(b.id) +
       '">Remove from My</button>' +
-      '  <button type="button" class="app-btn ' +
-      (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-      '" data-background-id="' +
-      escapeHtml(b.id) +
-      '">' +
-      (isSelected ? "Default" : "Set Default") +
-      "</button>" +
+      (isWebPaidTierForAI()
+        ? '  <button type="button" class="app-btn ' +
+          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+          '" data-background-id="' +
+          escapeHtml(b.id) +
+          '">' +
+          (isSelected ? "Default" : "Set Default") +
+          "</button>"
+        : "") +
       "</div>"
     );
   }
@@ -6343,13 +6383,15 @@
       '<button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.78rem;color:#fca5a5;" data-user-bg-delete="' +
       escapeHtml(b.id) +
       '">Delete</button>' +
-      '  <button type="button" class="app-btn ' +
-      (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-      '" data-background-id="' +
-      escapeHtml(b.id) +
-      '">' +
-      (isSelected ? "Default" : "Set Default") +
-      "</button>" +
+      (isWebPaidTierForAI()
+        ? '  <button type="button" class="app-btn ' +
+          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
+          '" data-background-id="' +
+          escapeHtml(b.id) +
+          '">' +
+          (isSelected ? "Default" : "Set Default") +
+          "</button>"
+        : "") +
       "</div>"
     );
   }
@@ -9341,9 +9383,8 @@
   }
 
   function toggleExpandAllPremadeAudioControls() {
-    var ids = currentPremade.map(function (p) {
-      return p.id;
-    });
+    var ids = premadeIdsForExpandAllToggle();
+    if (!ids.length) return;
     var next = !allPremadeAudioControlsExpanded(ids);
     ids.forEach(function (id) {
       setPremadeCardAudioControlsExpanded(id, next);
@@ -9354,41 +9395,26 @@
   function updatePremadeExpandAllToggleUi() {
     var btn = document.getElementById("premade-expand-all-audio");
     if (!btn) return;
-    if (!currentPremade.length) {
+    if (!activePremadeCategoryId) {
       btn.disabled = true;
       btn.textContent = "▼";
-      btn.setAttribute("aria-expanded", "true");
+      btn.setAttribute("aria-expanded", "false");
+      btn.title = "Open a category to expand or collapse audio controls";
+      return;
+    }
+    var ids = premadeIdsForExpandAllToggle();
+    if (!ids.length) {
+      btn.disabled = true;
+      btn.textContent = "▼";
+      btn.setAttribute("aria-expanded", "false");
+      btn.title = "";
       return;
     }
     btn.disabled = false;
-    var ids = currentPremade.map(function (p) {
-      return p.id;
-    });
+    btn.title = "";
     var allExp = allPremadeAudioControlsExpanded(ids);
     btn.textContent = allExp ? "▲" : "▼";
     btn.setAttribute("aria-expanded", allExp ? "true" : "false");
-  }
-
-  function premadeSectionStorageKey(categoryId) {
-    return PREMADE_SECTION_EXPAND_STORAGE_PREFIX + categoryId;
-  }
-
-  function premadeSectionExpandedFor(categoryId) {
-    if (expandedPremadeSectionById[categoryId] === true) return true;
-    if (expandedPremadeSectionById[categoryId] === false) return false;
-    try {
-      var v = localStorage.getItem(premadeSectionStorageKey(categoryId));
-      if (v === "0") return false;
-      if (v === "1") return true;
-    } catch (_e) {}
-    return true;
-  }
-
-  function setPremadeSectionExpanded(categoryId, expanded) {
-    expandedPremadeSectionById[categoryId] = expanded;
-    try {
-      localStorage.setItem(premadeSectionStorageKey(categoryId), expanded ? "1" : "0");
-    } catch (_e) {}
   }
 
   function groupPremadesByLibraryCategory(premades) {
@@ -9414,75 +9440,146 @@
     return { byId: byId, other: other };
   }
 
-  function flatPremadesForHashOrder(grouped) {
-    var flat = [];
-    PREMADE_LIBRARY_CATEGORY_ORDER.forEach(function (c) {
-      (grouped.byId[c.id] || []).forEach(function (p) {
-        flat.push(p);
-      });
-    });
-    grouped.other.forEach(function (p) {
-      flat.push(p);
-    });
-    return flat;
-  }
-
   function premadeLibraryCategoryDisplayName(categoryID) {
+    if (categoryID === "__other__") return "Other";
     var row = PREMADE_LIBRARY_CATEGORY_ORDER.find(function (c) {
       return c.id === categoryID;
     });
     return (row && row.name) || categoryID || "Other";
   }
 
-  function premadeCategorySectionHtml(categoryId, categoryName, items, hashMap) {
-    var sectionOpen = premadeSectionExpandedFor(categoryId);
-    var chevChar = sectionOpen ? "▲" : "▼";
-    var cardsHtml = items
-      .map(function (p) {
-        return premadeCardHtml(p, hashMap[p.id] || "");
-      })
-      .join("");
+  function premadeCategoryIconHtml(categoryId) {
+    var svg =
+      PREMADE_CATEGORY_ICON_SVGS[categoryId] ||
+      PREMADE_CATEGORY_ICON_SVGS.__other__ ||
+      "";
     return (
-      '<section class="premade-category-block" data-premade-category-block="' +
+      '<div class="premade-category-selector-icon premade-category-selector-icon--' +
       escapeHtml(categoryId) +
-      '">' +
-      '  <div class="premade-category-header">' +
-      '    <h3 class="premade-category-title">' +
-      escapeHtml(categoryName) +
-      "</h3>" +
-      '    <span class="app-muted premade-category-count">' +
-      String(items.length) +
-      "</span>" +
-      '    <button type="button" class="library-card-chevron premade-category-chevron" data-premade-category-toggle="' +
-      escapeHtml(categoryId) +
-      '" aria-expanded="' +
-      (sectionOpen ? "true" : "false") +
-      '" title="' +
-      (sectionOpen ? "Collapse category" : "Expand category") +
-      '">' +
-      chevChar +
-      "</button>" +
-      "  </div>" +
-      '  <div class="premade-category-body"' +
-      (sectionOpen ? "" : " hidden") +
-      ">" +
-      (items.length
-        ? cardsHtml
-        : '<p class="app-muted premade-category-empty">No premade in this category yet.</p>') +
-      "  </div>" +
-      "</section>"
+      '" aria-hidden="true">' +
+      svg +
+      "</div>"
     );
   }
 
-  function bindPremadeCategoryActions() {
+  function premadeCategoryMatchesSearch(categoryName, items, query) {
+    if (!query) return true;
+    if (textMatchesSectionSearch(categoryName, query)) return true;
+    return (items || []).some(function (p) {
+      return (
+        textMatchesSectionSearch(p.title, query) ||
+        textMatchesSectionSearch(p.scriptText, query) ||
+        textMatchesSectionSearch(p.description, query)
+      );
+    });
+  }
+
+  function premadeCategoryRowsForList(grouped) {
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
+    var rows = PREMADE_LIBRARY_CATEGORY_ORDER.map(function (c) {
+      return {
+        id: c.id,
+        name: c.name,
+        items: grouped.byId[c.id] || [],
+      };
+    });
+    if (grouped.other.length) {
+      rows.push({ id: "__other__", name: "Other", items: grouped.other });
+    }
+    if (!q) return rows;
+    return rows.filter(function (row) {
+      return premadeCategoryMatchesSearch(row.name, row.items, q);
+    });
+  }
+
+  function premadeCategorySelectorCardHtml(row) {
+    var count = (row.items && row.items.length) || 0;
+    var countLabel = count === 1 ? "1 script" : count + " scripts";
+    return (
+      '<button type="button" class="premade-category-selector-card" data-premade-category-open="' +
+      escapeHtml(row.id) +
+      '">' +
+      premadeCategoryIconHtml(row.id) +
+      '  <span class="premade-category-selector-copy">' +
+      '    <span class="premade-category-selector-name">' +
+      escapeHtml(row.name) +
+      "</span>" +
+      '    <span class="premade-category-selector-sub">App Library · ' +
+      escapeHtml(countLabel) +
+      "</span>" +
+      "  </span>" +
+      '  <span class="premade-category-selector-chevron" aria-hidden="true">\u203a</span>' +
+      "</button>"
+    );
+  }
+
+  function premadeCategoryListHtml(grouped) {
+    var rows = premadeCategoryRowsForList(grouped);
+    if (!rows.length) {
+      return '<p class="app-muted" style="margin:0;">No categories match your search.</p>';
+    }
+    return (
+      '<div class="premade-category-selector-list">' +
+      rows.map(premadeCategorySelectorCardHtml).join("") +
+      "</div>"
+    );
+  }
+
+  function premadeCategoryDetailHtml(categoryId, categoryName, items, hashMap) {
+    var cardsHtml = items.length
+      ? items
+          .map(function (p) {
+            return premadeCardHtml(p, hashMap[p.id] || "");
+          })
+          .join("")
+      : '<p class="app-muted premade-category-empty">No premade scripts in this category yet.</p>';
+    return (
+      '<div class="premade-category-detail">' +
+      '  <div class="premade-category-detail-nav">' +
+      '    <button type="button" class="app-btn app-btn-ghost premade-category-back-btn" data-premade-category-back="1">← Categories</button>' +
+      "  </div>" +
+      '  <h3 class="premade-category-detail-title">' +
+      escapeHtml(categoryName) +
+      "</h3>" +
+      '  <div class="premade-category-detail-cards">' +
+      cardsHtml +
+      "  </div>" +
+      "</div>"
+    );
+  }
+
+  function closePremadeCategoryView() {
+    activePremadeCategoryId = null;
+    renderPremade();
+  }
+
+  function premadeIdsForExpandAllToggle() {
+    if (!activePremadeCategoryId) return [];
+    var displayPremade = filteredPremadesForDisplay(currentPremade);
+    var grouped = groupPremadesByLibraryCategory(displayPremade);
+    var items =
+      activePremadeCategoryId === "__other__"
+        ? grouped.other
+        : grouped.byId[activePremadeCategoryId] || [];
+    return items.map(function (p) {
+      return p.id;
+    });
+  }
+
+  function bindPremadeCategoryNavActions() {
     var list = document.getElementById("premade-list");
     if (!list) return;
-    list.querySelectorAll("[data-premade-category-toggle]").forEach(function (btn) {
+    list.querySelectorAll("[data-premade-category-open]").forEach(function (btn) {
       btn.addEventListener("click", function () {
-        var cid = btn.getAttribute("data-premade-category-toggle");
+        var cid = btn.getAttribute("data-premade-category-open");
         if (!cid) return;
-        setPremadeSectionExpanded(cid, !premadeSectionExpandedFor(cid));
+        activePremadeCategoryId = cid;
         renderPremade();
+      });
+    });
+    list.querySelectorAll("[data-premade-category-back]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        closePremadeCategoryView();
       });
     });
   }
@@ -10058,6 +10155,8 @@
       "Generating or customizing audio requires Starter or Creator. Upgrade to create new audio.",
     editScript:
       "Upgrade to Starter or Creator to edit scripts, change voices, or generate new audio.",
+    setDefault:
+      "Setting a default voice or background requires Starter or Creator. Upgrade to customize your generation defaults.",
   };
 
   function promptWebPaidUpgrade(detail) {
@@ -10094,6 +10193,7 @@
       if (activeVoicesTab === "my-voices") activeVoicesTab = "app-voices";
       if (activeAudioPageTab === "my-audio") activeAudioPageTab = "app-audio";
     }
+    syncAccountDefaultMediaLabels();
   }
 
   function setAITextEditError(message, kind) {
@@ -10587,6 +10687,14 @@
 
   function openMediaPicker(target) {
     mediaPickerTarget = target || null;
+    if (
+      mediaPickerTarget &&
+      mediaPickerTarget.kind === "account-default" &&
+      !requireWebPaidTier(WEB_PAID_FEATURE_COPY.setDefault)
+    ) {
+      mediaPickerTarget = null;
+      return;
+    }
     var backdrop = document.getElementById("media-picker-backdrop");
     var title = document.getElementById("media-picker-title");
     var subtitle = document.getElementById("media-picker-subtitle");
@@ -13146,47 +13254,64 @@
     var list = document.getElementById("premade-list");
     if (!list) return;
     var displayPremade = filteredPremadesForDisplay(currentPremade);
-    if (!displayPremade.length) {
-      if (currentPremade.length && normalizeSectionSearchQuery(sectionSearchQuery.library)) {
-        list.innerHTML = '<p class="app-muted" style="margin:0 0 0.85rem;">No premade scripts match your search.</p>';
-        bindPremadeCategoryActions();
-        updatePremadeExpandAllToggleUi();
+    var grouped = groupPremadesByLibraryCategory(displayPremade);
+    var hasSearch = !!normalizeSectionSearchQuery(sectionSearchQuery.library);
+
+    function finishListHtml(html) {
+      list.innerHTML = html;
+      bindPremadeCategoryNavActions();
+      updatePremadeExpandAllToggleUi();
+    }
+
+    function finishDetailHtml(html) {
+      list.innerHTML = html;
+      bindPremadeCardActions();
+      bindPremadeCategoryNavActions();
+      updatePremadeExpandAllToggleUi();
+    }
+
+    if (activePremadeCategoryId) {
+      var catName = premadeLibraryCategoryDisplayName(activePremadeCategoryId);
+      var items =
+        activePremadeCategoryId === "__other__"
+          ? grouped.other
+          : grouped.byId[activePremadeCategoryId] || [];
+      if (!items.length) {
+        finishDetailHtml(premadeCategoryDetailHtml(activePremadeCategoryId, catName, [], {}));
         return;
       }
-      list.innerHTML =
-        '<p class="app-muted" style="margin:0 0 0.85rem;">No premade items in Firestore yet. iOS can also read bundled premade audio; web lists published docs from <code>premadeAudio</code>. When you publish items, they appear in the categories below.</p>' +
-        PREMADE_LIBRARY_CATEGORY_ORDER.map(function (c) {
-          return premadeCategorySectionHtml(c.id, c.name, [], {});
-        }).join("");
-      bindPremadeCategoryActions();
-      updatePremadeExpandAllToggleUi();
+      var gen = ++premadeRenderGeneration;
+      Promise.all(
+        items.map(function (p) {
+          return scriptContentSha256Hex(premadeDigestSourceFromPremade(p));
+        })
+      ).then(function (hashes) {
+        if (gen !== premadeRenderGeneration) return;
+        var hashMap = {};
+        items.forEach(function (p, i) {
+          hashMap[p.id] = hashes[i];
+        });
+        finishDetailHtml(premadeCategoryDetailHtml(activePremadeCategoryId, catName, items, hashMap));
+      });
       return;
     }
-    var gen = ++premadeRenderGeneration;
-    var grouped = groupPremadesByLibraryCategory(displayPremade);
-    var flatForHash = flatPremadesForHashOrder(grouped);
-    Promise.all(
-      flatForHash.map(function (p) {
-        return scriptContentSha256Hex(premadeDigestSourceFromPremade(p));
-      })
-    ).then(function (hashes) {
-      if (gen !== premadeRenderGeneration) return;
-      var hashMap = {};
-      flatForHash.forEach(function (p, i) {
-        hashMap[p.id] = hashes[i];
-      });
-      var parts = [];
-      PREMADE_LIBRARY_CATEGORY_ORDER.forEach(function (c) {
-        parts.push(premadeCategorySectionHtml(c.id, c.name, grouped.byId[c.id] || [], hashMap));
-      });
-      if (grouped.other.length) {
-        parts.push(premadeCategorySectionHtml("__other__", "Other", grouped.other, hashMap));
-      }
-      list.innerHTML = parts.join("");
-      bindPremadeCardActions();
-      bindPremadeCategoryActions();
-      updatePremadeExpandAllToggleUi();
-    });
+
+    if (!currentPremade.length) {
+      finishListHtml(
+        '<p class="app-muted" style="margin:0 0 0.85rem;">No premade items in Firestore yet. iOS can also read bundled premade audio; web lists published docs from <code>premadeAudio</code>. Pick a category below to browse.</p>' +
+          premadeCategoryListHtml(groupPremadesByLibraryCategory([]))
+      );
+      return;
+    }
+
+    if (hasSearch && !displayPremade.length) {
+      finishListHtml(
+        '<p class="app-muted" style="margin:0 0 0.85rem;">No premade scripts match your search.</p>'
+      );
+      return;
+    }
+
+    finishListHtml(premadeCategoryListHtml(grouped));
   }
 
   function subscribePremade() {
