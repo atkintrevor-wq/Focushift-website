@@ -5081,15 +5081,26 @@
       if (!path || typeof firebase.storage !== "function" || !currentUser) {
         throw new Error(networkFetchErrorMessage(contextLabel));
       }
-      return firebase
-        .storage()
-        .ref(path)
-        .getBytes(50 * 1024 * 1024)
-        .then(function (bytes) {
-          if (bytes && bytes.buffer) return bytes.buffer;
-          return bytes;
+      var ref = firebase.storage().ref(path);
+      if (!ref || typeof ref.getDownloadURL !== "function") {
+        throw new Error(networkFetchErrorMessage(contextLabel));
+      }
+      return ref
+        .getDownloadURL()
+        .then(function (signedUrl) {
+          return fetch(signedUrl).then(function (r) {
+            if (!r.ok) {
+              throw new Error(
+                "Could not download " + (contextLabel || "file") + " (" + r.status + ")."
+              );
+            }
+            return r.arrayBuffer();
+          });
         })
         .catch(function (storageErr) {
+          if (storageErr && storageErr.message && storageErr.message.indexOf("Could not download") === 0) {
+            throw storageErr;
+          }
           var detail = storageErr && storageErr.message ? " " + storageErr.message : "";
           throw new Error(networkFetchErrorMessage(contextLabel) + detail);
         });
