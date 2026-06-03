@@ -54,8 +54,8 @@
   var PREF_LISTEN_SHORTCUT_SCRIPT_TITLE_KEY = "focusshiftWebPrefListenTodayScriptTitle";
   /** Last Daily Spark sparkId we recorded a listen for (browser-local dedup). */
   var PREF_DAILY_SPARK_LISTEN_KEY = "focusshiftWebDailySparkListenRecorded";
-  /** "1" = Your library section expanded on home; "0" = collapsed. */
-  var PREF_HOME_LIBRARY_OPEN_KEY = "focusshiftWebHomeLibraryOpen";
+  /** "1" = Account → Active share links expanded; "0" = collapsed. */
+  var PREF_ACCOUNT_SHARE_LINKS_OPEN_KEY = "focusshiftWebAccountShareLinksOpen";
   var WEB_DEVICE_ID_KEY = "focusshiftWebDeviceId";
   /** Loaded from Firestore + Storage when Account opens (mirrors iOS usage / devices / sharing). */
   var accountInsightsSnapshot = {
@@ -599,8 +599,7 @@
         "Daily Spark — Tap to play today's short curated affirmation (Starter and Creator).\n\n" +
         "Listen today — Tap to run your saved playlist or library shortcut. Set the target in Account → Preferences.\n\n" +
         "Listening activity — Your streak, plays (tap Plays to cycle week / month / year / all time), last played track, and milestones. Same Firestore fields as the iOS app.\n\n" +
-        "Your library — Collapsible counts for scripts, audio-ready scripts, and playlists (synced from your account).\n\n" +
-        "Account — Open the person icon (top right) for settings, plans, preferences, and usage.",
+        "Account — Open the person icon (top right) for settings, plans, library counts, preferences, and usage.",
     },
     library: {
       title: "Library",
@@ -1578,17 +1577,17 @@
     }
   }
 
-  function readHomeLibrarySectionOpen() {
+  function readAccountShareLinksSectionOpen() {
     try {
-      return localStorage.getItem(PREF_HOME_LIBRARY_OPEN_KEY) === "1";
+      return localStorage.getItem(PREF_ACCOUNT_SHARE_LINKS_OPEN_KEY) === "1";
     } catch (_e) {
       return false;
     }
   }
 
-  function writeHomeLibrarySectionOpen(open) {
+  function writeAccountShareLinksSectionOpen(open) {
     try {
-      localStorage.setItem(PREF_HOME_LIBRARY_OPEN_KEY, open ? "1" : "0");
+      localStorage.setItem(PREF_ACCOUNT_SHARE_LINKS_OPEN_KEY, open ? "1" : "0");
     } catch (_e) {}
   }
 
@@ -2899,7 +2898,7 @@
       "      </section>" +
       '      <section id="account-sharing-management-section" class="account-section-card" hidden>' +
       '        <h4 class="account-section-card__title">Sharing management</h4>' +
-      '        <p class="app-muted account-section-card__text">Creator plan: manage who can listen to your shared audio and deactivate old share links.</p>' +
+        '        <p class="app-muted account-section-card__text">Creator plan: manage who can listen to your shared audio and deactivate old share links. Active links are stored in your Firebase account (same data as iOS) and appear on every device when you refresh or reopen Account.</p>' +
       '        <div id="account-sharing-management-panel" class="account-sharing-management-panel"></div>' +
       '        <button type="button" class="app-btn app-btn-secondary" id="account-refresh-sharing">Refresh sharing lists</button>' +
       "      </section>" +
@@ -8246,7 +8245,8 @@
             })
             .join("") +
           "</ul>";
-    var outgoingHtml =
+    var shareLinksOpenAttr = readAccountShareLinksSectionOpen() ? " open" : "";
+    var outgoingBodyHtml =
       outgoing.length === 0
         ? '<p class="app-muted" style="margin:0;">No active share links.</p>'
         : '<ul class="account-share-list">' +
@@ -8274,10 +8274,25 @@
       String(audience.length) +
       " / 15)</h5>" +
       audienceHtml +
-      '<h5 style="margin-top:1rem;">Active share links (' +
+      '<details class="account-share-links-details" id="account-share-links-details"' +
+      shareLinksOpenAttr +
+      ' style="margin-top:1rem;">' +
+      '  <summary class="account-share-links-summary" aria-label="Active share links, tap to expand or collapse">' +
+      '    <span class="account-share-links-chevron" aria-hidden="true">▸</span>' +
+      '    <span class="account-share-links-summary-title">Active share links (' +
       String(outgoing.length) +
-      ")</h5>" +
-      outgoingHtml;
+      ")</span>" +
+      "  </summary>" +
+      '  <div class="account-share-links-body">' +
+      outgoingBodyHtml +
+      "  </div>" +
+      "</details>";
+    var shareLinksDetails = document.getElementById("account-share-links-details");
+    if (shareLinksDetails) {
+      shareLinksDetails.addEventListener("toggle", function () {
+        writeAccountShareLinksSectionOpen(!!shareLinksDetails.open);
+      });
+    }
     panel.querySelectorAll(".account-share-remove-listener").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var uid = btn.getAttribute("data-share-listener");
@@ -8972,7 +8987,6 @@
       var dailySparkBusy = dailySparkState.loading || dailySparkState.playing;
       var listenHead = hasPlayedTodayWeb(ls) ? "Listen again" : "Listen to an affirmation today";
       var listenSub = escapeHtml(listenTodaySubtitleWeb(ls));
-      var libDetailsOpen = readHomeLibrarySectionOpen() ? " open" : "";
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
@@ -9045,31 +9059,6 @@
         "    </div>" +
         milestonesBlock +
         "  </div>" +
-        '  <details class="app-card app-glass-card home-library-details" id="home-library-details"' +
-        libDetailsOpen +
-        ">" +
-        '    <summary class="home-library-summary" aria-label="Your library, tap to expand or collapse">' +
-        '      <span class="home-library-chevron" aria-hidden="true">▸</span>' +
-        '      <span class="home-library-summary-main">' +
-        '        <span class="home-library-summary-title">Your library</span>' +
-        '        <span class="app-muted home-library-summary-hint">Scripts · audio ready · playlists</span>' +
-        "      </span>" +
-        "    </summary>" +
-        '    <div class="home-library-body">' +
-        '      <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.8rem;">Cross-device sync from your Firebase account.</p>' +
-        '      <div class="app-stat-grid">' +
-        '        <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📝</span> Scripts</div><div class="app-stat-value">' +
-        escapeHtml(String(currentScripts.length)) +
-        "</div></div>" +
-        '        <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">🎧</span> Audio Ready</div><div class="app-stat-value">' +
-        escapeHtml(String(scriptsWithAudioCount())) +
-        "</div></div>" +
-        '        <div class="app-stat-tile"><div class="app-stat-label"><span aria-hidden="true">📚</span> Playlists</div><div class="app-stat-value">' +
-        escapeHtml(String(currentPlaylists.length)) +
-        "</div></div>" +
-        "      </div>" +
-        "    </div>" +
-        "  </details>" +
         "</div>";
       var startBtn = document.getElementById("home-start-create");
       if (startBtn) {
@@ -9103,12 +9092,6 @@
           ev.stopPropagation();
           cycleHomePlaysPeriod();
           renderHomeFlow(displayName);
-        });
-      }
-      var libDetails = document.getElementById("home-library-details");
-      if (libDetails) {
-        libDetails.addEventListener("toggle", function () {
-          writeHomeLibrarySectionOpen(!!libDetails.open);
         });
       }
       return;
