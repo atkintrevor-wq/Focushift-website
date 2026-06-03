@@ -1159,6 +1159,28 @@
     if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
   }
 
+  /** Merge a script into currentScripts (Firestore snapshot may arrive before local text is applied). */
+  function upsertCurrentScript(entry) {
+    if (!entry || !entry.id) return;
+    var ix = currentScripts.findIndex(function (s) {
+      return s.id === entry.id;
+    });
+    if (ix >= 0) {
+      currentScripts[ix] = Object.assign({}, currentScripts[ix], entry);
+    } else {
+      currentScripts = [entry].concat(currentScripts);
+    }
+    updateTabCounts();
+  }
+
+  function seedInlineScriptDraft(scriptId, title, text) {
+    if (!scriptId) return;
+    inlineScriptDraftById[scriptId] = {
+      title: title != null ? String(title) : "",
+      text: text != null ? String(text) : "",
+    };
+  }
+
   function filterEntitledIncomingScripts(uid, incomingScripts) {
     if (!incomingScripts.length) return Promise.resolve([]);
     return Promise.all(
@@ -8702,30 +8724,22 @@
             var q2El = document.getElementById("gen-q2");
             if (q1El) q1El.value = "";
             if (q2El) q2El.value = "";
-            if (
-              !currentScripts.some(function (s) {
-                return s.id === newScriptId;
-              })
-            ) {
-              currentScripts = [
-                {
-                  id: newScriptId,
-                  title: title,
-                  text: scriptText,
-                  audioURL: "",
-                  voiceID: saveVoiceId,
-                  backgroundID: saveBgId,
-                  categoryID: ctx.cat.id,
-                  createdAt: now,
-                  updatedAt: null,
-                  audioCreatedAt: null,
-                  audioContentHash: "",
-                  audioVoiceID: "",
-                  audioBackgroundID: "",
-                },
-              ].concat(currentScripts);
-              updateTabCounts();
-            }
+            upsertCurrentScript({
+              id: newScriptId,
+              title: title,
+              text: scriptText,
+              audioURL: "",
+              voiceID: saveVoiceId,
+              backgroundID: saveBgId,
+              categoryID: ctx.cat.id,
+              createdAt: now,
+              updatedAt: null,
+              audioCreatedAt: null,
+              audioContentHash: "",
+              audioVoiceID: "",
+              audioBackgroundID: "",
+            });
+            seedInlineScriptDraft(newScriptId, title, scriptText);
             setMessage("Saved to My Library — edit the title or script below.", "success");
             setHomeFlowStep("landing", ctx.displayName || "");
             openInlineScriptEditorForScript(newScriptId);
@@ -10535,10 +10549,24 @@
       if (!scriptId || inlineScriptEditorOpenById[scriptId] !== true) continue;
       var titleEl = card.querySelector(".script-inline-title-input");
       var ta = card.querySelector(".script-inline-textarea");
-      if (!titleEl && !ta) continue;
+      var previewEl = card.querySelector(".script-inline-preview");
+      if (!titleEl && !ta && !previewEl) continue;
+      var capturedTitle = titleEl ? String(titleEl.value || "") : "";
+      var capturedText = ta
+        ? String(ta.value || "")
+        : previewEl
+          ? String(previewEl.textContent || "")
+          : "";
+      var prior = inlineScriptDraftById[scriptId];
+      if (prior && prior.text && String(prior.text).trim() && !String(capturedText).trim()) {
+        capturedText = String(prior.text);
+      }
+      if (prior && prior.title && String(prior.title).trim() && !String(capturedTitle).trim()) {
+        capturedTitle = String(prior.title);
+      }
       inlineScriptDraftById[scriptId] = {
-        title: titleEl ? String(titleEl.value || "") : "",
-        text: ta ? String(ta.value || "") : "",
+        title: capturedTitle,
+        text: capturedText,
       };
     }
   }
