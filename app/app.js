@@ -2748,6 +2748,8 @@
     host.addEventListener("click", function (ev) {
       var btn = ev.target && ev.target.closest ? ev.target.closest(".account-info-btn") : null;
       if (!btn || !btn.id) return;
+      ev.preventDefault();
+      ev.stopPropagation();
       if (btn.id === "account-subscription-info") {
         showAccountInfoModal("Subscriptions & billing", subscriptionPlansInfoBodyWeb());
       } else if (btn.id === "account-manage-billing-info") {
@@ -3079,15 +3081,17 @@
       '          <p class="app-muted account-subscription-desc" id="account-subscription-description">Limited features on the Free tier.</p>' +
       '          <div id="account-subscription-billing-rows" class="account-ios-billing-rows" hidden></div>' +
       "        </div>" +
-      '        <div class="account-ios-actions account-ios-actions--stack">' +
-      '          <button type="button" class="app-btn app-btn-secondary account-view-plans-btn" id="account-btn-view-plans" aria-expanded="false" aria-controls="account-plans-panel">View plans &amp; upgrade</button>' +
-      '          <div class="account-ios-action-row" id="account-manage-billing-row" hidden>' +
-      '            <button type="button" class="app-btn app-btn-secondary account-manage-billing-btn account-ios-action-row__btn" id="account-btn-manage-billing">Manage billing</button>' +
+      '        <div class="account-ios-actions account-ios-actions--subscription">' +
+      '          <button type="button" class="app-btn app-btn-primary account-view-plans-btn account-view-plans-btn--hero" id="account-btn-view-plans" aria-expanded="false" aria-controls="account-plans-panel">View plans &amp; upgrade</button>' +
+      '          <div class="account-ios-manage-row" id="account-ios-manage-row">' +
+      '            <div class="account-ios-manage-cell" id="account-manage-billing-row" hidden>' +
+      '              <button type="button" class="app-btn app-btn-secondary account-manage-billing-btn account-ios-manage-cell__btn" id="account-btn-manage-billing">Manage billing</button>' +
       accountInfoButtonHtml("account-manage-billing-info", "Manage billing help") +
-      "          </div>" +
-      '          <div class="account-ios-action-row" id="account-manage-subscriptions-row" hidden>' +
-      '            <button type="button" class="app-btn app-btn-secondary account-ios-action-row__btn" disabled>Manage subscriptions (iOS app)</button>' +
+      "            </div>" +
+      '            <div class="account-ios-manage-cell" id="account-manage-subscriptions-row" hidden>' +
+      '              <button type="button" class="app-btn app-btn-secondary account-ios-manage-cell__btn" disabled>Manage subscriptions (iOS)</button>' +
       accountInfoButtonHtml("account-manage-subscriptions-info", "Manage subscriptions help") +
+      "            </div>" +
       "          </div>" +
       "        </div>" +
       '        <div id="account-plans-panel" class="account-plans-panel" hidden>' +
@@ -8108,9 +8112,13 @@
     var tier = resolvedSubscriptionTier();
     var manageBillingRow = document.getElementById("account-manage-billing-row");
     var manageSubsRow = document.getElementById("account-manage-subscriptions-row");
+    var manageRow = document.getElementById("account-ios-manage-row");
     var syncCloudBtn = document.getElementById("account-sync-cloud");
-    if (manageBillingRow) manageBillingRow.hidden = !stripe;
-    if (manageSubsRow) manageSubsRow.hidden = tier === "free" || stripe;
+    var hideBilling = !stripe;
+    var hideSubs = tier === "free" || stripe;
+    if (manageBillingRow) manageBillingRow.hidden = hideBilling;
+    if (manageSubsRow) manageSubsRow.hidden = hideSubs;
+    if (manageRow) manageRow.hidden = hideBilling && hideSubs;
     if (syncCloudBtn) syncCloudBtn.hidden = tier !== "starter" && tier !== "creator";
   }
 

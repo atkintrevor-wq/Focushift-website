@@ -462,6 +462,53 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   width: 100%;
   justify-content: center;
 }
+.account-ios-actions--subscription {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+.account-view-plans-btn--hero {
+  width: 100%;
+  justify-content: center;
+  text-align: center;
+  padding: 0.55rem 1rem;
+  font-weight: 600;
+}
+.account-ios-manage-row[hidden] {
+  display: none !important;
+}
+.account-ios-manage-row {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+.account-ios-manage-cell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.account-ios-manage-cell[hidden] {
+  display: none !important;
+}
+.account-ios-manage-cell__btn {
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+  text-align: center;
+  font-size: 0.8rem;
+  padding: 0.48rem 0.4rem;
+  line-height: 1.25;
+}
+.account-ios-manage-cell .account-info-btn {
+  flex-shrink: 0;
+}
+.account-ios-manage-row:has(.account-ios-manage-cell:not([hidden]):only-child) .account-ios-manage-cell:not([hidden]) {
+  flex: 1;
+  max-width: 100%;
+}
 .account-ios-action-row {
   display: flex;
   align-items: center;
@@ -800,9 +847,7 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   line-height: 1.45;
 }
 .account-view-plans-btn {
-  margin-top: 0.65rem;
-  width: 100%;
-  max-width: 22rem;
+  margin-top: 0;
 }
 .account-plans-panel {
   margin-top: 0.75rem;
@@ -2955,6 +3000,10 @@ body.fs-app-body.fs-modal-scroll-lock {
   overscroll-behavior: contain;
 }
 .app-modal-backdrop[hidden] { display: none !important; }
+/* Account info popups must stack above the Account & Settings modal */
+#account-info-backdrop {
+  z-index: 10120;
+}
 .app-modal {
   width: 100%;
   max-width: 520px;
