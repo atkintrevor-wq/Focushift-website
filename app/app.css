@@ -1092,8 +1092,21 @@ html.fs-app[data-app-theme="light"] .listen-today-script-actions-row {
 .library-script-card--collapsed .app-card-meta-row {
   margin-bottom: 0;
 }
+.library-script-card--collapsed .script-card-expandable {
+  display: none;
+}
+.library-script-card--collapsed .script-card-footer-delete {
+  display: none;
+}
+.library-script-card--collapsed .script-card-footer {
+  margin-top: 0.35rem;
+  padding-top: 0.4rem;
+}
 .library-script-card--collapsed {
   padding-bottom: 0.75rem;
+}
+.script-card-expandable {
+  display: block;
 }
 .library-script-card .app-card-meta-row {
   margin-bottom: 0.45rem;
@@ -1595,11 +1608,6 @@ html.fs-app[data-app-theme="light"] .script-card-sync-warn {
     color: #b45309;
   }
 }
-.library-script-card--collapsed .script-card-sync-row {
-  margin-top: 0.15rem;
-  margin-bottom: 0.1rem;
-}
-
 .playlist-card-tappable:focus-visible {
   outline: 2px solid rgba(96, 165, 250, 0.85);
   outline-offset: 2px;

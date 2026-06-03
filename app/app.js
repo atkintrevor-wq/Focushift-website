@@ -10343,17 +10343,21 @@
         "</div>" +
         "</div>"
       : "";
-    var footerHtml = controlsExpanded
-      ? '<div class="script-card-footer">' +
-        '  <button type="button" class="script-card-icon-btn script-card-icon-btn-delete script-card-footer-delete" data-action="delete" data-script-id="' +
-        escapeHtml(script.id) +
-        '" title="' +
-        (isSharedListenOnly ? "Remove from library" : "Delete script") +
-        '" aria-label="' +
-        (isSharedListenOnly ? "Remove" : "Delete") +
-        '">\u2715</button>' +
-        "</div>"
-      : "";
+    var expandableHtml =
+      '<div class="script-card-expandable">' + inlineEditorHtml + audioSection + "</div>";
+    var footerHtml =
+      '<div class="script-card-footer">' +
+      syncStatusHtml +
+      (controlsExpanded
+        ? '  <button type="button" class="script-card-icon-btn script-card-icon-btn-delete script-card-footer-delete" data-action="delete" data-script-id="' +
+          escapeHtml(script.id) +
+          '" title="' +
+          (isSharedListenOnly ? "Remove from library" : "Delete script") +
+          '" aria-label="' +
+          (isSharedListenOnly ? "Remove" : "Delete") +
+          '">\u2715</button>'
+        : "") +
+      "</div>";
     var libraryChip = isSharedListenOnly
       ? '<span class="app-chip">Shared · ' +
         escapeHtml((script.sharedFrom && script.sharedFrom.senderDisplayName) || "Someone") +
@@ -10403,9 +10407,7 @@
       "</div>" +
       libraryChip +
       "</div>" +
-      syncStatusHtml +
-      inlineEditorHtml +
-      audioSection +
+      expandableHtml +
       footerHtml +
       "</article>"
     );
