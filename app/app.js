@@ -3161,6 +3161,9 @@
       '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Voice settings editor">' +
       "    <h3>Voice settings</h3>" +
       '    <p id="voice-settings-subtitle" class="app-muted" style="margin:0 0 0.55rem;">Tune cloned voice behavior to match iOS controls.</p>' +
+      '    <label for="voice-setting-speed">Speed <span id="voice-setting-speed-value" class="app-muted">1.10</span></label>' +
+      '    <input id="voice-setting-speed" type="range" min="0.7" max="1.2" step="0.05" value="1.1">' +
+      '    <p class="app-muted" style="margin:-0.35rem 0 0.55rem;font-size:0.82rem;">Read slowly when cloning? Use ~1.05–1.15 so scripts sound a bit faster.</p>' +
       '    <label for="voice-setting-stability">Stability <span id="voice-setting-stability-value" class="app-muted">0.50</span></label>' +
       '    <input id="voice-setting-stability" type="range" min="0" max="1" step="0.01" value="0.5">' +
       '    <label for="voice-setting-similarity">Similarity boost <span id="voice-setting-similarity-value" class="app-muted">0.80</span></label>' +
@@ -3258,11 +3261,15 @@
       "    <h3>Adjust Your Inner Voice</h3>" +
       '    <p id="voice-adjust-subtitle" class="app-muted" style="margin:0 0 0.55rem;">Fine-tune how your cloned voice sounds.</p>' +
       '    <div class="voice-adjust-presets">' +
+      '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="inner">Inner voice</button>' +
       '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="natural">Natural</button>' +
       '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="energetic">Energetic</button>' +
       '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="calm">Calm</button>' +
       '      <button type="button" class="app-btn app-btn-ghost" data-voice-adjust-preset="clear">Clear</button>' +
       "    </div>" +
+      '    <label for="voice-adjust-speed">Speed <span id="voice-adjust-speed-value" class="app-muted">1.10</span></label>' +
+      '    <input id="voice-adjust-speed" type="range" min="0.7" max="1.2" step="0.05" value="1.1">' +
+      '    <p class="app-muted" style="margin:-0.35rem 0 0.55rem;font-size:0.82rem;">If your clone sample was read slowly, nudge speed up so affirmations feel quicker.</p>' +
       '    <label for="voice-adjust-stability">Consistency <span id="voice-adjust-stability-value" class="app-muted">0.50</span></label>' +
       '    <input id="voice-adjust-stability" type="range" min="0" max="1" step="0.01" value="0.5">' +
       '    <label for="voice-adjust-similarity">Clarity <span id="voice-adjust-similarity-value" class="app-muted">0.80</span></label>' +
@@ -3953,7 +3960,7 @@
     });
     bindSectionSearchControls();
     bindAITextEditModal();
-    ["stability", "similarity", "style"].forEach(function (k) {
+    ["speed", "stability", "similarity", "style"].forEach(function (k) {
       var el = document.getElementById("voice-adjust-" + k);
       if (!el) return;
       el.addEventListener("input", function () {
@@ -3984,7 +3991,7 @@
         closeVoiceSettingsModal();
       }
     });
-    ["stability", "similarity", "style"].forEach(function (k) {
+    ["speed", "stability", "similarity", "style"].forEach(function (k) {
       var el = document.getElementById("voice-setting-" + k);
       if (!el) return;
       el.addEventListener("input", function () {
@@ -5240,21 +5247,45 @@
     );
   }
 
-  function voiceSettingsForAudioJob(localVoiceId) {
-    var cloned = clonedVoiceById(localVoiceId);
-    if (!cloned || !cloned.settings) return null;
-    var s = cloned.settings;
+  function clampVoiceSpeed(n, fallback) {
+    var x = Number(n);
+    if (!isFinite(x)) x = fallback;
+    return Math.max(0.7, Math.min(1.2, x));
+  }
+
+  function normalizeVoiceSettingsPayload(raw) {
     function clamp01(n, fallback) {
       var x = Number(n);
       if (!isFinite(x)) return fallback;
       return Math.max(0, Math.min(1, x));
     }
+    var s = raw || {};
     return {
+      speed: clampVoiceSpeed(s.speed, 1.0),
       stability: clamp01(s.stability, 0.5),
       similarity_boost: clamp01(s.similarity_boost != null ? s.similarity_boost : s.similarityBoost, 0.75),
       style: clamp01(s.style, 0),
       use_speaker_boost: s.use_speaker_boost !== false && s.useSpeakerBoost !== false,
     };
+  }
+
+  function persistClonedVoiceSettingsDoc(localVoiceId, settingsPayload) {
+    if (!currentUser || !localVoiceId) return Promise.resolve();
+    return clonedVoicesCollection(currentUser.uid)
+      .doc(localVoiceId)
+      .set(
+        {
+          settings: settingsPayload,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+  }
+
+  function voiceSettingsForAudioJob(localVoiceId) {
+    var cloned = clonedVoiceById(localVoiceId);
+    if (!cloned || !cloned.settings) return null;
+    return normalizeVoiceSettingsPayload(cloned.settings);
   }
 
   function beginVoiceUploadFlow(mode) {
@@ -5443,42 +5474,43 @@
     if (!input || !out) return;
     var val = Number(input.value || 0);
     if (!isFinite(val)) val = 0;
-    out.textContent = val.toFixed(2);
+    out.textContent = kind === "speed" ? val.toFixed(2) : val.toFixed(2);
   }
 
   function currentVoiceAdjustPayload() {
-    function clamp01(n, fallback) {
-      var x = Number(n);
-      if (!isFinite(x)) return fallback;
-      return Math.max(0, Math.min(1, x));
-    }
+    var speed = document.getElementById("voice-adjust-speed");
     var stability = document.getElementById("voice-adjust-stability");
     var similarity = document.getElementById("voice-adjust-similarity");
     var style = document.getElementById("voice-adjust-style");
     var speaker = document.getElementById("voice-adjust-speaker-boost");
-    return {
-      stability: clamp01(stability && stability.value, 0.5),
-      similarity_boost: clamp01(similarity && similarity.value, 0.8),
-      style: clamp01(style && style.value, 0.3),
+    return normalizeVoiceSettingsPayload({
+      speed: speed && speed.value,
+      stability: stability && stability.value,
+      similarity_boost: similarity && similarity.value,
+      style: style && style.value,
       use_speaker_boost: !!(speaker && speaker.checked),
-    };
+    });
   }
 
   function applyVoiceAdjustPreset(preset) {
+    var sp = document.getElementById("voice-adjust-speed");
     var s = document.getElementById("voice-adjust-stability");
     var m = document.getElementById("voice-adjust-similarity");
     var y = document.getElementById("voice-adjust-style");
     var b = document.getElementById("voice-adjust-speaker-boost");
-    if (!s || !m || !y || !b) return;
-    if (preset === "energetic") {
-      s.value = "0.60"; m.value = "0.80"; y.value = "0.50"; b.checked = true;
+    if (!sp || !s || !m || !y || !b) return;
+    if (preset === "inner") {
+      sp.value = "1.10"; s.value = "0.60"; m.value = "0.80"; y.value = "0.30"; b.checked = true;
+    } else if (preset === "energetic") {
+      sp.value = "1.10"; s.value = "0.60"; m.value = "0.80"; y.value = "0.50"; b.checked = true;
     } else if (preset === "calm") {
-      s.value = "0.70"; m.value = "0.70"; y.value = "0.00"; b.checked = true;
+      sp.value = "0.90"; s.value = "0.70"; m.value = "0.70"; y.value = "0.00"; b.checked = true;
     } else if (preset === "clear") {
-      s.value = "0.60"; m.value = "0.90"; y.value = "0.20"; b.checked = true;
+      sp.value = "1.00"; s.value = "0.60"; m.value = "0.90"; y.value = "0.20"; b.checked = true;
     } else {
-      s.value = "0.50"; m.value = "0.75"; y.value = "0.00"; b.checked = true;
+      sp.value = "1.00"; s.value = "0.50"; m.value = "0.75"; y.value = "0.00"; b.checked = true;
     }
+    updateVoiceAdjustReadout("speed");
     updateVoiceAdjustReadout("stability");
     updateVoiceAdjustReadout("similarity");
     updateVoiceAdjustReadout("style");
@@ -5511,14 +5543,17 @@
         });
       })
       .then(function (settings) {
+        var sp = document.getElementById("voice-adjust-speed");
         var s = document.getElementById("voice-adjust-stability");
         var m = document.getElementById("voice-adjust-similarity");
         var y = document.getElementById("voice-adjust-style");
         var b = document.getElementById("voice-adjust-speaker-boost");
+        if (sp) sp.value = String(clampVoiceSpeed(settings.speed, 1.1));
         if (s) s.value = String(typeof settings.stability === "number" ? settings.stability : 0.5);
         if (m) m.value = String(typeof settings.similarity_boost === "number" ? settings.similarity_boost : 0.75);
         if (y) y.value = String(typeof settings.style === "number" ? settings.style : 0.0);
         if (b) b.checked = settings.use_speaker_boost !== false;
+        updateVoiceAdjustReadout("speed");
         updateVoiceAdjustReadout("stability");
         updateVoiceAdjustReadout("similarity");
         updateVoiceAdjustReadout("style");
@@ -5621,6 +5656,10 @@
           if (!resp.ok) throw new Error("Could not save settings.");
           return true;
         });
+      })
+      .then(function () {
+        var payload = currentVoiceAdjustPayload();
+        return persistClonedVoiceSettingsDoc(cloneAdjustLocalVoiceId, payload);
       })
       .then(function () {
         closeVoiceAdjustModal();
@@ -6109,18 +6148,21 @@
     editingVoiceSettingsToken = token || "";
 
     var subtitle = document.getElementById("voice-settings-subtitle");
+    var speed = document.getElementById("voice-setting-speed");
     var stability = document.getElementById("voice-setting-stability");
     var similarity = document.getElementById("voice-setting-similarity");
     var style = document.getElementById("voice-setting-style");
     var speaker = document.getElementById("voice-setting-speaker-boost");
-    if (!stability || !similarity || !style || !speaker) return;
+    if (!speed || !stability || !similarity || !style || !speaker) return;
 
     var s = settings || {};
+    speed.value = String(clampVoiceSpeed(s.speed, 1.1));
     stability.value = String(typeof s.stability === "number" ? s.stability : 0.5);
     similarity.value = String(typeof s.similarity_boost === "number" ? s.similarity_boost : 0.8);
     style.value = String(typeof s.style === "number" ? s.style : 0.3);
     speaker.checked = s.use_speaker_boost !== false;
 
+    updateVoiceSettingsReadout("speed");
     updateVoiceSettingsReadout("stability");
     updateVoiceSettingsReadout("similarity");
     updateVoiceSettingsReadout("style");
@@ -6137,24 +6179,20 @@
       return;
     }
 
-    function clamp01(n, fallback) {
-      var x = Number(n);
-      if (!isFinite(x)) return fallback;
-      return Math.max(0, Math.min(1, x));
-    }
-
+    var speed = document.getElementById("voice-setting-speed");
     var stability = document.getElementById("voice-setting-stability");
     var similarity = document.getElementById("voice-setting-similarity");
     var style = document.getElementById("voice-setting-style");
     var speaker = document.getElementById("voice-setting-speaker-boost");
-    if (!stability || !similarity || !style || !speaker) return;
+    if (!speed || !stability || !similarity || !style || !speaker) return;
 
-    var payload = {
-      stability: clamp01(stability.value, 0.5),
-      similarity_boost: clamp01(similarity.value, 0.8),
-      style: clamp01(style.value, 0.3),
+    var payload = normalizeVoiceSettingsPayload({
+      speed: speed.value,
+      stability: stability.value,
+      similarity_boost: similarity.value,
+      style: style.value,
       use_speaker_boost: !!speaker.checked,
-    };
+    });
 
     setVoiceSettingsMessage("Saving voice settings...", "");
     fetch(backendBaseURL() + "/elevenlabs/voices/" + encodeURIComponent(cloned.elevenLabsVoiceID) + "/settings/edit", {
@@ -6173,6 +6211,9 @@
           if (!resp.ok) throw new Error("Could not save settings.");
           return true;
         });
+      })
+      .then(function () {
+        return persistClonedVoiceSettingsDoc(editingVoiceSettingsId, payload);
       })
       .then(function () {
         closeVoiceSettingsModal();
