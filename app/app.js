@@ -9430,6 +9430,22 @@
     };
   }
 
+  /** Hash input for a card — includes inline editor draft text when open. */
+  function scriptDigestSourceForScriptCard(script) {
+    if (!script) {
+      return { text: "", voiceID: "", backgroundID: "" };
+    }
+    var editorOpen = inlineScriptEditorOpenById[script.id] === true;
+    var draft = editorOpen ? inlineScriptDraftForScript(script) : null;
+    var text =
+      draft && draft.text != null ? String(draft.text) : (script.text && String(script.text)) || "";
+    return {
+      text: text,
+      voiceID: effectiveVoiceIdForScript(script),
+      backgroundID: effectiveBackgroundIdForScript(script),
+    };
+  }
+
   /** Aligns with iOS `AudioTagUtils` for Eleven v3-style tags. */
   var WEB_SHOW_AUDIO_TAGS_STORAGE_KEY = "focusshiftWebShowAudioTagsInScript";
 
@@ -9530,25 +9546,23 @@
     } catch (_e) {}
   }
 
-  function shouldEnableGenerateFromHash(script, contentHashHex) {
-    var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
+  /** True when text, voice, or background no longer match the last generated audio. */
+  function scriptNeedsAudioRegeneration(script, contentHashHex) {
+    var hasAudio = !!(script && script.audioURL && String(script.audioURL).trim());
     if (!hasAudio) return true;
     var stored = getEffectiveStoredContentHash(script);
     if (!stored) return true;
-    if (scriptHasFrozenAudioSettings(script)) {
-      return scriptVoiceBackgroundDrifted(script);
-    }
     return stored !== contentHashHex;
   }
 
-  /** True when voice or background changed since audio was generated (iOS-style frozen settings). */
+  function shouldEnableGenerateFromHash(script, contentHashHex) {
+    return scriptNeedsAudioRegeneration(script, contentHashHex);
+  }
+
+  /** @deprecated Use scriptNeedsAudioRegeneration — kept for call sites. */
   function scriptAudioSettingsDrifted(script, contentHashHex) {
     if (!script || !(script.audioURL && String(script.audioURL).trim())) return false;
-    if (scriptHasFrozenAudioSettings(script)) {
-      return scriptVoiceBackgroundDrifted(script);
-    }
-    var stored = getEffectiveStoredContentHash(script);
-    return !!stored && stored !== contentHashHex;
+    return scriptNeedsAudioRegeneration(script, contentHashHex);
   }
 
   function getStoredGeneratedHashPremade(premadeId) {
@@ -10109,20 +10123,24 @@
     var scriptBackgroundID = effectiveBackgroundIdForScript(script);
     var controlsExpanded = controlsExpandedForScript(script.id);
     var hasUnsavedEdits = inlineScriptHasUnsavedChanges(script);
-    var genEnabled = shouldEnableGenerateFromHash(script, contentHashHex);
+    var needsRegen = scriptNeedsAudioRegeneration(script, contentHashHex);
     var genLabel = isBusy ? "Generating audio..." : "Generate";
     var genClasses = "app-btn";
     if (isBusy) {
       genClasses += " app-btn-secondary";
-    } else if (!genEnabled || hasUnsavedEdits) {
-      genClasses += " app-btn-secondary app-btn-generate-muted";
-    } else if (hasAudio) {
+    } else if (hasAudio && (needsRegen || hasUnsavedEdits)) {
       genClasses += " app-btn-generate-warn";
+    } else if (hasAudio && !needsRegen) {
+      genClasses += " app-btn-secondary app-btn-generate-muted";
     } else {
       genClasses += " app-btn-generate-fresh";
     }
     var genDisabled =
-      isBusy || !genEnabled || controlsReadOnly || isWebFreeTier() || hasUnsavedEdits;
+      isBusy ||
+      controlsReadOnly ||
+      isWebFreeTier() ||
+      hasUnsavedEdits ||
+      (hasAudio && !needsRegen);
     var chevChar = controlsExpanded ? "▲" : "▼";
     var showShareLink = controlsExpanded && hasAudio && isWebCreatorTier() && !isSharedListenOnly;
     if (isSharedListenOnly) {
@@ -10131,23 +10149,23 @@
     if (isFreeReadOnly) {
       editorOpen = false;
     }
-    var drift = scriptAudioSettingsDrifted(script, contentHashHex);
+    var showRegenHint = hasAudio && needsRegen;
     var genTitle = "";
     if (!isBusy) {
-      if (hasUnsavedEdits) {
+      if (hasUnsavedEdits && needsRegen) {
+        genTitle =
+          "Script text changed — save first, then tap Generate to refresh your audio.";
+      } else if (hasUnsavedEdits) {
         genTitle = "Save your script before generating audio.";
-      } else if (!genEnabled && hasAudio) {
-        genTitle = "Audio already matches your selected voice and background.";
-      } else if (genEnabled && hasAudio && drift) {
+      } else if (hasAudio && !needsRegen) {
+        genTitle = "Audio already matches this script text, voice, and background.";
+      } else if (hasAudio && needsRegen) {
         genTitle =
-          "Voice or background changed since this audio was generated. Tap Generate to apply your current selections.";
-      } else if (genEnabled && hasAudio && getEffectiveStoredContentHash(script)) {
-        genTitle =
-          "Script settings changed since this audio was generated. Tap Generate to refresh the file.";
+          "Script text, voice, or background changed since this audio was generated. Tap Generate to refresh.";
       }
     }
-    var regenHintHtml = drift
-      ? '<div class="script-card-regen-hint" role="status">Voice or background changed — expand audio controls and tap <strong>Generate</strong> to apply to your audio.</div>'
+    var regenHintHtml = showRegenHint
+      ? '<div class="script-card-regen-hint" role="status">Script text, voice, or background changed — expand audio controls and tap <strong>Generate</strong> to refresh your audio.</div>'
       : "";
     var audioUrlStr = script.audioURL && String(script.audioURL).trim();
     var hostedAudio = !!(audioUrlStr && /^https?:\/\//i.test(audioUrlStr));
@@ -10892,6 +10910,28 @@
     });
   }
 
+  var inlineScriptEditorInputDebounce = null;
+  function bindScriptListInlineEditorInput() {
+    var list = document.getElementById("scripts-list");
+    if (!list || list.dataset.scriptInlineInputBound === "1") return;
+    list.dataset.scriptInlineInputBound = "1";
+    list.addEventListener("input", function (ev) {
+      var tgt = ev.target;
+      if (!tgt) return;
+      var isTitle = tgt.getAttribute("data-script-inline-field") === "title";
+      var isText = tgt.classList && tgt.classList.contains("script-inline-textarea");
+      if (!isTitle && !isText) return;
+      var card = tgt.closest(".library-script-card");
+      if (!card) return;
+      if (!card.getAttribute("data-script-id")) return;
+      clearTimeout(inlineScriptEditorInputDebounce);
+      inlineScriptEditorInputDebounce = setTimeout(function () {
+        captureInlineScriptDraftsFromDom();
+        renderScripts(currentScripts);
+      }, 250);
+    });
+  }
+
   function saveInlineScript(script) {
     if (!currentUser || !script || !script.id) return;
     if (scriptIsSharedListenOnly(script)) {
@@ -11052,7 +11092,7 @@
         }
         if (hadAudio && (patch.voiceID || patch.backgroundID)) {
           setMessage(
-            "Voice or background updated. Expand the card and tap Generate when you want new audio for this script.",
+            "Listen settings updated. If you changed the script text, voice, or background, tap Generate to refresh your audio.",
             "success"
           );
         } else {
@@ -11336,6 +11376,7 @@
     if (!list) return;
     captureInlineScriptDraftsFromDom();
     bindScriptListFormattingToggle();
+    bindScriptListInlineEditorInput();
     var displayScripts = scripts;
     if (scripts === currentScripts && activeLibraryTab === "my-library") {
       displayScripts = filteredScriptsForDisplay(scripts);
@@ -11355,7 +11396,7 @@
     inlineScriptEditorOpenById = nextExpanded;
     Promise.all(
       displayScripts.map(function (s) {
-        return scriptContentSha256Hex(scriptDigestSourceFromScript(s));
+        return scriptContentSha256Hex(scriptDigestSourceForScriptCard(s));
       })
     ).then(function (hashes) {
       if (gen !== scriptsRenderGeneration) return;
