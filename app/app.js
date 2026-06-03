@@ -5009,14 +5009,96 @@
     });
   }
 
-  function finalizeAwaitingClientMix(uid, scriptId, ttsDownloadURL, backgroundId) {
-    return fetch(ttsDownloadURL)
-      .then(function (r) {
+  function isNetworkFetchFailure(err) {
+    if (!err) return false;
+    var msg = String(err.message || err);
+    return (
+      err instanceof TypeError &&
+      (msg === "Failed to fetch" ||
+        msg.indexOf("NetworkError") >= 0 ||
+        msg.indexOf("Load failed") >= 0)
+    );
+  }
+
+  function networkFetchErrorMessage(context) {
+    return (
+      "Could not reach the server (" +
+      (context || "network") +
+      "). Check your connection, try disabling ad blockers for this site, and confirm Cloud Functions are deployed " +
+      "(firebase deploy --only functions:api,functions:onAudioJobCreated). " +
+      "You can also set Background to None and generate again."
+    );
+  }
+
+  function storagePathFromFirebaseDownloadUrl(url) {
+    try {
+      var u = new URL(url);
+      if (u.hostname !== "firebasestorage.googleapis.com") return "";
+      var parts = u.pathname.split("/o/");
+      if (parts.length < 2) return "";
+      return decodeURIComponent(parts[1].split("?")[0]);
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function fetchArrayBufferFromUrl(url, contextLabel) {
+    function viaHttp() {
+      return fetch(url).then(function (r) {
         if (!r.ok) {
-          throw new Error("Could not download speech audio for mixing (" + r.status + ").");
+          throw new Error(
+            "Could not download " + (contextLabel || "file") + " (" + r.status + ")."
+          );
         }
         return r.arrayBuffer();
-      })
+      });
+    }
+    return viaHttp().catch(function (err) {
+      if (!isNetworkFetchFailure(err)) throw err;
+      var path = storagePathFromFirebaseDownloadUrl(url);
+      if (!path || typeof firebase.storage !== "function" || !currentUser) {
+        throw new Error(networkFetchErrorMessage(contextLabel));
+      }
+      return firebase
+        .storage()
+        .ref(path)
+        .getBytes(50 * 1024 * 1024)
+        .then(function (bytes) {
+          if (bytes && bytes.buffer) return bytes.buffer;
+          return bytes;
+        })
+        .catch(function (storageErr) {
+          var detail = storageErr && storageErr.message ? " " + storageErr.message : "";
+          throw new Error(networkFetchErrorMessage(contextLabel) + detail);
+        });
+    });
+  }
+
+  function validateScriptForAudioGeneration(script) {
+    if (!script) return "Script not found.";
+    var voiceId = effectiveVoiceIdForScript(script);
+    if (!voiceId) return "Pick a voice before generating audio.";
+    if (!isWebVoiceAvailableForGeneration(voiceId)) {
+      return webGenerationGateMessage("voice");
+    }
+    var bgId = effectiveBackgroundIdForScript(script);
+    if (!isWebBackgroundAvailableForGeneration(bgId)) {
+      return webGenerationGateMessage("background");
+    }
+    if (voiceId.indexOf("-") >= 0) {
+      var cloned = clonedVoiceById(voiceId);
+      if (!cloned || !(cloned.elevenLabsVoiceID && String(cloned.elevenLabsVoiceID).trim())) {
+        return "This cloned voice is not ready on the server. Refresh the page or recreate the voice under Voices.";
+      }
+    }
+    if (typeof firebase.storage !== "function") {
+      return "Firebase Storage is not loaded. Refresh the page and try again.";
+    }
+    return "";
+  }
+
+  function finalizeAwaitingClientMix(uid, scriptId, ttsDownloadURL, backgroundId) {
+    return fetchArrayBufferFromUrl(ttsDownloadURL, "speech audio")
       .then(function (ttsAb) {
         return mixTtsWithBackgroundToWavBlob(ttsAb, backgroundId);
       })
@@ -11734,6 +11816,11 @@
         }
         return json != null ? json : {};
       });
+    }).catch(function (err) {
+      if (isNetworkFetchFailure(err)) {
+        throw new Error(networkFetchErrorMessage("API"));
+      }
+      throw err;
     });
   }
 
@@ -11763,6 +11850,11 @@
         }
         return json != null ? json : {};
       });
+    }).catch(function (err) {
+      if (isNetworkFetchFailure(err)) {
+        throw new Error(networkFetchErrorMessage("API"));
+      }
+      throw err;
     });
   }
 
@@ -11915,6 +12007,11 @@
     var text = (script.text || "").trim();
     if (!text) {
       setMessage("Script text is empty. Add text before generating audio.", "error");
+      return;
+    }
+    var genGuard = validateScriptForAudioGeneration(script);
+    if (genGuard) {
+      setMessage(genGuard, "error");
       return;
     }
     scriptContentSha256Hex(scriptDigestSourceFromScript(script)).then(function (hex) {
