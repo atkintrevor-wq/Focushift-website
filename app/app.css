@@ -331,14 +331,297 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
 .account-modal-close-x { min-width: 40px; padding: 0.35rem 0.5rem; font-size: 1.35rem; line-height: 1; }
 .account-modal-tabs { margin: 0 0 0.85rem; flex-wrap: wrap; }
 .account-tab-panel { margin-top: 0.25rem; }
-.account-tab-stack {
+.account-tab-stack,
+.account-ios-stack {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
 }
+.account-ios-stack {
+  gap: 1.1rem;
+}
 /* `display: flex` on .account-tab-stack wins over the UA `[hidden]` rule — force hide. */
 .account-tab-panel[hidden] {
   display: none !important;
+}
+/* iOS-style grouped settings (Account tab) */
+.account-ios-group {
+  margin: 0;
+}
+.account-ios-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  margin: 0 0 0.4rem;
+  padding: 0 0.15rem;
+}
+.account-ios-group__title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #94a3b8);
+}
+.account-ios-group__info {
+  margin-left: auto;
+}
+.account-ios-list {
+  border: 1px solid var(--app-surface-card-border, rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
+  background: var(--app-surface-card, rgba(255, 255, 255, 0.04));
+  overflow: hidden;
+}
+.account-ios-list--identity {
+  padding: 0.75rem 0.85rem;
+}
+.account-ios-list--subscription {
+  padding: 0.55rem 0.75rem 0.35rem;
+}
+.account-ios-list--subscription .account-subscription-plan-line {
+  margin-top: 0;
+}
+.account-ios-billing-rows .account-ios-row--kv:first-child {
+  border-top: 1px solid var(--app-surface-card-border, rgba(255, 255, 255, 0.08));
+  margin-top: 0.35rem;
+  padding-top: 0.5rem;
+}
+.account-ios-list--usage,
+.account-ios-list--stats {
+  padding: 0.55rem 0.7rem;
+}
+.account-ios-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  width: 100%;
+  padding: 0.62rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--app-surface-card-border, rgba(255, 255, 255, 0.08));
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  box-sizing: border-box;
+}
+.account-ios-row:last-child {
+  border-bottom: none;
+}
+.account-ios-row--nav {
+  cursor: pointer;
+}
+.account-ios-row--nav:hover {
+  background: var(--app-surface-muted, rgba(255, 255, 255, 0.05));
+}
+.account-ios-row--danger {
+  justify-content: center;
+  color: #f87171;
+  font-weight: 600;
+  cursor: pointer;
+}
+.account-ios-row--danger:hover {
+  background: rgba(248, 113, 113, 0.08);
+}
+.account-ios-row--toggle {
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.account-ios-row__label {
+  font-size: 0.92rem;
+  font-weight: 500;
+}
+.account-ios-row__value {
+  font-size: 0.88rem;
+  color: var(--muted, #94a3b8);
+  flex-shrink: 0;
+}
+.account-ios-row__chev {
+  font-size: 1.1rem;
+  line-height: 1;
+  color: var(--muted, #64748b);
+  margin-left: 0.15rem;
+}
+.account-ios-row--kv,
+.account-ios-row--stat {
+  padding-top: 0.48rem;
+  padding-bottom: 0.48rem;
+}
+.account-ios-actions {
+  margin-top: 0.55rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+.account-ios-actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+.account-ios-actions--stack > .app-btn {
+  width: 100%;
+  justify-content: center;
+}
+.account-ios-action-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.account-ios-action-row__btn {
+  flex: 1;
+  min-width: 0;
+}
+.account-ios-action-row--refresh {
+  margin-top: 0.65rem;
+  padding: 0 0.1rem;
+}
+.account-ios-action-row--refresh .account-ios-action-row__btn {
+  flex: 0 1 auto;
+}
+.account-ios-footer-btn {
+  margin-top: 0.55rem;
+  width: 100%;
+}
+.account-ios-group--nested {
+  margin-top: -0.35rem;
+}
+.account-identity-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+.account-identity-avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.account-identity-meta {
+  flex: 1;
+  min-width: 0;
+}
+.account-identity-form {
+  margin: 0;
+}
+.account-ios-field-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted, #94a3b8);
+  margin-bottom: 0.28rem;
+}
+.account-ios-field-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.45rem;
+  padding: 0.5rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid var(--app-surface-card-border, rgba(255, 255, 255, 0.14));
+  background: var(--app-modal-row-bg, rgba(0, 0, 0, 0.2));
+  color: inherit;
+  font-size: 0.92rem;
+}
+.account-ios-save-name {
+  width: 100%;
+  margin-bottom: 0.45rem;
+}
+.account-identity-email {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted, #94a3b8);
+  word-break: break-word;
+}
+.account-identity-meta-line {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted, #64748b);
+}
+.account-ios-usage-meters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.account-ios-meter__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.28rem;
+}
+.account-ios-meter__label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.account-ios-meter__ratio {
+  font-size: 0.82rem;
+  color: var(--muted, #94a3b8);
+}
+.account-ios-meter__track {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.account-ios-meter__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+.account-ios-meter__remain {
+  margin-top: 0.22rem;
+  font-size: 0.75rem;
+  color: var(--muted, #94a3b8);
+}
+.account-ios-reset-line {
+  margin: 0.65rem 0 0;
+  font-size: 0.78rem;
+  color: var(--muted, #94a3b8);
+}
+.account-ios-addon-host {
+  margin-top: 0.65rem;
+}
+.account-ios-addon {
+  border: 1px solid var(--app-surface-card-border, rgba(255, 255, 255, 0.1));
+  border-radius: 12px;
+  background: var(--app-surface-card, rgba(255, 255, 255, 0.03));
+  padding: 0.55rem 0.7rem 0.65rem;
+}
+.account-ios-addon .account-ios-group__header {
+  margin-bottom: 0.35rem;
+}
+.account-ios-addon__lede {
+  margin: 0 0 0.5rem;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  color: var(--muted, #94a3b8);
+}
+.account-ios-addon__action {
+  width: 100%;
+  margin-bottom: 0.35rem;
+}
+.account-ios-addon__note {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+.account-ios-loading {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--muted, #94a3b8);
+}
+.account-ios-group--signout .account-ios-list {
+  border-color: rgba(248, 113, 113, 0.25);
+}
+.app-modal.app-modal-account {
+  max-height: min(92vh, 820px);
+  overflow-y: auto;
 }
 .account-section-card {
   border: 1px solid var(--app-surface-card-border);
@@ -429,6 +712,47 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   gap: 0.5rem;
   flex-wrap: wrap;
   margin-bottom: 0.55rem;
+}
+.account-info-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 1px solid var(--fs-border, rgba(255, 255, 255, 0.14));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted, #94a3b8);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.account-info-btn:hover {
+  color: var(--text, #e2e8f0);
+  background: var(--app-surface-muted, rgba(255, 255, 255, 0.06));
+}
+.account-manage-billing-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  margin-top: 0.45rem;
+}
+.account-info-modal__body {
+  margin: 0 0 1rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.account-insight-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  margin-bottom: 0.45rem;
+}
+.account-insight-card-head h4 {
+  margin: 0;
 }
 .account-insight-device-list {
   margin: 0.35rem 0 0.5rem;

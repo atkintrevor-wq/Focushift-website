@@ -2576,6 +2576,198 @@
     if (backdrop) backdrop.hidden = true;
   }
 
+  function accountInfoIconSvg() {
+    return (
+      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="12" cy="12" r="9"/>' +
+      '<path d="M12 10v6M12 7h.01" stroke-linecap="round"/>' +
+      "</svg>"
+    );
+  }
+
+  function accountInfoButtonHtml(id, ariaLabel) {
+    return (
+      '<button type="button" class="account-info-btn" id="' +
+      id +
+      '" aria-label="' +
+      escapeHtml(ariaLabel) +
+      '">' +
+      accountInfoIconSvg() +
+      "</button>"
+    );
+  }
+
+  function showAccountInfoModal(title, body) {
+    var backdrop = document.getElementById("account-info-backdrop");
+    var titleEl = document.getElementById("account-info-title");
+    var bodyEl = document.getElementById("account-info-body");
+    if (!backdrop || !titleEl || !bodyEl) return;
+    titleEl.textContent = title || "Info";
+    bodyEl.textContent = body || "";
+    backdrop.hidden = false;
+    var doneBtn = document.getElementById("account-info-done");
+    if (doneBtn) doneBtn.focus();
+  }
+
+  function closeAccountInfoModal() {
+    var backdrop = document.getElementById("account-info-backdrop");
+    if (backdrop) backdrop.hidden = true;
+  }
+
+  function subscriptionManageInfoBodyWeb() {
+    var tier = resolvedSubscriptionTier();
+    if (tier === "free") {
+      return "On Free, paid features like creating new AI scripts, cloud sync, and voice cloning are not available. If you came from a paid plan, your library was removed from our servers; copies already on this device can stay until you remove them.";
+    }
+    if (profileUsesStripeBilling()) {
+      return "Your plan is billed on the web (Stripe). Use Manage billing to cancel, update your card, or view invoices. Use View plans & upgrade to change tier. Changes sync to the iOS app when you sign in with the same account.";
+    }
+    return "App Store billing is managed on iPhone or iPad: open the app → Account → Manage Subscriptions. When your plan becomes Free, your scripts, playlists, cloned voices, and cloud audio are removed from our servers. Content already on this device can remain. That is different from Delete account, which removes your sign-in and data from our services entirely.";
+  }
+
+  function subscriptionPlansInfoBodyWeb() {
+    return "iOS uses the App Store for mobile subscriptions. Web upgrades here use Stripe Checkout with the same Firebase account. In Stripe test mode you can use card 4242 4242 4242 4242. Live checkout needs the four STRIPE_PRICE_* env vars on your API function.";
+  }
+
+  function devicesSharingInfoBodyWeb() {
+    var tier = resolvedSubscriptionTier();
+    var limit = webTierDeviceLimit(tier);
+    var extra =
+      tier === "creator"
+        ? " Creator: manage listeners and share links in Sharing management."
+        : "";
+    return (
+      "Your plan allows up to " +
+      String(limit) +
+      " registered devices. Remove extra devices in the iOS app if you are over your limit. Counts sync from your Firebase account across iPhone, iPad, and web." +
+      extra
+    );
+  }
+
+  function aiScriptUsageInfoBodyWeb() {
+    return "Monthly AI words, scripts, and voice (TTS) usage. For paid plans, usage resets each billing period. When you need more, use the usage add-on above (complimentary during beta when enabled, or via in-app purchase).";
+  }
+
+  function accountIosGroupHeader(title, infoBtnId, infoAriaLabel) {
+    var info =
+      infoBtnId && infoAriaLabel
+        ? '<span class="account-ios-group__info">' + accountInfoButtonHtml(infoBtnId, infoAriaLabel) + "</span>"
+        : "";
+    return (
+      '<div class="account-ios-group__header">' +
+      '<span class="account-ios-group__title">' +
+      escapeHtml(title) +
+      "</span>" +
+      info +
+      "</div>"
+    );
+  }
+
+  function usageProgressTint(progress) {
+    if (progress >= 0.9) return "#ef4444";
+    if (progress >= 0.75) return "#f59e0b";
+    return "#3b82f6";
+  }
+
+  function accountUsageMeterHtml(label, used, limit, remainSuffix) {
+    remainSuffix = remainSuffix || "remaining";
+    var head =
+      '<div class="account-ios-meter__head"><span class="account-ios-meter__label">' +
+      escapeHtml(label) +
+      "</span>";
+    if (limit === null || typeof limit === "undefined") {
+      return (
+        '<div class="account-ios-meter">' +
+        head +
+        '<span class="account-ios-meter__ratio">' +
+        escapeHtml(formatInsightsInt(used) + " (unlimited)") +
+        "</span></div></div>"
+      );
+    }
+    var lim = Number(limit);
+    if (!isFinite(lim) || lim <= 0) {
+      return (
+        '<div class="account-ios-meter">' +
+        head +
+        '<span class="account-ios-meter__ratio">' +
+        escapeHtml(formatInsightsInt(used)) +
+        "</span></div></div>"
+      );
+    }
+    var progress = Math.min(1, used / lim);
+    var remaining = Math.max(0, lim - used);
+    var tint = usageProgressTint(progress);
+    return (
+      '<div class="account-ios-meter">' +
+      head +
+      '<span class="account-ios-meter__ratio">' +
+      escapeHtml(formatUsageRatio(used, lim)) +
+      "</span></div>" +
+      '<div class="account-ios-meter__track" role="progressbar" aria-valuenow="' +
+      String(Math.round(progress * 100)) +
+      '" aria-valuemin="0" aria-valuemax="100">' +
+      '<div class="account-ios-meter__fill" style="width:' +
+      String(Math.round(progress * 1000) / 10) +
+      "%;background:" +
+      tint +
+      ';"></div></div>' +
+      '<div class="account-ios-meter__remain">' +
+      escapeHtml(formatInsightsInt(remaining) + " " + remainSuffix) +
+      "</div></div>"
+    );
+  }
+
+  function accountIosKvRow(label, value) {
+    return (
+      '<div class="account-ios-row account-ios-row--kv">' +
+      '<span class="account-ios-row__label">' +
+      escapeHtml(label) +
+      "</span>" +
+      '<span class="account-ios-row__value">' +
+      escapeHtml(value) +
+      "</span></div>"
+    );
+  }
+
+  function accountIosStatRow(label, value) {
+    return (
+      '<div class="account-ios-row account-ios-row--stat">' +
+      '<span class="account-ios-row__label">' +
+      escapeHtml(label) +
+      "</span>" +
+      '<span class="account-ios-row__value">' +
+      escapeHtml(value) +
+      "</span></div>"
+    );
+  }
+
+  function wireAccountInfoButtons() {
+    var host = document.getElementById("account-tab-settings");
+    if (!host || host._accountInfoDelegated) return;
+    host._accountInfoDelegated = true;
+    host.addEventListener("click", function (ev) {
+      var btn = ev.target && ev.target.closest ? ev.target.closest(".account-info-btn") : null;
+      if (!btn || !btn.id) return;
+      if (btn.id === "account-subscription-info") {
+        showAccountInfoModal("Subscriptions & billing", subscriptionPlansInfoBodyWeb());
+      } else if (btn.id === "account-manage-billing-info") {
+        showAccountInfoModal("Manage billing", subscriptionManageInfoBodyWeb());
+      } else if (
+        btn.id === "account-devices-section-info" ||
+        btn.id === "account-manage-subscriptions-info"
+      ) {
+        showAccountInfoModal(
+          btn.id === "account-manage-subscriptions-info" ? "Manage subscriptions" : "Devices & sharing",
+          btn.id === "account-manage-subscriptions-info"
+            ? subscriptionManageInfoBodyWeb()
+            : devicesSharingInfoBodyWeb()
+        );
+      } else if (btn.id === "account-ai-usage-info") {
+        showAccountInfoModal("AI Script Usage", aiScriptUsageInfoBodyWeb());
+      }
+    });
+  }
+
   function syncScreenHelpButtonLabel() {
     var btn = document.getElementById("btn-screen-help");
     if (!btn) return;
@@ -2834,6 +3026,15 @@
       '    <div id="screen-help-sections" class="screen-help-sections"></div>' +
       "  </div>" +
       "</div>" +
+      '<div id="account-info-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal account-info-modal" role="dialog" aria-modal="true" aria-labelledby="account-info-title">' +
+      '    <h3 id="account-info-title">Info</h3>' +
+      '    <p id="account-info-body" class="app-muted account-info-modal__body"></p>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn app-btn-primary" id="account-info-done">Done</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
       '<div id="account-modal-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal app-modal-account" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">' +
       '    <div class="account-modal-head">' +
@@ -2845,35 +3046,50 @@
       '      <button type="button" class="app-tab-btn" data-account-tab="preferences">Preferences</button>' +
       '      <button type="button" class="app-tab-btn" data-account-tab="privacy">Privacy & Support</button>' +
       "    </nav>" +
-      '    <div id="account-tab-settings" class="account-tab-panel account-tab-stack">' +
-      '      <section class="account-section-card" aria-labelledby="account-card-heading-identity">' +
-      '        <h4 class="account-section-card__title" id="account-card-heading-identity">Account</h4>' +
-      '        <p class="app-muted account-section-card__lede">Signed in as <strong>' +
-      escapeHtml(email || "") +
-      "</strong></p>" +
-      '        <p class="app-muted account-section-card__lede">Last login: <strong id="account-last-login">' +
-      escapeHtml(formatDateString(currentUser && currentUser.metadata && currentUser.metadata.lastSignInTime)) +
-      "</strong></p>" +
-      '        <form id="account-form" class="app-form account-section-card__form">' +
-      '          <label for="account-display-name">Display name</label>' +
-      '          <input id="account-display-name" type="text" maxlength="80" value="' +
+      '    <div id="account-tab-settings" class="account-tab-panel account-ios-stack">' +
+      '      <section class="account-ios-group" aria-labelledby="account-card-heading-identity">' +
+      accountIosGroupHeader("Account", null, null) +
+      '        <div class="account-ios-list account-ios-list--identity">' +
+      '          <div class="account-identity-row">' +
+      '            <div class="account-identity-avatar" aria-hidden="true">' +
+      '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="8" r="4"/><path d="M5 20c0-3.3 3.1-6 7-6s7 2.7 7 6"/></svg>' +
+      "            </div>" +
+      '            <div class="account-identity-meta">' +
+      '              <form id="account-form" class="account-identity-form">' +
+      '                <label class="account-ios-field-label" for="account-display-name">Display name</label>' +
+      '                <input id="account-display-name" class="account-ios-field-input" type="text" maxlength="80" value="' +
       escapeHtml(displayName || "") +
       '">' +
-      '          <button type="submit" class="app-btn app-btn-primary">Save display name</button>' +
-      "        </form>" +
+      '                <button type="submit" class="app-btn app-btn-primary account-ios-save-name">Save display name</button>' +
+      "              </form>" +
+      '              <p class="account-identity-email">' +
+      escapeHtml(email || "") +
+      "</p>" +
+      '              <p class="account-identity-meta-line">Last login: <span id="account-last-login">' +
+      escapeHtml(formatDateString(currentUser && currentUser.metadata && currentUser.metadata.lastSignInTime)) +
+      "</span></p>" +
+      "            </div>" +
+      "          </div>" +
+      "        </div>" +
       "      </section>" +
-      '      <section class="account-section-card account-subscription-section">' +
-      '        <h4 class="account-section-card__title account-subscription-heading">' +
-      '          <span class="account-subscription-crown" aria-hidden="true">' +
-      '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg"><path d="M11.562 3.266a.5.5 0 0 1 .876 0L15.39 8.87a1 1 0 0 0 1.516.294L21.183 5.5a.5.5 0 0 1 .798.519l-2.834 10.246a1 1 0 0 1-.956.734H5.81a1 1 0 0 1-.957-.734L2.02 6.02a.5.5 0 0 1 .798-.519l4.276 3.664a1 1 0 0 0 1.516-.294L11.562 3.266Z"/></svg>' +
-      "          </span>" +
-      '          <span>Subscription</span>' +
-      "        </h4>" +
-      '        <p class="account-subscription-plan-line tier-free" id="account-subscription-headline">Your plan: Free</p>' +
-      '        <p class="app-muted account-subscription-desc" id="account-subscription-description">Limited features on the Free tier.</p>' +
-      '        <p class="app-muted" style="margin:0.45rem 0 0;font-size:0.82rem;line-height:1.45;">iOS uses the App Store; <strong>web</strong> upgrades use Stripe Checkout (same Firebase account). Test card <code style="font-size:0.85em;">4242&nbsp;4242&nbsp;4242&nbsp;4242</code>.</p>' +
-      '        <button type="button" class="app-btn app-btn-secondary account-view-plans-btn" id="account-btn-view-plans" aria-expanded="false" aria-controls="account-plans-panel">View plans &amp; upgrade</button>' +
-      '        <button type="button" class="app-btn app-btn-secondary account-manage-billing-btn" id="account-btn-manage-billing" hidden>Manage billing</button>' +
+      '      <section class="account-ios-group account-subscription-section" id="account-subscription-group">' +
+      accountIosGroupHeader("Subscription", "account-subscription-info", "About subscriptions and billing") +
+      '        <div class="account-ios-list account-ios-list--subscription">' +
+      '          <p class="account-subscription-plan-line tier-free" id="account-subscription-headline">Your plan: Free</p>' +
+      '          <p class="app-muted account-subscription-desc" id="account-subscription-description">Limited features on the Free tier.</p>' +
+      '          <div id="account-subscription-billing-rows" class="account-ios-billing-rows" hidden></div>' +
+      "        </div>" +
+      '        <div class="account-ios-actions account-ios-actions--stack">' +
+      '          <button type="button" class="app-btn app-btn-secondary account-view-plans-btn" id="account-btn-view-plans" aria-expanded="false" aria-controls="account-plans-panel">View plans &amp; upgrade</button>' +
+      '          <div class="account-ios-action-row" id="account-manage-billing-row" hidden>' +
+      '            <button type="button" class="app-btn app-btn-secondary account-manage-billing-btn account-ios-action-row__btn" id="account-btn-manage-billing">Manage billing</button>' +
+      accountInfoButtonHtml("account-manage-billing-info", "Manage billing help") +
+      "          </div>" +
+      '          <div class="account-ios-action-row" id="account-manage-subscriptions-row" hidden>' +
+      '            <button type="button" class="app-btn app-btn-secondary account-ios-action-row__btn" disabled>Manage subscriptions (iOS app)</button>' +
+      accountInfoButtonHtml("account-manage-subscriptions-info", "Manage subscriptions help") +
+      "          </div>" +
+      "        </div>" +
       '        <div id="account-plans-panel" class="account-plans-panel" hidden>' +
       '          <p class="app-muted" style="margin:0 0 0.55rem;font-size:0.82rem;line-height:1.45;">Choose a billing period. You will be redirected to Stripe Checkout.</p>' +
       '          <div class="account-plans-grid">' +
@@ -2882,53 +3098,49 @@
       '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-month">Creator — monthly</button>' +
       '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-year">Creator — yearly</button>' +
       "          </div>" +
-      '          <p class="app-muted" style="margin:0.55rem 0 0;font-size:0.78rem;line-height:1.45;">Live checkout needs the four <code>STRIPE_PRICE_*</code> env vars on your API function.</p>' +
       "        </div>" +
       "      </section>" +
-      '      <section id="account-usage-addon-section" class="account-section-card" hidden>' +
-      '        <h4 class="account-section-card__title">Usage add-on</h4>' +
-      '        <p id="account-usage-addon-lede" class="app-muted account-section-card__text" style="margin-top:0;">Extra words and TTS characters for this billing period.</p>' +
-      '        <button type="button" class="app-btn app-btn-primary" id="account-usage-addon-action" hidden>Add usage pack</button>' +
-      '        <p id="account-usage-addon-note" class="app-muted" style="margin:0.45rem 0 0;font-size:0.82rem;line-height:1.45;"></p>' +
+      '      <section class="account-ios-group" id="account-ai-usage-group" hidden>' +
+      accountIosGroupHeader("AI Script Usage", null, null) +
+      '        <div id="account-ai-usage-panel" class="account-ios-list account-ios-list--usage"></div>' +
+      '        <div id="account-ai-usage-addon-host" class="account-ios-addon-host"></div>' +
       "      </section>" +
-      '      <section class="account-section-card">' +
-      '        <h4 class="account-section-card__title">Devices &amp; sharing</h4>' +
-      '        <p class="app-muted account-section-card__text">Counts sync from your account (same Firestore data as iOS). Remove extra devices in the iOS app if you are over your plan limit.</p>' +
-      '        <button type="button" class="app-btn app-btn-secondary" id="account-manage-devices">Refresh device list</button>' +
+      '      <section class="account-ios-group" id="account-devices-group">' +
+      accountIosGroupHeader("Devices & Sharing", "account-devices-section-info", "Devices and sharing help") +
+      '        <div class="account-ios-list">' +
+      '          <button type="button" class="account-ios-row account-ios-row--nav" id="account-manage-devices">' +
+      '            <span class="account-ios-row__label">Manage devices</span>' +
+      '            <span class="account-ios-row__value" id="account-device-count-label">—</span>' +
+      "          </button>" +
+      '          <button type="button" class="account-ios-row account-ios-row--nav" id="account-scroll-sharing" hidden>' +
+      '            <span class="account-ios-row__label">Shared listeners</span>' +
+      '            <span class="account-ios-row__value" id="account-shared-listeners-value">—</span>' +
+      '            <span class="account-ios-row__chev" aria-hidden="true">›</span>' +
+      "          </button>" +
+      "        </div>" +
       "      </section>" +
-      '      <section id="account-sharing-management-section" class="account-section-card" hidden>' +
-      '        <h4 class="account-section-card__title">Sharing management</h4>' +
-        '        <p class="app-muted account-section-card__text">Creator plan: manage who can listen to your shared audio and deactivate old share links. Active links are stored in your Firebase account (same data as iOS) and appear on every device when you refresh or reopen Account.</p>' +
+      '      <section id="account-sharing-management-section" class="account-ios-group account-ios-group--nested" hidden>' +
+      accountIosGroupHeader("Sharing management", null, null) +
       '        <div id="account-sharing-management-panel" class="account-sharing-management-panel"></div>' +
-      '        <button type="button" class="app-btn app-btn-secondary" id="account-refresh-sharing">Refresh sharing lists</button>' +
+      '        <button type="button" class="app-btn app-btn-secondary account-ios-footer-btn" id="account-refresh-sharing">Refresh sharing lists</button>' +
       "      </section>" +
-      '      <section class="account-section-card">' +
-      '        <h4 class="account-section-card__title">Library &amp; storage</h4>' +
-      '        <p class="app-muted account-section-card__text">Library counts update from your scripts. Use Refresh in Usage &amp; statistics for cloud usage, devices, and storage.</p>' +
-      '        <div class="account-section-card__btn-row">' +
-      '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-library-stats">Refresh library stats</button>' +
-      '          <button type="button" class="app-btn app-btn-secondary" id="account-sync-cloud">Sync status</button>' +
+      '      <section class="account-ios-group" id="account-library-group">' +
+      accountIosGroupHeader("Library & Storage", null, null) +
+      '        <div id="account-library-panel" class="account-ios-list account-ios-list--stats"></div>' +
+      '        <div class="account-ios-actions account-ios-actions--stack">' +
+      '          <button type="button" class="app-btn app-btn-primary" id="account-sync-cloud" hidden>Sync to Cloud</button>' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-library-stats">Refresh Library Stats</button>' +
       "        </div>" +
       "      </section>" +
-      '      <section id="account-admin-tools-section" class="account-section-card">' +
-      '        <h4 class="account-section-card__title">Admin tools</h4>' +
-      '        <p class="app-muted account-section-card__text">Same idea as the iOS app: turn on only when publishing or editing App Library catalog data in Firestore. This browser remembers your choice.</p>' +
-      '        <label class="account-pref-row"><input type="checkbox" id="pref-admin-mode" /> Admin mode (catalog publish &amp; edit)</label>' +
-      "      </section>" +
-      '      <section class="account-section-card account-section-card--insights">' +
-      '        <div class="account-section-title-row">' +
-      '          <h4 class="account-section-card__title" style="margin:0;">Usage &amp; statistics</h4>' +
-      '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-usage-stats" style="padding:0.32rem 0.55rem;font-size:0.78rem;">Refresh</button>' +
+      '      <section id="account-admin-tools-section" class="account-ios-group">' +
+      accountIosGroupHeader("Admin Tools", null, null) +
+      '        <div class="account-ios-list">' +
+      '          <label class="account-ios-row account-ios-row--toggle account-pref-row"><input type="checkbox" id="pref-admin-mode" /> Admin mode (catalog publish &amp; edit)</label>' +
       "        </div>" +
-      '        <div id="account-insights" class="account-insights-grid"></div>' +
       "      </section>" +
-      '      <section class="account-section-card">' +
-      '        <h4 class="account-section-card__title">Session &amp; sign out</h4>' +
-      '        <p class="app-muted account-section-card__text">Password reset, refresh your login session, or sign out in this browser.</p>' +
-      '        <div class="account-section-card__btn-row">' +
-      '          <button type="button" class="app-btn" id="account-password-reset">Send password reset email</button>' +
-      '          <button type="button" class="app-btn" id="account-refresh-token">Refresh session</button>' +
-      '          <button type="button" class="app-btn app-btn-danger" id="account-signout">Sign out</button>' +
+      '      <section class="account-ios-group account-ios-group--signout">' +
+      '        <div class="account-ios-list">' +
+      '          <button type="button" class="account-ios-row account-ios-row--danger" id="account-signout">Sign Out</button>' +
       "        </div>" +
       "      </section>" +
       '      <div id="account-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
@@ -3481,12 +3693,15 @@
       ev.preventDefault();
       saveAccountDisplayName();
     });
-    document.getElementById("account-password-reset").addEventListener("click", function () {
-      sendPasswordResetFromAccount();
-    });
-    document.getElementById("account-refresh-token").addEventListener("click", function () {
-      refreshSessionToken();
-    });
+    var accountScrollSharingBtn = document.getElementById("account-scroll-sharing");
+    if (accountScrollSharingBtn) {
+      accountScrollSharingBtn.addEventListener("click", function () {
+        var section = document.getElementById("account-sharing-management-section");
+        if (section) {
+          section.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      });
+    }
     (function bindStripePlanButtons() {
       var planMap = {
         "starter-month": ["starter", "month"],
@@ -3560,17 +3775,15 @@
         setAccountMessage("Usage and library statistics refreshed.", "success");
       });
     });
-    var accountRefreshUsageBtn = document.getElementById("account-refresh-usage-stats");
-    if (accountRefreshUsageBtn) {
-      accountRefreshUsageBtn.addEventListener("click", function () {
-        refreshAccountInsightsFromCloud().then(function () {
-          setAccountMessage("Usage statistics refreshed.", "success");
-        });
+    var accountSyncCloudBtn = document.getElementById("account-sync-cloud");
+    if (accountSyncCloudBtn) {
+      accountSyncCloudBtn.addEventListener("click", function () {
+        setAccountMessage(
+          "Cloud sync is account-linked. New scripts and playlists should appear across devices after refresh.",
+          ""
+        );
       });
     }
-    document.getElementById("account-sync-cloud").addEventListener("click", function () {
-      setAccountMessage("Cloud sync is account-linked. New scripts and playlists should appear across devices after refresh.", "");
-    });
     document.getElementById("account-signout").addEventListener("click", function () {
       closeAccountModal();
       auth.signOut().then(redirectLogin);
@@ -3628,6 +3841,15 @@
     document.getElementById("screen-help-done").addEventListener("click", function () {
       closeScreenHelp();
     });
+    wireAccountInfoButtons();
+    var accountInfoDone = document.getElementById("account-info-done");
+    if (accountInfoDone) accountInfoDone.addEventListener("click", closeAccountInfoModal);
+    var accountInfoBackdrop = document.getElementById("account-info-backdrop");
+    if (accountInfoBackdrop) {
+      accountInfoBackdrop.addEventListener("click", function (ev) {
+        if (ev.target && ev.target.id === "account-info-backdrop") closeAccountInfoModal();
+      });
+    }
     document.getElementById("screen-help-backdrop").addEventListener("click", function (ev) {
       if (ev.target === ev.currentTarget) closeScreenHelp();
     });
@@ -7443,7 +7665,7 @@
   }
 
   function scrollToUsageAddOnSection() {
-    var section = document.getElementById("account-usage-addon-section");
+    var section = document.getElementById("account-ai-usage-group");
     if (!section || section.hidden) return;
     setAccountModalTab("settings");
     setTimeout(function () {
@@ -7452,18 +7674,14 @@
   }
 
   function renderUsageAddOnSection() {
-    var section = document.getElementById("account-usage-addon-section");
-    var lede = document.getElementById("account-usage-addon-lede");
-    var action = document.getElementById("account-usage-addon-action");
-    var note = document.getElementById("account-usage-addon-note");
-    if (!section || !lede || !action || !note) return;
+    var host = document.getElementById("account-ai-usage-addon-host");
+    if (!host) return;
 
     var tier = resolvedSubscriptionTier();
     if (tier !== "starter" && tier !== "creator") {
-      section.hidden = true;
+      host.innerHTML = "";
       return;
     }
-    section.hidden = false;
 
     var wordsLabel = STEP_UP_WORDS_BONUS.toLocaleString();
     var ttsLabel = STEP_UP_TTS_BONUS.toLocaleString();
@@ -7471,64 +7689,60 @@
     var freeStepUp = accountInsightsSnapshot.freeStepUpEnabled === true;
     var billingChannel = resolveSubscriptionBillingChannel();
 
-    if (!freeStepUpKnown && accountInsightsSnapshot.loading) {
-      lede.textContent =
-        "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
-      action.hidden = true;
-      note.textContent = "Loading usage add-on options…";
-      return;
-    }
+    var ledeText =
+      "Adds +" + wordsLabel + " AI words and +" + ttsLabel + " voice (TTS) characters for this billing period. You can purchase more than once.";
+    var actionText = "Buy usage add-on";
+    var actionHidden = true;
+    var actionMode = "";
+    var noteText = "Loading usage add-on options…";
 
-    if (freeStepUp) {
-      lede.textContent =
-        "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
-      action.textContent = "Add " + wordsLabel + " words & " + ttsLabel + " TTS";
-      action.hidden = false;
-      action.setAttribute("data-stepup-mode", "complimentary");
-      note.textContent = "Complimentary while beta top-ups are enabled (same as iOS).";
+    if (!freeStepUpKnown && accountInsightsSnapshot.loading) {
+      /* defaults above */
+    } else if (freeStepUp) {
+      actionText = "Add " + wordsLabel + " words & " + ttsLabel + " TTS";
+      actionHidden = false;
+      actionMode = "complimentary";
+      noteText = "Complimentary while beta top-ups are enabled (same as iOS).";
     } else if (billingChannel === "stripe" && accountInsightsSnapshot.stepUpStripeConfigured) {
       var priceLabel = accountInsightsSnapshot.stepUpStripePriceDisplay;
-      lede.textContent =
-        "Add +" +
-        wordsLabel +
-        " words and +" +
-        ttsLabel +
-        " TTS characters for this billing period.";
-      action.textContent = priceLabel
-        ? "Buy usage pack (" + priceLabel + ")"
-        : "Buy usage pack";
-      action.hidden = false;
-      action.setAttribute("data-stepup-mode", "stripe");
-      note.textContent =
+      actionText = priceLabel ? "Buy usage pack (" + priceLabel + ")" : "Buy usage pack";
+      actionHidden = false;
+      actionMode = "stripe";
+      noteText =
         "One-time purchase via Stripe Checkout (your subscription is billed on the web). Limits update after payment.";
     } else if (billingChannel === "store") {
-      lede.textContent =
-        "Add +" +
-        wordsLabel +
-        " words and +" +
-        ttsLabel +
-        " TTS characters for this billing period.";
-      action.textContent = "Buy usage add-on (App Store)";
-      action.hidden = false;
-      action.setAttribute("data-stepup-mode", "appstore");
-      note.textContent =
+      actionText = "Buy usage add-on (App Store)";
+      actionHidden = false;
+      actionMode = "appstore";
+      noteText =
         "Your plan is billed through the App Store. Purchase the usage pack in the Focus Shift iOS app (Sandbox works for TestFlight testing).";
     } else if (billingChannel === "stripe" && !accountInsightsSnapshot.stepUpStripeConfigured) {
-      lede.textContent =
-        "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
-      action.hidden = true;
-      action.removeAttribute("data-stepup-mode");
-      note.textContent =
+      noteText =
         "Stripe usage add-on checkout is not configured yet (set STRIPE_PRICE_STEPUP on the API function).";
     } else {
-      lede.textContent =
-        "Add +" + wordsLabel + " words and +" + ttsLabel + " TTS characters for this billing period.";
-      action.textContent = "Buy usage add-on";
-      action.hidden = false;
-      action.setAttribute("data-stepup-mode", "appstore");
-      note.textContent =
+      actionText = "Buy usage add-on";
+      actionHidden = false;
+      actionMode = "appstore";
+      noteText =
         "If you subscribed on iPhone or iPad, buy the pack in the iOS app. If you subscribed on the web with Stripe, contact support if checkout is missing.";
     }
+
+    host.innerHTML =
+      '<div class="account-ios-addon">' +
+      accountIosGroupHeader("Usage add-on", null, null) +
+      '<p class="account-ios-addon__lede">' +
+      escapeHtml(ledeText) +
+      "</p>" +
+      '<button type="button" class="app-btn app-btn-primary account-ios-addon__action" id="account-usage-addon-action"' +
+      (actionHidden ? " hidden" : "") +
+      (actionMode ? ' data-stepup-mode="' + escapeHtml(actionMode) + '"' : "") +
+      ">" +
+      escapeHtml(actionText) +
+      "</button>" +
+      '<p class="account-ios-addon__note app-muted">' +
+      escapeHtml(noteText) +
+      "</p>" +
+      "</div>";
   }
 
   function applyComplimentaryStepUp() {
@@ -7667,13 +7881,37 @@
       });
   }
 
-  function renderAccountInsights() {
-    var el = document.getElementById("account-insights");
+  function renderAccountSubscriptionBillingRows() {
+    var el = document.getElementById("account-subscription-billing-rows");
     if (!el) return;
+    var tier = resolvedSubscriptionTier();
+    if (tier === "free") {
+      el.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    el.hidden = false;
+    var interval = formatBillingIntervalLabel(currentUserProfile) || "—";
+    var billedVia = formatSubscriptionTierSourceLabel(currentUserProfile);
+    el.innerHTML =
+      accountIosKvRow("Billing period", interval) + accountIosKvRow("Billed via", billedVia);
+  }
+
+  function renderAccountAiUsagePanel() {
+    var group = document.getElementById("account-ai-usage-group");
+    var el = document.getElementById("account-ai-usage-panel");
+    if (!group || !el) return;
+
+    var tier = resolvedSubscriptionTier();
+    if (tier !== "starter" && tier !== "creator") {
+      group.hidden = true;
+      el.innerHTML = "";
+      return;
+    }
+    group.hidden = false;
 
     if (accountInsightsSnapshot.loading) {
-      el.innerHTML = '<p class="app-muted" style="margin:0;">Loading usage from your account…</p>';
-      syncAccountSubscriptionHeadline();
+      el.innerHTML = '<p class="account-ios-loading">Loading usage…</p>';
       return;
     }
 
@@ -7690,12 +7928,9 @@
           });
         });
       }
-      syncAccountSubscriptionHeadline();
       return;
     }
 
-    var plan = resolvePlanLabel();
-    var tier = resolvedSubscriptionTier();
     var limits = webTierUsageLimits(tier);
     var usage = accountInsightsSnapshot.usage || {};
     var scriptsUsed = usageDocInt(usage, "scriptsThisMonth");
@@ -7707,114 +7942,104 @@
       limits.wordsLimit > 0 ? limits.wordsLimit + stepUpWords : limits.wordsLimit;
     var effectiveTtsLimit = limits.ttsLimit > 0 ? limits.ttsLimit + stepUpTts : limits.ttsLimit;
 
-    var devices = accountInsightsSnapshot.devices || [];
-    var deviceCount = devices.length;
-    var deviceLimit = webTierDeviceLimit(tier);
-    var sharingCount = accountInsightsSnapshot.shareAudienceCount;
-    var shareCap = 15;
+    var usageResetLabel = "";
+    if (usage.usagePeriodEnd) {
+      usageResetLabel = firestoreDateLabel(usage.usagePeriodEnd);
+    } else if (usage.monthStart) {
+      usageResetLabel = firestoreDateLabel(usage.monthStart);
+    }
 
-    var storageDisplay = "-";
+    var meters =
+      accountUsageMeterHtml("Scripts", scriptsUsed, limits.scriptsLimit) +
+      accountUsageMeterHtml("Words", wordsUsed, effectiveWordsLimit || limits.wordsLimit) +
+      accountUsageMeterHtml(
+        "Voice audio (TTS)",
+        ttsUsed,
+        effectiveTtsLimit || limits.ttsLimit,
+        "characters remaining"
+      );
+
+    var resetRow = usageResetLabel
+      ? '<p class="account-ios-reset-line"><span aria-hidden="true">↻</span> Resets: ' +
+        escapeHtml(usageResetLabel) +
+        "</p>"
+      : "";
+
+    el.innerHTML =
+      '<div class="account-ios-usage-meters">' +
+      meters +
+      "</div>" +
+      resetRow +
+      '<div class="account-ios-action-row account-ios-action-row--refresh">' +
+      '<button type="button" class="app-btn app-btn-secondary account-ios-action-row__btn" id="account-refresh-ai-usage">Refresh AI Usage</button>' +
+      accountInfoButtonHtml("account-ai-usage-info", "AI script usage help") +
+      "</div>";
+
+    var refreshAiBtn = document.getElementById("account-refresh-ai-usage");
+    if (refreshAiBtn && !refreshAiBtn._bound) {
+      refreshAiBtn._bound = true;
+      refreshAiBtn.addEventListener("click", function () {
+        refreshAccountInsightsFromCloud().then(function () {
+          setAccountMessage("AI usage refreshed.", "success");
+        });
+      });
+    }
+  }
+
+  function renderAccountLibraryPanel() {
+    var el = document.getElementById("account-library-panel");
+    if (!el) return;
+
+    if (accountInsightsSnapshot.loading) {
+      el.innerHTML = '<p class="account-ios-loading">Loading statistics…</p>';
+      return;
+    }
+
+    var storageDisplay = "—";
     if (accountInsightsSnapshot.storageBytes !== null) {
       storageDisplay = formatBytesHuman(accountInsightsSnapshot.storageBytes);
     } else if (accountInsightsSnapshot.storageBytes === 0) {
       storageDisplay = "0 B";
     }
 
-    var usageResetLabel = "";
-    if (usage.usagePeriodEnd) {
-      usageResetLabel = firestoreDateLabel(usage.usagePeriodEnd);
-    } else if (usage.monthStart) {
-      usageResetLabel = firestoreDateLabel(usage.monthStart) + " (monthly)";
-    }
-
-    function row(label, value) {
-      return (
-        '<div class="account-kv"><span class="account-kv-label">' +
-        escapeHtml(label) +
-        '</span><span class="account-kv-value">' +
-        escapeHtml(value) +
-        "</span></div>"
-      );
-    }
-
-    var deviceRows = "";
-    if (devices.length) {
-      deviceRows =
-        '<div class="account-insight-device-list">' +
-        devices
-          .slice(0, 6)
-          .map(function (d) {
-            var tagOpen = "<" + "div" + ' class="account-insight-device">';
-            return tagOpen + escapeHtml(d.name + (d.isCurrent ? " (this browser)" : "")) + "</" + "div" + ">";
-          })
-          .join("") +
-        (devices.length > 6
-          ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">+' +
-            String(devices.length - 6) +
-            " more on other devices.</p>"
-          : "") +
-        "</" + "div" + ">";
-    }
-
-    var sharingValue =
-      tier === "creator" ? formatUsageRatio(sharingCount || 0, shareCap) : "Requires Creator plan";
-
-    var billingInterval = formatBillingIntervalLabel(currentUserProfile);
-
-    var aiSection = "";
-    if (tier === "free") {
-      aiSection =
-        '<section class="account-insight-card">' +
-        "<h4>AI script usage</h4>" +
-        '<p class="app-muted" style="margin:0;font-size:0.82rem;line-height:1.45;">Upgrade to Starter or Creator for monthly AI words, scripts, and voice (TTS) quotas.</p>' +
-        "</section>";
-    } else {
-      aiSection =
-        '<section class="account-insight-card">' +
-        "<h4>AI script usage</h4>" +
-        (usageResetLabel ? row("Usage resets", usageResetLabel) : "") +
-        row(
-          "Scripts this month",
-          limits.scriptsLimit === null
-            ? formatInsightsInt(scriptsUsed) + " (unlimited)"
-            : formatUsageRatio(scriptsUsed, limits.scriptsLimit)
-        ) +
-        row("Words this month", formatUsageRatio(wordsUsed, effectiveWordsLimit || limits.wordsLimit)) +
-        row("Voice (TTS) characters", formatUsageRatio(ttsUsed, effectiveTtsLimit || limits.ttsLimit)) +
-        (stepUpWords || stepUpTts
-          ? row(
-              "Step-up bonus",
-              "+" + formatInsightsInt(stepUpWords) + " words, +" + formatInsightsInt(stepUpTts) + " TTS"
-            )
-          : "") +
-        "</section>";
-    }
-
     el.innerHTML =
-      '<section class="account-insight-card">' +
-      "<h4>Subscription plan</h4>" +
-      row("Current plan", plan || "Plan not set") +
-      (billingInterval && tier !== "free" ? row("Billing period", billingInterval) : "") +
-      row("Plan source", formatSubscriptionTierSourceLabel(currentUserProfile)) +
-      "</section>" +
-      '<section class="account-insight-card">' +
-      "<h4>Devices and sharing</h4>" +
-      row("Registered devices", formatInsightsInt(deviceCount) + " / " + formatInsightsInt(deviceLimit)) +
-      deviceRows +
-      row("Shared listeners", sharingValue) +
-      (tier === "creator"
-        ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">Manage listeners and share links in Account → Sharing management.</p>'
-        : "") +
-      "</section>" +
-      aiSection +
-      '<section class="account-insight-card">' +
-      "<h4>Library and storage</h4>" +
-      row("My scripts", formatCount(currentScripts.length)) +
-      row("Scripts with audio", formatCount(scriptsWithAudioCount())) +
-      row("Imported audio", formatCount(importedAudioCount())) +
-      row("Cloud audio storage", storageDisplay) +
-      '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;">Total size of hosted audio files in Firebase Storage.</p>' +
-      "</section>";
+      accountIosStatRow("Scripts", formatCount(currentScripts.length)) +
+      accountIosStatRow("Scripts with audio", formatCount(scriptsWithAudioCount())) +
+      accountIosStatRow("Imported audio", formatCount(importedAudioCount())) +
+      accountIosStatRow("Storage used", storageDisplay);
+  }
+
+  function renderAccountDevicesSummary() {
+    var label = document.getElementById("account-device-count-label");
+    var sharingBtn = document.getElementById("account-scroll-sharing");
+    if (!label) return;
+
+    var tier = resolvedSubscriptionTier();
+    var deviceLimit = webTierDeviceLimit(tier);
+    var deviceCount = (accountInsightsSnapshot.devices || []).length;
+    if (accountInsightsSnapshot.loading) {
+      label.textContent = "—";
+    } else {
+      label.textContent = String(deviceCount) + " of " + String(deviceLimit);
+    }
+
+    var sharingVal = document.getElementById("account-shared-listeners-value");
+    if (sharingBtn) sharingBtn.hidden = tier !== "creator";
+    if (sharingVal) {
+      if (tier !== "creator") sharingVal.textContent = "—";
+      else if (accountInsightsSnapshot.loading || accountInsightsSnapshot.shareAudienceCount == null) {
+        sharingVal.textContent = "—";
+      } else {
+        sharingVal.textContent = formatUsageRatio(accountInsightsSnapshot.shareAudienceCount || 0, 15);
+      }
+    }
+  }
+
+  function renderAccountInsights() {
+    renderAccountSubscriptionBillingRows();
+    renderAccountAiUsagePanel();
+    renderAccountLibraryPanel();
+    renderAccountDevicesSummary();
     syncAccountSubscriptionHeadline();
     renderUsageAddOnSection();
   }
@@ -7879,8 +8104,14 @@
   }
 
   function syncAccountBillingButtons() {
-    var manageBtn = document.getElementById("account-btn-manage-billing");
-    if (manageBtn) manageBtn.hidden = !profileUsesStripeBilling();
+    var stripe = profileUsesStripeBilling();
+    var tier = resolvedSubscriptionTier();
+    var manageBillingRow = document.getElementById("account-manage-billing-row");
+    var manageSubsRow = document.getElementById("account-manage-subscriptions-row");
+    var syncCloudBtn = document.getElementById("account-sync-cloud");
+    if (manageBillingRow) manageBillingRow.hidden = !stripe;
+    if (manageSubsRow) manageSubsRow.hidden = tier === "free" || stripe;
+    if (syncCloudBtn) syncCloudBtn.hidden = tier !== "starter" && tier !== "creator";
   }
 
   function syncAccountSubscriptionHeadline() {
