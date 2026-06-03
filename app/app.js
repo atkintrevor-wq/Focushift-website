@@ -156,6 +156,8 @@
   var publishTitleDirty = false;
   var editingPremadeId = null;
   var inlineScriptEditorOpenById = {};
+  /** Unsaved title/text for open inline editors (survives list re-renders). */
+  var inlineScriptDraftById = {};
   var sectionSearchOpen = { library: false, playlists: false, voices: false, audio: false };
   var sectionSearchQuery = { library: "", playlists: "", voices: "", audio: "" };
   var aiTextEditContext = null;
@@ -1093,6 +1095,8 @@
     }
     ownedScripts = [];
     incomingSharedScripts = [];
+    inlineScriptEditorOpenById = {};
+    inlineScriptDraftById = {};
   }
 
   function firestoreMillis(val) {
@@ -9964,19 +9968,21 @@
     var scriptVoiceID = effectiveVoiceIdForScript(script);
     var scriptBackgroundID = effectiveBackgroundIdForScript(script);
     var controlsExpanded = controlsExpandedForScript(script.id);
+    var hasUnsavedEdits = inlineScriptHasUnsavedChanges(script);
     var genEnabled = shouldEnableGenerateFromHash(script, contentHashHex);
     var genLabel = isBusy ? "Generating audio..." : "Generate";
     var genClasses = "app-btn";
     if (isBusy) {
       genClasses += " app-btn-secondary";
-    } else if (!genEnabled) {
+    } else if (!genEnabled || hasUnsavedEdits) {
       genClasses += " app-btn-secondary app-btn-generate-muted";
     } else if (hasAudio) {
       genClasses += " app-btn-generate-warn";
     } else {
       genClasses += " app-btn-generate-fresh";
     }
-    var genDisabled = isBusy || !genEnabled || controlsReadOnly || isWebFreeTier();
+    var genDisabled =
+      isBusy || !genEnabled || controlsReadOnly || isWebFreeTier() || hasUnsavedEdits;
     var chevChar = controlsExpanded ? "▲" : "▼";
     var showShareLink = controlsExpanded && hasAudio && isWebCreatorTier() && !isSharedListenOnly;
     if (isSharedListenOnly) {
@@ -9988,7 +9994,9 @@
     var drift = scriptAudioSettingsDrifted(script, contentHashHex);
     var genTitle = "";
     if (!isBusy) {
-      if (!genEnabled && hasAudio) {
+      if (hasUnsavedEdits) {
+        genTitle = "Save your script before generating audio.";
+      } else if (!genEnabled && hasAudio) {
         genTitle = "Audio already matches your selected voice and background.";
       } else if (genEnabled && hasAudio && drift) {
         genTitle =
@@ -10003,7 +10011,15 @@
       : "";
     var audioUrlStr = script.audioURL && String(script.audioURL).trim();
     var hostedAudio = !!(audioUrlStr && /^https?:\/\//i.test(audioUrlStr));
-    var rawScriptText = (script.text && String(script.text)) || "";
+    var inlineDraft = editorOpen ? inlineScriptDraftForScript(script) : null;
+    var rawScriptText =
+      inlineDraft && inlineDraft.text != null
+        ? String(inlineDraft.text)
+        : (script.text && String(script.text)) || "";
+    var inlineTitle =
+      inlineDraft && inlineDraft.title != null
+        ? String(inlineDraft.title)
+        : script.title || "";
     var hasAudioTagsInScript = containsAudioTagsForScript(rawScriptText);
     var syncStatusHtml =
       '<div class="script-card-sync-row">' +
@@ -10058,7 +10074,7 @@
         '<div class="script-inline-editor-scroll">' +
         '<label class="script-inline-field-label">Title</label>' +
         '<input type="text" class="script-inline-title-input" maxlength="120" value="' +
-        escapeHtml(script.title || "") +
+        escapeHtml(inlineTitle) +
         '" data-script-inline-field="title">' +
         '<div class="script-inline-toolbar">' +
         formatToggleHtml +
@@ -10427,7 +10443,60 @@
     return null;
   }
 
+  function captureInlineScriptDraftsFromDom() {
+    var list = document.getElementById("scripts-list");
+    if (!list) return;
+    var cards = list.querySelectorAll(".library-script-card");
+    for (var i = 0; i < cards.length; i++) {
+      var card = cards[i];
+      var scriptId = card.getAttribute("data-script-id");
+      if (!scriptId || inlineScriptEditorOpenById[scriptId] !== true) continue;
+      var titleEl = card.querySelector(".script-inline-title-input");
+      var ta = card.querySelector(".script-inline-textarea");
+      if (!titleEl && !ta) continue;
+      inlineScriptDraftById[scriptId] = {
+        title: titleEl ? String(titleEl.value || "") : "",
+        text: ta ? String(ta.value || "") : "",
+      };
+    }
+  }
+
+  function clearInlineScriptDraft(scriptId) {
+    if (!scriptId) return;
+    delete inlineScriptDraftById[scriptId];
+  }
+
+  function inlineScriptDraftForScript(script) {
+    if (!script || !script.id) return null;
+    var draft = inlineScriptDraftById[script.id];
+    if (draft) return draft;
+    if (inlineScriptEditorOpenById[script.id] !== true) return null;
+    var card = getInlineScriptCard(script.id);
+    if (!card) return null;
+    var titleEl = card.querySelector(".script-inline-title-input");
+    var ta = card.querySelector(".script-inline-textarea");
+    if (!titleEl && !ta) return null;
+    return {
+      title: titleEl ? String(titleEl.value || "") : "",
+      text: ta ? String(ta.value || "") : "",
+    };
+  }
+
+  function inlineScriptHasUnsavedChanges(script) {
+    if (!script || !script.id || inlineScriptEditorOpenById[script.id] !== true) return false;
+    var draft = inlineScriptDraftForScript(script);
+    if (!draft) return false;
+    var savedTitle = String(script.title || "").trim();
+    var savedText = String(script.text || "").trim();
+    return (
+      String(draft.title || "").trim() !== savedTitle ||
+      String(draft.text || "").trim() !== savedText
+    );
+  }
+
   function getInlineScriptEditorText(scriptId) {
+    var draft = inlineScriptDraftById[scriptId];
+    if (draft && draft.text != null) return String(draft.text);
     var card = getInlineScriptCard(scriptId);
     if (!card) {
       var script = currentScripts.find(function (s) {
@@ -10498,6 +10567,7 @@
           currentScripts[ix].text = text;
         }
         delete inlineScriptEditorOpenById[scriptId];
+        clearInlineScriptDraft(scriptId);
         closeAITextEditModal();
         setMessage("Script updated.", "success");
         renderScripts(currentScripts);
@@ -10731,6 +10801,7 @@
           currentScripts[ix].text = text;
         }
         delete inlineScriptEditorOpenById[script.id];
+        clearInlineScriptDraft(script.id);
         setMessage("Script updated.", "success");
         renderScripts(currentScripts);
       })
@@ -10760,6 +10831,7 @@
           renderScripts(currentScripts, opening ? script.id : null);
         } else if (action === "cancel-inline-script") {
           delete inlineScriptEditorOpenById[script.id];
+          clearInlineScriptDraft(script.id);
           renderScripts(currentScripts);
         } else if (action === "save-inline-script") {
           saveInlineScript(script);
@@ -11108,6 +11180,7 @@
   function renderScripts(scripts, scrollScriptIdIntoView) {
     var list = document.getElementById("scripts-list");
     if (!list) return;
+    captureInlineScriptDraftsFromDom();
     bindScriptListFormattingToggle();
     var displayScripts = scripts;
     if (scripts === currentScripts && activeLibraryTab === "my-library") {
@@ -11833,6 +11906,10 @@
     if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
     if (scriptIsSharedListenOnly(script)) {
       setMessage("Shared audio is listen-only — playback uses the sender’s hosted file.", "info");
+      return;
+    }
+    if (inlineScriptHasUnsavedChanges(script)) {
+      setMessage("Save your script before generating audio.", "error");
       return;
     }
     var text = (script.text || "").trim();
