@@ -10149,7 +10149,7 @@
     if (isFreeReadOnly) {
       editorOpen = false;
     }
-    var showRegenHint = hasAudio && needsRegen;
+    var audioMatchesCard = hasAudio && !needsRegen && !hasUnsavedEdits;
     var genTitle = "";
     if (!isBusy) {
       if (hasUnsavedEdits && needsRegen) {
@@ -10157,16 +10157,13 @@
           "Script text changed — save first, then tap Generate to refresh your audio.";
       } else if (hasUnsavedEdits) {
         genTitle = "Save your script before generating audio.";
-      } else if (hasAudio && !needsRegen) {
-        genTitle = "Audio already matches this script text, voice, and background.";
+      } else if (hasAudio && audioMatchesCard) {
+        genTitle = "Audio matches this script text, voice, and background.";
       } else if (hasAudio && needsRegen) {
         genTitle =
           "Script text, voice, or background changed since this audio was generated. Tap Generate to refresh.";
       }
     }
-    var regenHintHtml = showRegenHint
-      ? '<div class="script-card-regen-hint" role="status">Script text, voice, or background changed — expand audio controls and tap <strong>Generate</strong> to refresh your audio.</div>'
-      : "";
     var audioUrlStr = script.audioURL && String(script.audioURL).trim();
     var hostedAudio = !!(audioUrlStr && /^https?:\/\//i.test(audioUrlStr));
     var inlineDraft = editorOpen ? inlineScriptDraftForScript(script) : null;
@@ -10179,18 +10176,38 @@
         ? String(inlineDraft.title)
         : script.title || "";
     var hasAudioTagsInScript = containsAudioTagsForScript(rawScriptText);
+    var syncStatusLabel;
+    var syncStatusClass = "script-card-sync-muted";
+    if (isBusy) {
+      syncStatusLabel = "Generating\u2026";
+      syncStatusClass = "script-card-sync-busy";
+    } else if (!hasAudio) {
+      syncStatusLabel = "No audio yet";
+    } else if (audioMatchesCard && hostedAudio) {
+      syncStatusLabel = "Synced with cloud";
+      syncStatusClass = "script-card-sync-ok";
+    } else if (audioMatchesCard && !hostedAudio) {
+      syncStatusLabel = "Audio on this device only";
+    } else if (hasUnsavedEdits && !needsRegen) {
+      syncStatusLabel = "Not synced with cloud \u2014 save script, then regenerate";
+      syncStatusClass = "script-card-sync-warn";
+    } else {
+      syncStatusLabel = "Not synced with cloud \u2014 regeneration needed";
+      syncStatusClass = "script-card-sync-warn";
+    }
     var syncStatusHtml =
-      '<div class="script-card-sync-row">' +
+      '<div class="script-card-sync-row" role="status">' +
       '  <button type="button" class="script-card-sync-refresh" data-action="refresh-script" data-script-id="' +
       escapeHtml(script.id) +
       '" title="Reload this script from the cloud" aria-label="Refresh from cloud">\u21bb</button>' +
-      (isBusy
-        ? '<span class="script-card-sync-busy">Generating\u2026</span>'
-        : hasAudio && hostedAudio
-          ? '<span class="script-card-sync-ok"><span aria-hidden="true">\u2713</span> Synced with cloud</span>'
-          : hasAudio
-            ? '<span class="script-card-sync-muted">Audio on this device only</span>'
-            : '<span class="script-card-sync-muted">No audio yet</span>') +
+      '  <span class="' +
+      syncStatusClass +
+      '">' +
+      (syncStatusClass === "script-card-sync-ok"
+        ? '<span aria-hidden="true">\u2713</span> '
+        : "") +
+      escapeHtml(syncStatusLabel) +
+      "</span>" +
       "</div>";
     var playPauseIcon = libraryTransportPlayPauseIconSvg(playingThis);
     var docIconSvg =
@@ -10328,7 +10345,6 @@
       : "";
     var footerHtml = controlsExpanded
       ? '<div class="script-card-footer">' +
-        syncStatusHtml +
         '  <button type="button" class="script-card-icon-btn script-card-icon-btn-delete script-card-footer-delete" data-action="delete" data-script-id="' +
         escapeHtml(script.id) +
         '" title="' +
@@ -10387,7 +10403,7 @@
       "</div>" +
       libraryChip +
       "</div>" +
-      regenHintHtml +
+      syncStatusHtml +
       inlineEditorHtml +
       audioSection +
       footerHtml +
