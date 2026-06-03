@@ -5044,12 +5044,45 @@
 
   function networkFetchErrorMessage(context) {
     return (
-      "Could not reach the server (" +
-      (context || "network") +
-      "). Check your connection, try disabling ad blockers for this site, and confirm Cloud Functions are deployed " +
-      "(firebase deploy --only functions:api,functions:onAudioJobCreated). " +
-      "You can also set Background to None and generate again."
+      "Could not download " +
+      (context || "audio") +
+      ". Check your internet connection and try disabling ad blockers for focushift.app. " +
+      "If it keeps failing, set Background to None and generate again, or use the iOS app."
     );
+  }
+
+  function fetchAudioJobStagingTts(jobId, token) {
+    if (!jobId || !token) {
+      return Promise.reject(new Error("Missing audio job credentials."));
+    }
+    return fetch(
+      backendBaseURL() + "/audio-jobs/" + encodeURIComponent(jobId) + "/staging-tts",
+      {
+        method: "GET",
+        headers: { Authorization: "Bearer " + token },
+      }
+    )
+      .then(function (resp) {
+        return resp.arrayBuffer().then(function (ab) {
+          if (!resp.ok) {
+            var errMsg = "Could not download speech audio (" + resp.status + ").";
+            if (resp.status === 404) {
+              errMsg = "Speech audio is not ready yet. Wait a moment and try Generate again.";
+            }
+            throw new Error(errMsg);
+          }
+          if (!ab || !ab.byteLength) {
+            throw new Error("Speech audio download was empty.");
+          }
+          return ab;
+        });
+      })
+      .catch(function (err) {
+        if (isNetworkFetchFailure(err)) {
+          throw new Error(networkFetchErrorMessage("speech audio"));
+        }
+        throw err;
+      });
   }
 
   function storagePathFromFirebaseDownloadUrl(url) {
@@ -5130,8 +5163,8 @@
     return "";
   }
 
-  function finalizeAwaitingClientMix(uid, scriptId, ttsDownloadURL, backgroundId) {
-    return fetchArrayBufferFromUrl(ttsDownloadURL, "speech audio")
+  function finalizeAwaitingClientMix(uid, scriptId, jobId, backgroundId, token) {
+    return fetchAudioJobStagingTts(jobId, token)
       .then(function (ttsAb) {
         return mixTtsWithBackgroundToWavBlob(ttsAb, backgroundId);
       })
@@ -12087,7 +12120,12 @@
           });
         })
         .then(function (ctx) {
-          return waitForAudioJob(script, ctx.jobId, effectiveBackgroundIdForScript(script));
+          return waitForAudioJob(
+            script,
+            ctx.jobId,
+            effectiveBackgroundIdForScript(script),
+            ctx.token
+          );
         })
         .then(function (result) {
           var vId = effectiveVoiceIdForScript(script);
@@ -12241,7 +12279,8 @@
           return waitForAudioJob(
             { id: jobScriptId, title: premade.title },
             ctx.jobId,
-            String(resolvePremadeBackgroundSelection(premade) || "").trim()
+            String(resolvePremadeBackgroundSelection(premade) || "").trim(),
+            ctx.token
           );
         })
         .then(function (result) {
@@ -12284,7 +12323,7 @@
     });
   }
 
-  function waitForAudioJob(script, jobId, backgroundIdForMix) {
+  function waitForAudioJob(script, jobId, backgroundIdForMix, authToken) {
     return new Promise(function (resolve, reject) {
       var mixStarted = false;
       var timeout = setTimeout(function () {
@@ -12314,10 +12353,9 @@
             if (status === "awaiting_client_mix") {
               if (mixStarted) return;
               mixStarted = true;
-              var ttsUrl = data.ttsDownloadURL;
-              if (!ttsUrl) {
+              if (!authToken) {
                 cleanup();
-                reject(new Error("Missing TTS download URL for background mix."));
+                reject(new Error("Not signed in — refresh and try again."));
                 return;
               }
               var bgMix = (backgroundIdForMix && String(backgroundIdForMix).trim()) || "";
@@ -12326,7 +12364,7 @@
                 reject(new Error("Background mix was requested but no background is selected."));
                 return;
               }
-              finalizeAwaitingClientMix(currentUser.uid, script.id, ttsUrl, bgMix)
+              finalizeAwaitingClientMix(currentUser.uid, script.id, jobId, bgMix, authToken)
                 .then(function (url) {
                   return db
                     .collection("users")
