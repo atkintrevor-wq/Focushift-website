@@ -2634,7 +2634,7 @@
     var limit = webTierDeviceLimit(tier);
     var extra =
       tier === "creator"
-        ? " Creator: manage listeners and share links in Sharing management."
+        ? " Creator: open Shared listeners to remove listeners or deactivate share links."
         : "";
     return (
       "Your plan allows up to " +
@@ -3028,6 +3028,26 @@
       '    <div id="screen-help-sections" class="screen-help-sections"></div>' +
       "  </div>" +
       "</div>" +
+      '<div id="account-devices-backdrop" class="app-modal-backdrop account-sheet-backdrop" hidden>' +
+      '  <div class="app-modal account-sheet-modal" role="dialog" aria-modal="true" aria-labelledby="account-devices-title">' +
+      '    <div class="account-sheet-head">' +
+      '      <h3 id="account-devices-title">Manage devices</h3>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="account-devices-close">Done</button>' +
+      "    </div>" +
+      '    <p class="app-muted account-sheet-lede" id="account-devices-lede"></p>' +
+      '    <div id="account-devices-modal-body" class="account-sheet-body"></div>' +
+      "  </div>" +
+      "</div>" +
+      '<div id="account-sharing-backdrop" class="app-modal-backdrop account-sheet-backdrop" hidden>' +
+      '  <div class="app-modal account-sheet-modal" role="dialog" aria-modal="true" aria-labelledby="account-sharing-title">' +
+      '    <div class="account-sheet-head">' +
+      '      <h3 id="account-sharing-title">Shared listeners</h3>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="account-sharing-close">Done</button>' +
+      "    </div>" +
+      '    <p class="app-muted account-sheet-lede">Creator plan: manage who can listen to your shared audio and deactivate old share links.</p>' +
+      '    <div id="account-sharing-modal-body" class="account-sheet-body account-sharing-management-panel"></div>' +
+      "  </div>" +
+      "</div>" +
       '<div id="account-info-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal account-info-modal" role="dialog" aria-modal="true" aria-labelledby="account-info-title">' +
       '    <h3 id="account-info-title">Info</h3>' +
@@ -3094,13 +3114,23 @@
       "            </div>" +
       "          </div>" +
       "        </div>" +
-      '        <div id="account-plans-panel" class="account-plans-panel" hidden>' +
-      '          <p class="app-muted" style="margin:0 0 0.55rem;font-size:0.82rem;line-height:1.45;">Choose a billing period. You will be redirected to Stripe Checkout.</p>' +
-      '          <div class="account-plans-grid">' +
-      '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-month">Starter — monthly</button>' +
-      '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-year">Starter — yearly</button>' +
-      '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-month">Creator — monthly</button>' +
-      '            <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-year">Creator — yearly</button>' +
+        '        <div id="account-plans-panel" class="account-plans-panel" hidden>' +
+      '          <div id="account-plans-stripe-wrap">' +
+      '            <p class="app-muted account-plans-panel-note">Choose a billing period. You will be redirected to Stripe Checkout.</p>' +
+      '            <div class="account-plans-grid">' +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-month">Starter — monthly</button>' +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-year">Starter — yearly</button>' +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-month">Creator — monthly</button>' +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-year">Creator — yearly</button>' +
+      "            </div>" +
+      "          </div>" +
+      '          <div id="account-plans-appstore-wrap" hidden>' +
+      '            <p class="app-muted account-plans-panel-note">Your subscription is managed through the <strong>App Store</strong>. Upgrades, downgrades, and cancellations must be done on iPhone or iPad — not through Stripe on the web.</p>' +
+      '            <ul class="account-plans-readonly">' +
+      "              <li><strong>Starter</strong> — More scripts, voices, cloud sync, and AI usage.</li>" +
+      "              <li><strong>Creator</strong> — Higher limits, sharing, and voice cloning.</li>" +
+      "            </ul>" +
+      '            <p class="app-muted account-plans-panel-note" style="margin-top:0.55rem;">Open <strong>Focus Shift</strong> on your iPhone or iPad → <strong>Account</strong> → <strong>Subscription</strong> → <strong>View Plans &amp; Upgrade</strong> or <strong>Manage Subscriptions</strong>.</p>' +
       "          </div>" +
       "        </div>" +
       "      </section>" +
@@ -3122,11 +3152,6 @@
       '            <span class="account-ios-row__chev" aria-hidden="true">›</span>' +
       "          </button>" +
       "        </div>" +
-      "      </section>" +
-      '      <section id="account-sharing-management-section" class="account-ios-group account-ios-group--nested" hidden>' +
-      accountIosGroupHeader("Sharing management", null, null) +
-      '        <div id="account-sharing-management-panel" class="account-sharing-management-panel"></div>' +
-      '        <button type="button" class="app-btn app-btn-secondary account-ios-footer-btn" id="account-refresh-sharing">Refresh sharing lists</button>' +
       "      </section>" +
       '      <section class="account-ios-group" id="account-library-group">' +
       accountIosGroupHeader("Library & Storage", null, null) +
@@ -3700,12 +3725,27 @@
     var accountScrollSharingBtn = document.getElementById("account-scroll-sharing");
     if (accountScrollSharingBtn) {
       accountScrollSharingBtn.addEventListener("click", function () {
-        var section = document.getElementById("account-sharing-management-section");
-        if (section) {
-          section.scrollIntoView({ behavior: "smooth", block: "nearest" });
-        }
+        openAccountSharingModal();
       });
     }
+    (function bindAccountSheetModals() {
+      var devicesClose = document.getElementById("account-devices-close");
+      var devicesBd = document.getElementById("account-devices-backdrop");
+      if (devicesClose) devicesClose.addEventListener("click", closeAccountDevicesModal);
+      if (devicesBd) {
+        devicesBd.addEventListener("click", function (ev) {
+          if (ev.target && ev.target.id === "account-devices-backdrop") closeAccountDevicesModal();
+        });
+      }
+      var sharingClose = document.getElementById("account-sharing-close");
+      var sharingBd = document.getElementById("account-sharing-backdrop");
+      if (sharingClose) sharingClose.addEventListener("click", closeAccountSharingModal);
+      if (sharingBd) {
+        sharingBd.addEventListener("click", function (ev) {
+          if (ev.target && ev.target.id === "account-sharing-backdrop") closeAccountSharingModal();
+        });
+      }
+    })();
     (function bindStripePlanButtons() {
       var planMap = {
         "starter-month": ["starter", "month"],
@@ -3739,6 +3779,15 @@
           if (!pair) return;
           ev.preventDefault();
           ev.stopPropagation();
+          if (profileUsesAppStoreBilling() && resolvedSubscriptionTier() !== "free") {
+            showAppBanner(
+              "Manage in the iOS app",
+              "App Store subscriptions cannot be changed with Stripe on the web. Open Focus Shift on iPhone or iPad → Account → Subscription.",
+              "info",
+              { duration: 9000 }
+            );
+            return;
+          }
           postStripeCheckoutTier(pair[0], pair[1]);
         });
       }
@@ -3746,10 +3795,11 @@
     document.getElementById("account-btn-view-plans").addEventListener("click", function () {
       var panel = document.getElementById("account-plans-panel");
       if (!panel) return;
+      syncAccountPlansPanelForBilling();
       var willShow = !!panel.hidden;
       panel.hidden = !willShow;
       this.setAttribute("aria-expanded", willShow ? "true" : "false");
-      this.textContent = willShow ? "Hide plans" : "View plans & upgrade";
+      this.textContent = willShow ? "Hide plans" : viewPlansButtonLabelCollapsed();
     });
     var accountManageBillingBtn = document.getElementById("account-btn-manage-billing");
     if (accountManageBillingBtn) {
@@ -3758,21 +3808,8 @@
       });
     }
     document.getElementById("account-manage-devices").addEventListener("click", function () {
-      refreshAccountInsightsFromCloud().then(function () {
-        setAccountMessage(
-          "Device list refreshed. Remove devices in the iOS app if you are over your plan limit.",
-          "success"
-        );
-      });
+      openAccountDevicesModal();
     });
-    var accountRefreshSharingBtn = document.getElementById("account-refresh-sharing");
-    if (accountRefreshSharingBtn) {
-      accountRefreshSharingBtn.addEventListener("click", function () {
-        refreshShareManagementPanel().then(function () {
-          setAccountMessage("Sharing lists refreshed.", "success");
-        });
-      });
-    }
     bindShareClaimModal();
     document.getElementById("account-refresh-library-stats").addEventListener("click", function () {
       refreshAccountInsightsFromCloud().then(function () {
@@ -4624,7 +4661,7 @@
     syncAccountAppleLinkUI();
     renderAccountInsights();
     renderUsageAddOnSection();
-    syncAccountSharingManagementSection();
+    syncAccountSharedListenersRow();
     refreshAccountInsightsFromCloud().then(function () {
       if (accountOpenFocusUsageAddOn) {
         accountOpenFocusUsageAddOn = false;
@@ -8122,6 +8159,25 @@
     if (syncCloudBtn) syncCloudBtn.hidden = tier !== "starter" && tier !== "creator";
   }
 
+  function viewPlansButtonLabelCollapsed() {
+    if (profileUsesAppStoreBilling() && resolvedSubscriptionTier() !== "free") {
+      return "View plans";
+    }
+    return "View plans & upgrade";
+  }
+
+  function syncAccountPlansPanelForBilling() {
+    var stripeWrap = document.getElementById("account-plans-stripe-wrap");
+    var appStoreWrap = document.getElementById("account-plans-appstore-wrap");
+    var storePaid = profileUsesAppStoreBilling() && resolvedSubscriptionTier() !== "free";
+    if (stripeWrap) stripeWrap.hidden = storePaid;
+    if (appStoreWrap) appStoreWrap.hidden = !storePaid;
+    var btn = document.getElementById("account-btn-view-plans");
+    if (btn && btn.getAttribute("aria-expanded") !== "true") {
+      btn.textContent = viewPlansButtonLabelCollapsed();
+    }
+  }
+
   function syncAccountSubscriptionHeadline() {
     var headlineEl = document.getElementById("account-subscription-headline");
     var descEl = document.getElementById("account-subscription-description");
@@ -8132,6 +8188,7 @@
     headlineEl.classList.remove("tier-free", "tier-starter", "tier-creator");
     headlineEl.classList.add("tier-" + tier);
     syncAccountBillingButtons();
+    syncAccountPlansPanelForBilling();
     syncPaidFeatureControls();
   }
 
@@ -8141,8 +8198,130 @@
     if (panel) panel.hidden = true;
     if (btn) {
       btn.setAttribute("aria-expanded", "false");
-      btn.textContent = "View plans & upgrade";
+      btn.textContent = viewPlansButtonLabelCollapsed();
     }
+    syncAccountPlansPanelForBilling();
+  }
+
+  function openAccountDevicesModal() {
+    var bd = document.getElementById("account-devices-backdrop");
+    if (!bd || !currentUser) return;
+    var lede = document.getElementById("account-devices-lede");
+    var limit = webTierDeviceLimit(resolvedSubscriptionTier());
+    if (lede) {
+      lede.textContent =
+        "You can use up to " +
+        String(limit) +
+        " device" +
+        (limit === 1 ? "" : "s") +
+        " on your plan. Remove a device to sign in on another.";
+    }
+    renderAccountDevicesModalContent(true);
+    bd.hidden = false;
+    refreshAccountInsightsFromCloud().then(function () {
+      renderAccountDevicesModalContent(false);
+      renderAccountDevicesSummary();
+    });
+  }
+
+  function closeAccountDevicesModal() {
+    var bd = document.getElementById("account-devices-backdrop");
+    if (bd) bd.hidden = true;
+  }
+
+  function renderAccountDevicesModalContent(loading) {
+    var body = document.getElementById("account-devices-modal-body");
+    if (!body) return;
+    if (loading || accountInsightsSnapshot.loading) {
+      body.innerHTML = '<p class="app-muted" style="margin:0;">Loading devices…</p>';
+      return;
+    }
+    if (accountInsightsSnapshot.error) {
+      body.innerHTML =
+        '<p class="app-inline-msg error" style="margin:0;">' + escapeHtml(accountInsightsSnapshot.error) + "</p>";
+      return;
+    }
+    var devices = accountInsightsSnapshot.devices || [];
+    var currentId = getWebDeviceId();
+    if (!devices.length) {
+      body.innerHTML = '<p class="app-muted" style="margin:0;">No registered devices yet.</p>';
+      return;
+    }
+    body.innerHTML =
+      '<ul class="account-sheet-list">' +
+      devices
+        .map(function (d) {
+          var isCurrent = d.id === currentId || d.isCurrent;
+          var lastLine = isCurrent
+            ? '<span class="account-sheet-item__meta account-sheet-item__meta--current">This browser</span>'
+            : '<span class="account-sheet-item__meta">Last active on this device</span>';
+          var removeBtn = isCurrent
+            ? ""
+            : '<button type="button" class="app-btn app-btn-secondary account-device-remove" data-device-id="' +
+              escapeHtml(d.id) +
+              '">Remove</button>';
+          return (
+            '<li class="account-sheet-list-item">' +
+            '<div class="account-sheet-item__main">' +
+            '<div class="account-sheet-item__title">' +
+            escapeHtml(d.name || "Device") +
+            "</div>" +
+            lastLine +
+            "</div>" +
+            removeBtn +
+            "</li>"
+          );
+        })
+        .join("") +
+      "</ul>";
+    body.querySelectorAll(".account-device-remove").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var deviceId = btn.getAttribute("data-device-id");
+        if (!deviceId || !currentUser) return;
+        if (!window.confirm("Remove this device? It will need to sign in again.")) return;
+        btn.disabled = true;
+        db.collection("users")
+          .doc(currentUser.uid)
+          .collection("devices")
+          .doc(deviceId)
+          .delete()
+          .then(function () {
+            setAccountMessage("Device removed.", "success");
+            return refreshAccountInsightsFromCloud();
+          })
+          .then(function () {
+            renderAccountDevicesModalContent(false);
+            renderAccountDevicesSummary();
+          })
+          .catch(function (e) {
+            setAccountMessage((e && e.message) || "Could not remove device.", "error");
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+    });
+  }
+
+  function openAccountSharingModal() {
+    if (!isWebCreatorTier()) {
+      setAccountMessage("Shared listeners require the Creator plan.", "info");
+      return;
+    }
+    var bd = document.getElementById("account-sharing-backdrop");
+    if (!bd) return;
+    bd.hidden = false;
+    refreshShareManagementPanel();
+  }
+
+  function closeAccountSharingModal() {
+    var bd = document.getElementById("account-sharing-backdrop");
+    if (bd) bd.hidden = true;
+  }
+
+  function syncAccountSharedListenersRow() {
+    var sharingBtn = document.getElementById("account-scroll-sharing");
+    if (sharingBtn) sharingBtn.hidden = !isWebCreatorTier();
   }
 
   function setHomeFlowStep(step, displayName) {
@@ -8434,20 +8613,10 @@
     }
   }
 
-  function syncAccountSharingManagementSection() {
-    var section = document.getElementById("account-sharing-management-section");
-    if (!section) return;
-    section.hidden = !isWebCreatorTier();
-  }
-
   function renderShareManagementPanel() {
-    var panel = document.getElementById("account-sharing-management-panel");
+    var panel = document.getElementById("account-sharing-modal-body");
     if (!panel) return;
-    syncAccountSharingManagementSection();
-    if (panel.closest("#account-sharing-management-section") && panel.closest("#account-sharing-management-section").hidden) {
-      panel.innerHTML = "";
-      return;
-    }
+    syncAccountSharedListenersRow();
     if (shareManagementSnapshot.loading) {
       panel.innerHTML = '<p class="app-muted" style="margin:0;">Loading sharing lists…</p>';
       return;
@@ -8545,7 +8714,9 @@
           .delete()
           .then(function () {
             setAccountMessage("Listener removed.", "success");
-            return refreshShareManagementPanel();
+            return refreshShareManagementPanel().then(function () {
+              renderAccountDevicesSummary();
+            });
           })
           .catch(function (e) {
             setAccountMessage((e && e.message) || "Could not remove listener.", "error");
