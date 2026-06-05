@@ -235,36 +235,37 @@
   var activeVoicesTab = "app-voices";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
+  /** `file` must match the filename in `website/audio/voices/` (same catalog as iOS `VoiceSamples`). */
   var availableVoices = [
-    { id: "YZHSTqsq1isdXNsFLzBw", name: "Isa", description: "smooth, charming female" },
-    { id: "rJ9XoWu8gbUhVKZnKY8X", name: "Lori", description: "Warm, Engaging and Caring" },
-    { id: "l32B8XDoylOsZKiSdfhE", name: "Carla", description: "Sweet, Soft and Meditative" },
-    { id: "1wGbFxmAM3Fgw63G1zZJ", name: "Allison", description: "Calm, Soothing and Meditative" },
-    { id: "tOEwa4nCo7gciO1FbUBK", name: "Stephen", description: "Raspy Senior Narrator" },
-    { id: "87tjwokZlpNU7QL3HaLP", name: "Zane", description: "Raspy and Convincing" },
-    { id: "7dEuJHhweR5AFXA4INkB", name: "Carol", description: "Warm, Smooth & Luxurious" },
-    { id: "xctasy8XvGp2cVO9HL9k", name: "Samantha", description: "Energetic, Clear and Bubbly" },
-    { id: "6F5Zhi321D3Oq7v1oNT4", name: "Hank", description: "Deep and Engaging Narrator" },
-    { id: "FVQMzxJGPUBtfz1Azdoy", name: "Danielle", description: "Gentle and Engaging Narrator" },
-    { id: "NNl6r8mD7vthiJatiJt1", name: "Bradford", description: "Expressive and Articulate" },
-    { id: "gUABw7pXQjhjt0kNFBTF", name: "Andrew", description: "Smooth, Smart and Clear" },
-    { id: "kqVT88a5QfII1HNAEPTJ", name: "Sage", description: "Wise and Captivating" },
-    { id: "EkK5I93UQWFDigLMpZcX", name: "James", description: "Husky, Engaging and Bold" },
-    { id: "NtS6nEHDYMQC9QczMQuq", name: "Katherine", description: "Calm Luxury Narrator" },
-    { id: "BpjGufoPiobT79j2vtj4", name: "Priyanka", description: "Calm, Neutral and Relaxed" },
-    { id: "wAGzRVkxKEs8La0lmdrE", name: "Sully", description: "Mature, Deep and Intriguing" },
-    { id: "dPah2VEoifKnZT37774q", name: "Knox", description: "Serious, Deep, and Steady" },
-    { id: "MFZUKuGQUsGJPQjTS4wC", name: "Jon", description: "Warm & Grounded Storyteller" },
-    { id: "uju3wxzG5OhpWcoi3SMy", name: "Michael", description: "Confident, Expressive" },
-    { id: "lnieQLGTodpbhjpZtg1k", name: "Bill", description: "Clear and Articulate" },
-    { id: "ZthjuvLPty3kTMaNKVKb", name: "Jackson", description: "Confident and Reliable" },
-    { id: "lxYfHSkYm1EzQzGhdbfc", name: "Jessica", description: "Confident. Conversational" },
-    { id: "8LVfoRdkh4zgjr8v5ObE", name: "Clara", description: "Soothing, Warm and Friendly" },
-    { id: "EiNlNiXeDU1pqqOPrYMO", name: "Paul", description: "Deep Voice" },
-    { id: "YgzytRZyVmEux6PCtJYB", name: "Ivanna", description: "Sultry & Captivating" },
-    { id: "A7LE95x99tn9HChsblA6", name: "Rebecca", description: "Hypnotic Female voice" },
-    { id: "iZURAYccQtQd12U8kEcq", name: "Roland", description: "Middle-aged male voice" },
-    { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark", description: "Very Deep, Confident, Professional" },
+    { id: "YZHSTqsq1isdXNsFLzBw", name: "Isa", description: "smooth, charming female", file: "Isa.mp3" },
+    { id: "rJ9XoWu8gbUhVKZnKY8X", name: "Lori", description: "Warm, Engaging and Caring", file: "Lori.mp3" },
+    { id: "l32B8XDoylOsZKiSdfhE", name: "Carla", description: "Sweet, Soft and Meditative", file: "Carla.mp3" },
+    { id: "1wGbFxmAM3Fgw63G1zZJ", name: "Allison", description: "Calm, Soothing and Meditative", file: "Allison.mp3" },
+    { id: "tOEwa4nCo7gciO1FbUBK", name: "Stephen", description: "Raspy Senior Narrator", file: "Stephen.mp3" },
+    { id: "87tjwokZlpNU7QL3HaLP", name: "Zane", description: "Raspy and Convincing", file: "Zane.mp3" },
+    { id: "7dEuJHhweR5AFXA4INkB", name: "Carol", description: "Warm, Smooth & Luxurious", file: "Carol.mp3" },
+    { id: "xctasy8XvGp2cVO9HL9k", name: "Samantha", description: "Energetic, Clear and Bubbly", file: "Samantha.mp3" },
+    { id: "6F5Zhi321D3Oq7v1oNT4", name: "Hank", description: "Deep and Engaging Narrator", file: "Hank.mp3" },
+    { id: "FVQMzxJGPUBtfz1Azdoy", name: "Danielle", description: "Gentle and Engaging Narrator", file: "Danielle.mp3" },
+    { id: "NNl6r8mD7vthiJatiJt1", name: "Bradford", description: "Expressive and Articulate", file: "Bradford.mp3" },
+    { id: "gUABw7pXQjhjt0kNFBTF", name: "Andrew", description: "Smooth, Smart and Clear", file: "Andrew.mp3" },
+    { id: "kqVT88a5QfII1HNAEPTJ", name: "Sage", description: "Wise and Captivating", file: "Sage.mp3" },
+    { id: "EkK5I93UQWFDigLMpZcX", name: "James", description: "Husky, Engaging and Bold", file: "James.mp3" },
+    { id: "NtS6nEHDYMQC9QczMQuq", name: "Katherine", description: "Calm Luxury Narrator", file: "Katherine.mp3" },
+    { id: "BpjGufoPiobT79j2vtj4", name: "Priyanka", description: "Calm, Neutral and Relaxed", file: "Priyanka.mp3" },
+    { id: "wAGzRVkxKEs8La0lmdrE", name: "Sully", description: "Mature, Deep and Intriguing", file: "Sully.mp3" },
+    { id: "dPah2VEoifKnZT37774q", name: "Knox", description: "Serious, Deep, and Steady", file: "Knox.mp3" },
+    { id: "MFZUKuGQUsGJPQjTS4wC", name: "Jon", description: "Warm & Grounded Storyteller", file: "Jon.mp3" },
+    { id: "uju3wxzG5OhpWcoi3SMy", name: "Michael", description: "Confident, Expressive", file: "Michael.mp3" },
+    { id: "lnieQLGTodpbhjpZtg1k", name: "Bill", description: "Clear and Articulate", file: "Bill.mp3" },
+    { id: "ZthjuvLPty3kTMaNKVKb", name: "Jackson", description: "Confident and Reliable", file: "Jackson.mp3" },
+    { id: "lxYfHSkYm1EzQzGhdbfc", name: "Jessica", description: "Confident. Conversational", file: "Jessica.mp3" },
+    { id: "8LVfoRdkh4zgjr8v5ObE", name: "Clara", description: "Soothing, Warm and Friendly", file: "Clara.mp3" },
+    { id: "EiNlNiXeDU1pqqOPrYMO", name: "Paul", description: "Deep Voice", file: "Paul.mp3" },
+    { id: "YgzytRZyVmEux6PCtJYB", name: "Ivanna", description: "Sultry & Captivating", file: "Ivanna.mp3" },
+    { id: "A7LE95x99tn9HChsblA6", name: "Rebecca", description: "Hypnotic Female voice", file: "Rebecca.mp3" },
+    { id: "iZURAYccQtQd12U8kEcq", name: "Roland", description: "Middle-aged male voice", file: "Roland.mp3" },
+    { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark", description: "Very Deep, Confident, Professional", file: "Mark.mp3" },
   ];
   /** `file` must match the filename in `website/audio/backgrounds/` (same catalog as iOS `BackGroundAudio`). */
   var availableBackgrounds = [
@@ -4862,6 +4863,12 @@
     return new URL("../audio/backgrounds/" + encodeURIComponent(fn), window.location.href).href;
   }
 
+  function voiceSampleAssetUrl(filename) {
+    var fn = (filename && String(filename).trim()) || "";
+    if (!fn) return "";
+    return new URL("../audio/voices/" + encodeURIComponent(fn), window.location.href).href;
+  }
+
   function premadeTrackAssetUrl(folderName, filename) {
     var folder = (folderName && String(folderName).trim()) || "";
     var file = (filename && String(filename).trim()) || "";
@@ -6473,8 +6480,57 @@
     uploadVoiceSample(file, mode);
   }
 
+  function startVoicePreviewPlayback(audioUrl, voice, isBlobURL) {
+    if (activePreviewBlobURL) {
+      try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
+      activePreviewBlobURL = null;
+    }
+    stopActiveAudio(false);
+    activeAudio = new Audio(audioUrl);
+    if (isBlobURL) activePreviewBlobURL = audioUrl;
+    applyPlaybackVolumeToActiveAudio();
+    activeAudioScriptId = null;
+    activeAudioTitle = "Voice preview — " + (voice.name || "Voice");
+    bindAudioLifecycle(function () {
+      if (activePreviewBlobURL) {
+        try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
+        activePreviewBlobURL = null;
+      }
+      activeAudioScriptId = null;
+      activeAudioTitle = "";
+      activeAudio = null;
+      updateMiniPlayer();
+    });
+    return activeAudio.play();
+  }
+
   function previewVoiceSample(voice) {
-    if (!currentUser || !voice || !voice.id) return;
+    if (!voice || !voice.id) return;
+    var sampleFile = (voice.file && String(voice.file).trim()) || "";
+    if (sampleFile) {
+      var sampleUrl = voiceSampleAssetUrl(sampleFile);
+      if (!sampleUrl) {
+        setVoicesMessage("Could not preview voice.", "error");
+        return;
+      }
+      setVoicesMessage('Playing preview for "' + (voice.name || "voice") + '"...', "");
+      startVoicePreviewPlayback(sampleUrl, voice, false)
+        .then(function () {
+          updateMiniPlayer();
+          setVoicesMessage("Playing preview.", "success");
+        })
+        .catch(function () {
+          setVoicesMessage(
+            "Could not play preview. Check the file exists under audio/voices/.",
+            "error"
+          );
+        });
+      return;
+    }
+    if (!currentUser) {
+      setVoicesMessage("Sign in to preview this voice.", "error");
+      return;
+    }
     setVoicesMessage('Generating preview for "' + (voice.name || "voice") + '"...', "");
     currentUser
       .getIdToken(true)
@@ -6502,28 +6558,8 @@
         return resp.blob();
       })
       .then(function (blob) {
-        if (activePreviewBlobURL) {
-          try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
-          activePreviewBlobURL = null;
-        }
         var blobURL = URL.createObjectURL(blob);
-        activePreviewBlobURL = blobURL;
-        stopActiveAudio(false);
-        activeAudio = new Audio(blobURL);
-        applyPlaybackVolumeToActiveAudio();
-        activeAudioScriptId = null;
-        activeAudioTitle = "Voice preview — " + (voice.name || "Voice");
-        bindAudioLifecycle(function () {
-          if (activePreviewBlobURL) {
-            try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
-            activePreviewBlobURL = null;
-          }
-          activeAudioScriptId = null;
-          activeAudioTitle = "";
-          activeAudio = null;
-          updateMiniPlayer();
-        });
-        return activeAudio.play();
+        return startVoicePreviewPlayback(blobURL, voice, true);
       })
       .then(function () {
         updateMiniPlayer();
