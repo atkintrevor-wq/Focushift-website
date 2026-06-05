@@ -1769,41 +1769,77 @@
       });
   }
 
+  function fetchDailySparkTtsBufferFromUrl(url) {
+    return fetch(url).then(function (r) {
+      if (!r.ok) throw new Error("Could not download Daily Spark audio.");
+      return r.arrayBuffer();
+    });
+  }
+
+  function fetchDailySparkTtsBuffer(spark) {
+    if (!currentUser || !spark || !spark.sparkId) {
+      return Promise.reject(new Error("Sign in to play Daily Spark."));
+    }
+    var directUrl = (spark.ttsDownloadURL && String(spark.ttsDownloadURL).trim()) || "";
+    return currentUser.getIdToken(false).then(function (token) {
+      var proxyUrl =
+        backendBaseURL() +
+        "/daily-spark/audio?sparkId=" +
+        encodeURIComponent(spark.sparkId);
+      return fetch(proxyUrl, {
+        method: "GET",
+        headers: { Authorization: "Bearer " + token },
+      })
+        .then(function (r) {
+          if (r.ok) return r.arrayBuffer();
+          if (r.status === 404 && directUrl) {
+            return fetchDailySparkTtsBufferFromUrl(directUrl);
+          }
+          return r.text().then(function (text) {
+            var json = null;
+            try {
+              json = JSON.parse(text);
+            } catch (_e) {}
+            throw new Error(
+              (json && json.error) || text || "Could not download Daily Spark audio."
+            );
+          });
+        })
+        .catch(function (e) {
+          if (directUrl && isNetworkFetchFailure(e)) {
+            return fetchDailySparkTtsBufferFromUrl(directUrl);
+          }
+          if (isNetworkFetchFailure(e)) {
+            throw new Error(
+              "Could not download Daily Spark audio. Check your connection and try disabling ad blockers for focushift.app."
+            );
+          }
+          throw e;
+        });
+    });
+  }
+
   function prepareDailySparkPlayback(spark) {
     revokeDailySparkObjectUrl();
-    var ttsUrl = spark.ttsDownloadURL && String(spark.ttsDownloadURL).trim();
-    if (!ttsUrl) {
+    if (!spark || !spark.sparkId) {
       return Promise.reject(new Error("Daily Spark audio is not ready yet."));
     }
-    return fetch(ttsUrl)
-      .then(function (r) {
-        if (!r.ok) throw new Error("Could not download Daily Spark audio.");
-        return r.arrayBuffer();
-      })
-      .then(function (ttsAb) {
-        var bg = (spark.backgroundID && String(spark.backgroundID).trim()) || "";
-        if (!bg || bg === "bg-none") {
+    return fetchDailySparkTtsBuffer(spark).then(function (ttsAb) {
+      var bg = (spark.backgroundID && String(spark.backgroundID).trim()) || "";
+      if (!bg || bg === "bg-none") {
+        dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
+        return dailySparkState.objectUrl;
+      }
+      return mixTtsWithBackgroundToWavBlob(ttsAb, bg)
+        .then(function (wavBlob) {
+          dailySparkState.objectUrl = URL.createObjectURL(wavBlob);
+          return dailySparkState.objectUrl;
+        })
+        .catch(function () {
           dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
           return dailySparkState.objectUrl;
-        }
-        return mixTtsWithBackgroundToWavBlob(ttsAb, bg)
-          .then(function (wavBlob) {
-            dailySparkState.objectUrl = URL.createObjectURL(wavBlob);
-            return dailySparkState.objectUrl;
-          })
-          .catch(function () {
-            dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
-            return dailySparkState.objectUrl;
-          });
-      })
-      .catch(function (e) {
-        if (isNetworkFetchFailure(e)) {
-          throw new Error(
-            "Could not download Daily Spark audio. Check your connection and try disabling ad blockers for focushift.app."
-          );
-        }
-        throw e;
-      });
+        });
+    });
   }
 
   function fetchDailySparkCurrent(force) {
