@@ -31,6 +31,7 @@
   var activeAudio = null;
   var activeAudioScriptId = null;
   var activeAudioTitle = "";
+  var activeVoicePreviewId = "";
   var activePreviewBlobURL = null;
   var activePlaylistQueue = [];
   var activePlaylistIndex = -1;
@@ -5063,6 +5064,94 @@
     );
   }
 
+  function mediaCardPlusIconSvg() {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
+    );
+  }
+
+  function mediaCardSavedIconSvg() {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>'
+    );
+  }
+
+  function mediaCardDefaultStarIconSvg(isDefault) {
+    if (isDefault) {
+      return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+      );
+    }
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+    );
+  }
+
+  function mediaCardPlayBtnHtml(dataAttr, dataValue, isPlaying, title) {
+    var label = title || (isPlaying ? "Pause" : "Play");
+    return (
+      '<button type="button" class="script-card-play-btn" ' +
+      dataAttr +
+      '="' +
+      escapeHtml(dataValue) +
+      '" title="' +
+      escapeHtml(label) +
+      '" aria-label="' +
+      escapeHtml(label) +
+      '">' +
+      libraryTransportPlayPauseIconSvg(isPlaying) +
+      "</button>"
+    );
+  }
+
+  function mediaCardIconActionBtnHtml(dataAttr, dataValue, title, iconSvg, isActive) {
+    return (
+      '<button type="button" class="app-btn app-btn-secondary library-script-share-btn media-card-icon-btn' +
+      (isActive ? " is-active" : "") +
+      '" ' +
+      dataAttr +
+      '="' +
+      escapeHtml(dataValue) +
+      '" title="' +
+      escapeHtml(title) +
+      '" aria-label="' +
+      escapeHtml(title) +
+      '">' +
+      iconSvg +
+      "</button>"
+    );
+  }
+
+  function isVoicePreviewing(voiceId) {
+    var vid = (voiceId && String(voiceId).trim()) || "";
+    return !!(
+      activeAudio &&
+      !activeAudioScriptId &&
+      activeVoicePreviewId === vid &&
+      !activeAudio.paused
+    );
+  }
+
+  function voiceOptionById(voiceId, fallbackList) {
+    var id = (voiceId && String(voiceId).trim()) || "";
+    if (!id) return null;
+    if (Array.isArray(fallbackList) && fallbackList.length) {
+      var fromList = fallbackList.find(function (v) {
+        return v && v.id === id;
+      });
+      if (fromList) return fromList;
+    }
+    var builtIn = availableVoices.find(function (v) {
+      return v.id === id;
+    });
+    if (builtIn) return builtIn;
+    return (
+      currentClonedVoices.find(function (v) {
+        return v.id === id;
+      }) || null
+    );
+  }
+
   function previewBackgroundById(backgroundId, onError) {
     var entry = backgroundEntryById(backgroundId);
     if (!entry || entry.id === "bg-none") return Promise.resolve(false);
@@ -5518,23 +5607,26 @@
         var supportsSaveToggle = activeVoicesTab === "app-voices" && isWebPaidTierForAI();
         var isCloned = isClonedVoiceOption(v);
         var supportsCloneActions = activeVoicesTab === "my-voices" && isCloned;
+        var isAudible = isVoicePreviewing(v.id);
         return (
-          '<div class="app-modal-row" style="margin-bottom:0.45rem;">' +
-          '  <div class="app-modal-row-name">' +
+          '<div class="app-modal-row media-card-row">' +
+          '  <div class="media-card-row-main">' +
+          '    <div class="app-modal-row-name">' +
           escapeHtml(v.name) +
           (v.description ? '<div class="app-muted" style="font-size:0.75rem;">' + escapeHtml(v.description) + "</div>" : "") +
-          "</div>" +
-          '<div style="display:flex;gap:0.4rem;flex-wrap:wrap;justify-content:flex-end;">' +
+          "    </div>" +
+          "  </div>" +
+          '<div class="media-card-actions">' +
+          mediaCardPlayBtnHtml("data-voice-preview-id", v.id, isAudible) +
           (supportsSaveToggle
-            ? '<button type="button" class="app-btn app-btn-ghost" data-voice-save-id="' +
-              escapeHtml(v.id) +
-              '">' +
-              (inMyVoices ? "Saved" : "Add to My Voices") +
-              "</button>"
+            ? mediaCardIconActionBtnHtml(
+                "data-voice-save-id",
+                v.id,
+                inMyVoices ? "Remove from My Voices" : "Add to My Voices",
+                inMyVoices ? mediaCardSavedIconSvg() : mediaCardPlusIconSvg(),
+                inMyVoices
+              )
             : "") +
-          '<button type="button" class="app-btn app-btn-ghost" data-voice-preview-id="' +
-          escapeHtml(v.id) +
-          '">Preview</button>' +
           (supportsCloneActions
             ? '<button type="button" class="app-btn app-btn-ghost" data-voice-settings-id="' +
               escapeHtml(v.id) +
@@ -5544,13 +5636,13 @@
               '">Delete</button>'
             : "") +
           (isWebPaidTierForAI()
-            ? '<button type="button" class="app-btn ' +
-              (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-              '" data-voice-id="' +
-              escapeHtml(v.id) +
-              '">' +
-              (isSelected ? "Default" : "Set Default") +
-              "</button>"
+            ? mediaCardIconActionBtnHtml(
+                "data-voice-id",
+                v.id,
+                isSelected ? "Default voice" : "Set as default voice",
+                mediaCardDefaultStarIconSvg(isSelected),
+                isSelected
+              )
             : "") +
           "</div>" +
           "</div>"
@@ -5604,11 +5696,11 @@
     list.querySelectorAll("[data-voice-preview-id]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var voiceID = btn.getAttribute("data-voice-preview-id");
-        var voice = sourceVoices.find(function (v) {
-          return v.id === voiceID;
+        previewVoiceById(voiceID, function (msg) {
+          setVoicesMessage(msg, "error");
+        }).then(function () {
+          renderVoices();
         });
-        if (!voice) return;
-        previewVoiceSample(voice);
       });
     });
     list.querySelectorAll("[data-voice-settings-id]").forEach(function (btn) {
@@ -6490,6 +6582,7 @@
     if (isBlobURL) activePreviewBlobURL = audioUrl;
     applyPlaybackVolumeToActiveAudio();
     activeAudioScriptId = null;
+    activeVoicePreviewId = voice.id || "";
     activeAudioTitle = "Voice preview — " + (voice.name || "Voice");
     bindAudioLifecycle(function () {
       if (activePreviewBlobURL) {
@@ -6497,42 +6590,48 @@
         activePreviewBlobURL = null;
       }
       activeAudioScriptId = null;
+      activeVoicePreviewId = "";
       activeAudioTitle = "";
       activeAudio = null;
       updateMiniPlayer();
+      if (activeAdminTab === "voices") renderVoices();
     });
     return activeAudio.play();
   }
 
-  function previewVoiceSample(voice) {
-    if (!voice || !voice.id) return;
+  function previewVoiceSample(voice, onError) {
+    if (!voice || !voice.id) return Promise.resolve(false);
     var sampleFile = (voice.file && String(voice.file).trim()) || "";
     if (sampleFile) {
       var sampleUrl = voiceSampleAssetUrl(sampleFile);
       if (!sampleUrl) {
-        setVoicesMessage("Could not preview voice.", "error");
-        return;
+        var missingMsg = "Could not preview voice.";
+        if (typeof onError === "function") onError(missingMsg);
+        else setVoicesMessage(missingMsg, "error");
+        return Promise.resolve(false);
       }
       setVoicesMessage('Playing preview for "' + (voice.name || "voice") + '"...', "");
-      startVoicePreviewPlayback(sampleUrl, voice, false)
+      return startVoicePreviewPlayback(sampleUrl, voice, false)
         .then(function () {
           updateMiniPlayer();
           setVoicesMessage("Playing preview.", "success");
+          return true;
         })
         .catch(function () {
-          setVoicesMessage(
-            "Could not play preview. Check the file exists under audio/voices/.",
-            "error"
-          );
+          var playMsg = "Could not play preview. Check the file exists under audio/voices/.";
+          if (typeof onError === "function") onError(playMsg);
+          else setVoicesMessage(playMsg, "error");
+          return false;
         });
-      return;
     }
     if (!currentUser) {
-      setVoicesMessage("Sign in to preview this voice.", "error");
-      return;
+      var signInMsg = "Sign in to preview this voice.";
+      if (typeof onError === "function") onError(signInMsg);
+      else setVoicesMessage(signInMsg, "error");
+      return Promise.resolve(false);
     }
     setVoicesMessage('Generating preview for "' + (voice.name || "voice") + '"...', "");
-    currentUser
+    return currentUser
       .getIdToken(true)
       .then(function (token) {
         return fetch(backendBaseURL() + "/text-to-speech", {
@@ -6564,10 +6663,39 @@
       .then(function () {
         updateMiniPlayer();
         setVoicesMessage("Playing preview.", "success");
+        return true;
       })
       .catch(function (e) {
-        setVoicesMessage(e.message || "Could not preview voice.", "error");
+        var errMsg = e.message || "Could not preview voice.";
+        if (typeof onError === "function") onError(errMsg);
+        else setVoicesMessage(errMsg, "error");
+        return false;
       });
+  }
+
+  function previewVoiceById(voiceId, onError) {
+    var voice = voiceOptionById(voiceId);
+    if (!voice) return Promise.resolve(false);
+    if (activeVoicePreviewId === voice.id && activeAudio && !activeAudioScriptId) {
+      if (activeAudio.paused) {
+        return activeAudio
+          .play()
+          .then(function () {
+            updateMiniPlayer();
+            return true;
+          })
+          .catch(function () {
+            if (typeof onError === "function") {
+              onError("Could not play preview.");
+            }
+            return false;
+          });
+      }
+      activeAudio.pause();
+      updateMiniPlayer();
+      return Promise.resolve(true);
+    }
+    return previewVoiceSample(voice, onError);
   }
 
   function setVoiceSettingsMessage(text, kind) {
@@ -6859,52 +6987,36 @@
     if (options.showPinToMy) {
       var savedNow = !!loadSavedAppBackgroundIdSet()[b.id];
       if (!savedNow) {
-        trailing +=
-          '<button type="button" class="app-btn app-btn-secondary" style="padding:0.32rem 0.55rem;font-size:0.78rem;" data-add-saved-bg="' +
-          escapeHtml(b.id) +
-          '">Add to My Audio</button>';
+        trailing += mediaCardIconActionBtnHtml(
+          "data-add-saved-bg",
+          b.id,
+          "Add to My Audio",
+          mediaCardPlusIconSvg(),
+          false
+        );
       }
     }
-    var transportHtml = "";
-    if (canPrev) {
-      if (options.playPauseTransport) {
-        transportHtml =
-          '  <button type="button" class="script-card-play-btn" data-background-preview="' +
-          escapeHtml(b.id) +
-          '" title="' +
-          (isAudible ? "Pause" : "Play") +
-          '" aria-label="' +
-          (isAudible ? "Pause" : "Play") +
-          '">' +
-          libraryTransportPlayPauseIconSvg(isAudible) +
-          "</button>";
-      } else {
-        transportHtml =
-          '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
-          escapeHtml(b.id) +
-          '">' +
-          (isAudible ? "Pause" : "Play") +
-          "</button>";
-      }
-    }
+    var transportHtml = canPrev ? mediaCardPlayBtnHtml("data-background-preview", b.id, isAudible) : "";
     return (
-      '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
-      '  <div style="flex:1;min-width:140px;">' +
+      '<div class="app-modal-row media-card-row">' +
+      '  <div class="media-card-row-main">' +
       '    <div class="app-modal-row-name">' +
       escapeHtml(b.name) +
       "</div>" +
       "  </div>" +
+      '<div class="media-card-actions">' +
       transportHtml +
       trailing +
       (isWebPaidTierForAI()
-        ? '  <button type="button" class="app-btn ' +
-          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-          '" data-background-id="' +
-          escapeHtml(b.id) +
-          '">' +
-          (isSelected ? "Default" : "Set Default") +
-          "</button>"
+        ? mediaCardIconActionBtnHtml(
+            "data-background-id",
+            b.id,
+            isSelected ? "Default background" : "Set as default background",
+            mediaCardDefaultStarIconSvg(isSelected),
+            isSelected
+          )
         : "") +
+      "</div>" +
       "</div>"
     );
   }
@@ -6915,31 +7027,27 @@
     var isAudible = isBackgroundPreviewing(b.id);
     var canPrev = backgroundRowCanPreview(b);
     return (
-      '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
-      '  <div style="flex:1;min-width:140px;">' +
+      '<div class="app-modal-row media-card-row">' +
+      '  <div class="media-card-row-main">' +
       '    <div class="app-modal-row-name">' +
       escapeHtml(b.name) +
       ' <span class="app-muted" style="font-weight:400;">(App)</span></div>' +
       "  </div>" +
-      (canPrev
-        ? '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
-          escapeHtml(b.id) +
-          '">' +
-          (isAudible ? "Pause" : "Play") +
-          "</button>"
-        : "") +
+      '<div class="media-card-actions">' +
+      (canPrev ? mediaCardPlayBtnHtml("data-background-preview", b.id, isAudible) : "") +
       '<button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.78rem;" data-remove-saved-bg="' +
       escapeHtml(b.id) +
       '">Remove from My</button>' +
       (isWebPaidTierForAI()
-        ? '  <button type="button" class="app-btn ' +
-          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-          '" data-background-id="' +
-          escapeHtml(b.id) +
-          '">' +
-          (isSelected ? "Default" : "Set Default") +
-          "</button>"
+        ? mediaCardIconActionBtnHtml(
+            "data-background-id",
+            b.id,
+            isSelected ? "Default background" : "Set as default background",
+            mediaCardDefaultStarIconSvg(isSelected),
+            isSelected
+          )
         : "") +
+      "</div>" +
       "</div>"
     );
   }
@@ -6954,29 +7062,27 @@
     var isSelected = b.id === selectedBackgroundId;
     var isAudible = isBackgroundPreviewing(b.id);
     return (
-      '<div class="app-modal-row" style="margin-bottom:0.45rem;display:flex;align-items:center;gap:0.45rem;flex-wrap:wrap;">' +
-      '  <div style="flex:1;min-width:140px;">' +
+      '<div class="app-modal-row media-card-row">' +
+      '  <div class="media-card-row-main">' +
       '    <div class="app-modal-row-name">' +
       escapeHtml(b.name) +
       "</div>" +
       "  </div>" +
-      '  <button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.8rem;" data-background-preview="' +
-      escapeHtml(b.id) +
-      '">' +
-      (isAudible ? "Pause" : "Play") +
-      "</button>" +
+      '<div class="media-card-actions">' +
+      mediaCardPlayBtnHtml("data-background-preview", b.id, isAudible) +
       '<button type="button" class="app-btn app-btn-ghost" style="padding:0.32rem 0.55rem;font-size:0.78rem;color:#fca5a5;" data-user-bg-delete="' +
       escapeHtml(b.id) +
       '">Delete</button>' +
       (isWebPaidTierForAI()
-        ? '  <button type="button" class="app-btn ' +
-          (isSelected ? "app-btn-primary" : "app-btn-secondary") +
-          '" data-background-id="' +
-          escapeHtml(b.id) +
-          '">' +
-          (isSelected ? "Default" : "Set Default") +
-          "</button>"
+        ? mediaCardIconActionBtnHtml(
+            "data-background-id",
+            b.id,
+            isSelected ? "Default background" : "Set as default background",
+            mediaCardDefaultStarIconSvg(isSelected),
+            isSelected
+          )
         : "") +
+      "</div>" +
       "</div>"
     );
   }
@@ -7030,7 +7136,6 @@
             .map(function (b) {
               return audioBuiltinRowMarkup(b, {
                 showPinToMy: isWebPaidTierForAI(),
-                playPauseTransport: true,
               });
             })
             .join("") +
@@ -12107,6 +12212,7 @@
     }
     activeAudio = null;
     activeAudioScriptId = null;
+    activeVoicePreviewId = "";
     if (resetQueue) {
       activePlaylistQueue = [];
       activePlaylistIndex = -1;
