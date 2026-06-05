@@ -1717,31 +1717,93 @@
     return "A short affirmation to start your day.";
   }
 
+  function dailySparkFromFirestoreDoc(data) {
+    if (!data || data.status !== "ready" || !data.sparkId) return null;
+    return {
+      sparkId: data.sparkId,
+      title: data.title || "Daily Spark",
+      scriptText: data.scriptText || "",
+      wordCount: data.wordCount || 0,
+      voiceID: data.voiceID || null,
+      voiceName: data.voiceName || null,
+      backgroundID: data.backgroundID || null,
+      backgroundName: data.backgroundName || null,
+      ttsDownloadURL: data.ttsDownloadURL || null,
+      listenCount: data.listenCount || 0,
+    };
+  }
+
+  function dailySparkStatusMessageFromDoc(data) {
+    if (!data) return "Daily Spark is being prepared. Check back in a moment.";
+    if (data.status === "generating") return "Today's Daily Spark is being prepared.";
+    if (data.status === "failed") {
+      return (data.error && String(data.error).trim()) || "Daily Spark generation failed.";
+    }
+    if (data.status === "ready") return null;
+    return "Daily Spark is being prepared. Check back in a moment.";
+  }
+
+  function bootstrapDailySparkViaApi() {
+    if (!currentUser) return;
+    currentUser
+      .getIdToken(false)
+      .then(function (token) {
+        return backendGet("/daily-spark/current", token);
+      })
+      .catch(function () {});
+  }
+
+  function fetchDailySparkCurrentViaApi() {
+    return currentUser
+      .getIdToken(false)
+      .then(function (token) {
+        return backendGet("/daily-spark/current", token);
+      })
+      .then(function (json) {
+        dailySparkState.spark = (json && json.spark) || null;
+        dailySparkState.lastFetchMs = Date.now();
+        if (!dailySparkState.spark && json && json.message) {
+          dailySparkState.error = json.message;
+        }
+        return dailySparkState.spark;
+      });
+  }
+
   function prepareDailySparkPlayback(spark) {
     revokeDailySparkObjectUrl();
     var ttsUrl = spark.ttsDownloadURL && String(spark.ttsDownloadURL).trim();
     if (!ttsUrl) {
       return Promise.reject(new Error("Daily Spark audio is not ready yet."));
     }
-    return fetch(ttsUrl).then(function (r) {
-      if (!r.ok) throw new Error("Could not download Daily Spark audio.");
-      return r.arrayBuffer();
-    }).then(function (ttsAb) {
-      var bg = (spark.backgroundID && String(spark.backgroundID).trim()) || "";
-      if (!bg || bg === "bg-none") {
-        dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
-        return dailySparkState.objectUrl;
-      }
-      return mixTtsWithBackgroundToWavBlob(ttsAb, bg)
-        .then(function (wavBlob) {
-          dailySparkState.objectUrl = URL.createObjectURL(wavBlob);
-          return dailySparkState.objectUrl;
-        })
-        .catch(function () {
+    return fetch(ttsUrl)
+      .then(function (r) {
+        if (!r.ok) throw new Error("Could not download Daily Spark audio.");
+        return r.arrayBuffer();
+      })
+      .then(function (ttsAb) {
+        var bg = (spark.backgroundID && String(spark.backgroundID).trim()) || "";
+        if (!bg || bg === "bg-none") {
           dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
           return dailySparkState.objectUrl;
-        });
-    });
+        }
+        return mixTtsWithBackgroundToWavBlob(ttsAb, bg)
+          .then(function (wavBlob) {
+            dailySparkState.objectUrl = URL.createObjectURL(wavBlob);
+            return dailySparkState.objectUrl;
+          })
+          .catch(function () {
+            dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
+            return dailySparkState.objectUrl;
+          });
+      })
+      .catch(function (e) {
+        if (isNetworkFetchFailure(e)) {
+          throw new Error(
+            "Could not download Daily Spark audio. Check your connection and try disabling ad blockers for focushift.app."
+          );
+        }
+        throw e;
+      });
   }
 
   function fetchDailySparkCurrent(force) {
@@ -1760,22 +1822,31 @@
     }
     dailySparkState.loading = true;
     dailySparkState.error = null;
-    return currentUser
-      .getIdToken(false)
-      .then(function (token) {
-        return backendGet("/daily-spark/current", token);
-      })
-      .then(function (json) {
-        dailySparkState.spark = (json && json.spark) || null;
+    return db
+      .collection("config")
+      .doc("dailySpark")
+      .get()
+      .then(function (snap) {
+        var data = snap.exists ? snap.data() : null;
+        var spark = dailySparkFromFirestoreDoc(data);
         dailySparkState.lastFetchMs = Date.now();
-        if (!dailySparkState.spark && json && json.message) {
-          dailySparkState.error = json.message;
+        if (spark) {
+          dailySparkState.spark = spark;
+          dailySparkState.error = null;
+          return spark;
         }
-        return dailySparkState.spark;
-      })
-      .catch(function (e) {
-        dailySparkState.error = e.message || "Could not load Daily Spark.";
+        dailySparkState.spark = null;
+        var statusMsg = dailySparkStatusMessageFromDoc(data);
+        if (statusMsg) dailySparkState.error = statusMsg;
+        bootstrapDailySparkViaApi();
         return null;
+      })
+      .catch(function () {
+        return fetchDailySparkCurrentViaApi().catch(function (e) {
+          dailySparkState.error = e.message || "Could not load Daily Spark.";
+          dailySparkState.spark = null;
+          return null;
+        });
       })
       .finally(function () {
         dailySparkState.loading = false;
@@ -5413,12 +5484,12 @@
 
   function isNetworkFetchFailure(err) {
     if (!err) return false;
-    var msg = String(err.message || err);
+    var msg = String(err.message || err).toLowerCase();
     return (
-      err instanceof TypeError &&
-      (msg === "Failed to fetch" ||
-        msg.indexOf("NetworkError") >= 0 ||
-        msg.indexOf("Load failed") >= 0)
+      msg === "failed to fetch" ||
+      msg.indexOf("networkerror") >= 0 ||
+      msg.indexOf("load failed") >= 0 ||
+      msg.indexOf("network request failed") >= 0
     );
   }
 
