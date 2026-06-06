@@ -4038,6 +4038,17 @@
       '    <div id="script-workshop-footer" class="script-workshop-footer"></div>' +
       "  </div>" +
       "</div>" +
+      '<div id="script-save-as-backdrop" class="app-modal-backdrop" hidden aria-hidden="true">' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="script-save-as-title">' +
+      "    <h3 id=\"script-save-as-title\">Save as…</h3>" +
+      '    <label for="script-save-as-title-input">Script title</label>' +
+      '    <input id="script-save-as-title-input" type="text" maxlength="120" class="script-workshop-title-input" style="margin-bottom:0.75rem;" />' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="script-save-as-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="script-save-as-confirm">Save</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
       "</section>" +
       '<section id="section-playlists" class="app-section">' +
       '  <div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
@@ -4828,6 +4839,29 @@
     if (workshopBackdrop) {
       workshopBackdrop.addEventListener("click", function (ev) {
         if (ev.target === workshopBackdrop) closeScriptWorkshop();
+      });
+    }
+    var saveAsCancel = document.getElementById("script-save-as-cancel");
+    if (saveAsCancel) {
+      saveAsCancel.addEventListener("click", closeScriptWorkshopSaveAsModal);
+    }
+    var saveAsConfirm = document.getElementById("script-save-as-confirm");
+    if (saveAsConfirm) {
+      saveAsConfirm.addEventListener("click", confirmScriptWorkshopSaveAs);
+    }
+    var saveAsBackdrop = document.getElementById("script-save-as-backdrop");
+    if (saveAsBackdrop) {
+      saveAsBackdrop.addEventListener("click", function (ev) {
+        if (ev.target === saveAsBackdrop) closeScriptWorkshopSaveAsModal();
+      });
+    }
+    var saveAsTitleInput = document.getElementById("script-save-as-title-input");
+    if (saveAsTitleInput) {
+      saveAsTitleInput.addEventListener("keydown", function (ev) {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          confirmScriptWorkshopSaveAs();
+        }
       });
     }
     var genOverlayDismiss = document.getElementById("audio-generation-overlay-dismiss");
@@ -12345,6 +12379,8 @@
   }
 
   function closeScriptWorkshop() {
+    closeScriptWorkshopSaveMenu();
+    closeScriptWorkshopSaveAsModal();
     scriptWorkshopOpenId = null;
     scriptWorkshopDraft = null;
     scriptWorkshopSnapshot = null;
@@ -12357,6 +12393,146 @@
       backdrop.setAttribute("aria-hidden", "true");
     }
     unlockAppBodyScroll();
+  }
+
+  var scriptWorkshopSaveMenuCloseHandler = null;
+
+  function closeScriptWorkshopSaveMenu() {
+    var menu = document.getElementById("script-workshop-save-menu");
+    if (menu) menu.hidden = true;
+    if (scriptWorkshopSaveMenuCloseHandler) {
+      document.removeEventListener("click", scriptWorkshopSaveMenuCloseHandler);
+      scriptWorkshopSaveMenuCloseHandler = null;
+    }
+  }
+
+  function getScriptWorkshopMenuItems(script) {
+    if (scriptWorkshopIsPremadeEditor) return [];
+    if (scriptWorkshopIsNewDraft) {
+      return [{ action: "saveAsIs", label: "Save as is" }];
+    }
+    var items = [{ action: "saveAs", label: "Save as…" }];
+    if (
+      scriptHasPlayableAudio(script) &&
+      workshopHasTitleChange() &&
+      !workshopHasAudioAffectingChanges()
+    ) {
+      items.push({ action: "saveOnly", label: "Save only" });
+    }
+    return items;
+  }
+
+  function scriptWorkshopChevronHtml(script, primaryAction) {
+    if (scriptWorkshopIsPremadeEditor) return "";
+    if (primaryAction === "saveAs") return "";
+    var items = getScriptWorkshopMenuItems(script);
+    if (!items.length) return "";
+    if (items.length === 1 && items[0].action === "saveAs") {
+      return (
+        '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="Save as…">▾</button>'
+      );
+    }
+    var chevronTitle = scriptWorkshopIsNewDraft ? "Save as is" : "More save options";
+    var menuItems = items
+      .map(function (it) {
+        return (
+          '<button type="button" class="library-dropdown-item script-workshop-menu-item" data-workshop-menu-action="' +
+          escapeHtml(it.action) +
+          '">' +
+          escapeHtml(it.label) +
+          "</button>"
+        );
+      })
+      .join("");
+    return (
+      '<div class="script-workshop-chevron-wrap">' +
+      '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="' +
+      escapeHtml(chevronTitle) +
+      '">▾</button>' +
+      '<div id="script-workshop-save-menu" class="script-workshop-save-menu library-create-dropdown" hidden>' +
+      menuItems +
+      "</div>" +
+      "</div>"
+    );
+  }
+
+  function runScriptWorkshopMenuAction(script, action) {
+    closeScriptWorkshopSaveMenu();
+    if (action === "saveAsIs" || action === "saveOnly") {
+      persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
+      return;
+    }
+    if (action === "saveAs") {
+      openScriptWorkshopSaveAsModal(script);
+    }
+  }
+
+  function toggleScriptWorkshopSaveMenu() {
+    var menu = document.getElementById("script-workshop-save-menu");
+    if (!menu) return;
+    var willOpen = menu.hidden;
+    closeScriptWorkshopSaveMenu();
+    if (!willOpen) return;
+    menu.hidden = false;
+    scriptWorkshopSaveMenuCloseHandler = function () {
+      closeScriptWorkshopSaveMenu();
+    };
+    setTimeout(function () {
+      document.addEventListener("click", scriptWorkshopSaveMenuCloseHandler);
+    }, 0);
+  }
+
+  function bindScriptWorkshopSaveMenu(script, primaryAction) {
+    closeScriptWorkshopSaveMenu();
+    var chev = document.getElementById("script-workshop-chevron");
+    if (!chev) return;
+    var items = getScriptWorkshopMenuItems(script);
+    if (items.length === 1 && items[0].action === "saveAs") {
+      chev.onclick = function (ev) {
+        ev.stopPropagation();
+        openScriptWorkshopSaveAsModal(script);
+      };
+      return;
+    }
+    chev.onclick = function (ev) {
+      ev.stopPropagation();
+      toggleScriptWorkshopSaveMenu();
+    };
+    document.querySelectorAll("[data-workshop-menu-action]").forEach(function (btn) {
+      btn.onclick = function (ev) {
+        ev.stopPropagation();
+        runScriptWorkshopMenuAction(script, btn.getAttribute("data-workshop-menu-action"));
+      };
+    });
+  }
+
+  var scriptWorkshopSaveAsContext = null;
+
+  function closeScriptWorkshopSaveAsModal() {
+    var backdrop = document.getElementById("script-save-as-backdrop");
+    if (backdrop) {
+      backdrop.hidden = true;
+      backdrop.setAttribute("aria-hidden", "true");
+    }
+    scriptWorkshopSaveAsContext = null;
+  }
+
+  function openScriptWorkshopSaveAsModal(script) {
+    if (!script || !scriptWorkshopDraft) return;
+    scriptWorkshopSaveAsContext = script;
+    var backdrop = document.getElementById("script-save-as-backdrop");
+    var input = document.getElementById("script-save-as-title-input");
+    if (!backdrop || !input) return;
+    var suggested = uniqueScriptTitle((scriptWorkshopDraft.title || script.title || "Script").trim());
+    input.value = suggested;
+    backdrop.hidden = false;
+    backdrop.setAttribute("aria-hidden", "false");
+    requestAnimationFrame(function () {
+      try {
+        input.focus();
+        input.select();
+      } catch (_e) {}
+    });
   }
 
   function renderScriptWorkshop() {
@@ -12397,16 +12573,7 @@
     var primaryAction = getWorkshopPrimaryAction(script);
     var primaryTitle = workshopPrimaryButtonTitle(script, primaryAction);
     var primaryDisabled = primaryAction === "none";
-    var chevronHtml = "";
-    if (!scriptWorkshopIsPremadeEditor) {
-      if (scriptWorkshopIsNewDraft) {
-        chevronHtml =
-          '<button type="button" class="script-workshop-chevron" id="script-workshop-save-as-is" title="Save as is">▾</button>';
-      } else if (primaryAction !== "saveAs") {
-        chevronHtml =
-          '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="More save options">▾</button>';
-      }
-    }
+    var chevronHtml = scriptWorkshopChevronHtml(script, primaryAction);
     body.innerHTML =
       '<p class="script-workshop-section-label">How you\'ll listen</p>' +
       '<div class="script-workshop-media-row">' +
@@ -12479,39 +12646,7 @@
     document.getElementById("script-workshop-primary").onclick = function () {
       runScriptWorkshopPrimaryAction(script);
     };
-    var saveAsIs = document.getElementById("script-workshop-save-as-is");
-    if (saveAsIs) {
-      saveAsIs.onclick = function () {
-        persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
-      };
-    }
-    var chev = document.getElementById("script-workshop-chevron");
-    if (chev) {
-      chev.onclick = function () {
-        var items = [];
-        if (scriptWorkshopIsNewDraft) {
-          items.push({ label: "Save as is", action: "saveAsIs" });
-        } else {
-          items.push({ label: "Save as…", action: "saveAs" });
-          if (scriptHasPlayableAudio(script) && workshopHasTitleChange() && !workshopHasAudioAffectingChanges()) {
-            items.push({ label: "Save only", action: "saveOnly" });
-          }
-        }
-        if (!items.length) return;
-        var pick = window.prompt(
-          items.map(function (it, i) {
-            return i + 1 + ". " + it.label;
-          }).join("\n") + "\n\nEnter number:"
-        );
-        var idx = parseInt(pick, 10) - 1;
-        if (idx < 0 || idx >= items.length) return;
-        if (items[idx].action === "saveAsIs" || items[idx].action === "saveOnly") {
-          persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
-        } else if (items[idx].action === "saveAs") {
-          runScriptWorkshopSaveAs(script);
-        }
-      };
-    }
+    bindScriptWorkshopSaveMenu(script, primaryAction);
   }
 
   function renderScriptWorkshopFooterOnly(script) {
@@ -12520,16 +12655,7 @@
     var primaryAction = getWorkshopPrimaryAction(script);
     var primaryTitle = workshopPrimaryButtonTitle(script, primaryAction);
     var primaryDisabled = primaryAction === "none";
-    var chevronHtml = "";
-    if (!scriptWorkshopIsPremadeEditor) {
-      if (scriptWorkshopIsNewDraft) {
-        chevronHtml =
-          '<button type="button" class="script-workshop-chevron" id="script-workshop-save-as-is" title="Save as is">▾</button>';
-      } else if (primaryAction !== "saveAs") {
-        chevronHtml =
-          '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="More save options">▾</button>';
-      }
-    }
+    var chevronHtml = scriptWorkshopChevronHtml(script, primaryAction);
     footer.innerHTML =
       '<div class="script-workshop-save-row">' +
       '<button type="button" class="app-btn app-btn-primary script-workshop-primary' +
@@ -12544,22 +12670,7 @@
     document.getElementById("script-workshop-primary").onclick = function () {
       runScriptWorkshopPrimaryAction(script);
     };
-    var saveAsIs = document.getElementById("script-workshop-save-as-is");
-    if (saveAsIs) {
-      saveAsIs.onclick = function () {
-        persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
-      };
-    }
-    var chev = document.getElementById("script-workshop-chevron");
-    if (chev) {
-      chev.onclick = function () {
-        if (primaryAction === "saveAs") {
-          runScriptWorkshopSaveAs(script);
-        } else {
-          persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
-        }
-      };
-    }
+    bindScriptWorkshopSaveMenu(script, primaryAction);
   }
 
   function openScriptWorkshop(scriptId, isNewDraft) {
@@ -12604,7 +12715,7 @@
       return;
     }
     if (action === "saveAs") {
-      runScriptWorkshopSaveAs(script);
+      openScriptWorkshopSaveAsModal(script);
       return;
     }
     persistScriptWorkshop(script, {
@@ -12693,20 +12804,23 @@
       });
   }
 
-  function runScriptWorkshopSaveAs(script) {
-    var suggested = uniqueScriptTitle((scriptWorkshopDraft.title || script.title || "Script").trim());
-    var newTitle = window.prompt("Save as new script — enter a title:", suggested);
-    if (newTitle == null) return;
-    newTitle = newTitle.trim();
+  function confirmScriptWorkshopSaveAs() {
+    var script = scriptWorkshopSaveAsContext;
+    if (!script || !scriptWorkshopDraft || !currentUser) return;
+    var input = document.getElementById("script-save-as-title-input");
+    var newTitle = input ? String(input.value || "").trim() : "";
+    if (!newTitle) {
+      newTitle = uniqueScriptTitle((scriptWorkshopDraft.title || script.title || "Script").trim());
+    }
     if (!newTitle) {
       setMessage("Enter a title for the new script.", "error");
       return;
     }
-    if (!currentUser) return;
     var docRef = scriptCollection(currentUser.uid).doc();
     var payload = buildWorkshopFirestorePayload(scriptWorkshopDraft);
     payload.title = newTitle;
     payload.createdAt = firebase.firestore.Timestamp.now();
+    closeScriptWorkshopSaveAsModal();
     setMessage("Saving…", "");
     scriptCollection(currentUser.uid)
       .doc(docRef.id)

@@ -2201,6 +2201,21 @@ html.fs-app[data-app-theme="light"] .script-workshop-textarea {
   cursor: pointer;
   font-size: 1rem;
 }
+.script-workshop-chevron-wrap {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+}
+.script-workshop-save-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 11.5rem;
+  z-index: 20;
+}
+#script-save-as-backdrop {
+  z-index: 13200;
+}
 @media (min-width: 640px) {
   .script-workshop-backdrop {
     align-items: center;
