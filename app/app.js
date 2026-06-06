@@ -33,7 +33,17 @@
   var isEditing = false;
   var editingScriptId = null;
   var generatingAudioByScriptId = {};
-  /** 1s timer for bottom generation overlay (My Library + premade). */
+  /** My Library background audio queue (max 3: 1 active + up to 2 waiting). */
+  var backgroundAudioQueue = [];
+  var activeBackgroundAudioTask = null;
+  var backgroundAudioBadgeTimerId = null;
+  var MAX_BACKGROUND_AUDIO_TASKS = 3;
+  /** Full-screen script workshop (iOS ScriptEditView parity). */
+  var scriptWorkshopOpenId = null;
+  var scriptWorkshopDraft = null;
+  var scriptWorkshopSnapshot = null;
+  var scriptWorkshopIsNewDraft = false;
+  /** 1s timer for bottom generation overlay (App Library premade only). */
   var generationOverlayTimerId = null;
   var generationOverlayStartedAt = 0;
   var scriptWorkOverlayTimerId = null;
@@ -971,9 +981,10 @@
       content:
         "This screen shows your affirmation scripts and the App Library catalog.\n\n" +
         "My Library / App Library — Use the segmented tabs at the top to switch views.\n\n" +
-        "My Library — Tap a script card to expand controls: edit title and text, play, generate spoken audio, pick voice and background, or add to a playlist.\n\n" +
+        "My Library — Expand a card to see voice and background. Tap Edit to change title, script, voice, and background in the workshop. Save when only the title changed; Save and Generate when text or listen settings changed.\n\n" +
         "• + New — Create a blank script, or use the menu for Import Audio (Starter/Creator).\n" +
-        "• Chevron (▼) on the toolbar expands or collapses voice/background controls on all cards at once.\n" +
+        "• Chevron (▼) on the toolbar expands or collapses details on all cards at once.\n" +
+        "• While audio generates, a spinner and timer appear in the top bar (number = jobs queued, up to 3).\n" +
         "• Scripts sync from Firebase across devices on the same account.\n" +
         "• A * after a title means it's a custom version of a premade script.\n\n" +
         "App Library — Pick a category card to browse premade scripts (same categories as iOS). Play, save to My Library, or add audio to a playlist.",
@@ -3914,6 +3925,12 @@
       '        <span id="app-playlist-timer-label" class="app-playlist-timer-label"></span>' +
       '        <button type="button" class="app-playlist-timer-clear" id="btn-app-playlist-timer-clear" aria-label="Clear playlist timer">×</button>' +
       "      </div>" +
+      '      <div id="app-generation-badge-wrap" class="app-generation-badge-wrap" hidden title="Background audio work">' +
+      '        <span class="app-generation-badge-spinner" aria-hidden="true"></span>' +
+      '        <span id="app-generation-badge-label" class="app-generation-badge-label">Generating</span>' +
+      '        <span id="app-generation-badge-elapsed" class="app-generation-badge-elapsed">0:00</span>' +
+      '        <span id="app-generation-badge-queue" class="app-generation-badge-queue" hidden></span>' +
+      "      </div>" +
       '      <button type="button" class="app-header-help-btn" id="btn-screen-help" aria-label="Show help for this screen">' +
       screenHelpIconSvg() +
       "</button>" +
@@ -3997,6 +4014,16 @@
       '  <div class="app-section-title-row"><h2>My Library Scripts</h2></div>' +
       '  <div id="scripts-list"><p class="app-muted">Loading scripts...</p></div>' +
       "</section>" +
+      '<div id="script-workshop-backdrop" class="script-workshop-backdrop" hidden aria-hidden="true">' +
+      '  <div class="script-workshop-panel app-card" role="dialog" aria-labelledby="script-workshop-heading">' +
+      '    <div class="script-workshop-header">' +
+      '      <button type="button" class="app-btn app-btn-secondary script-workshop-back" id="script-workshop-close">← Back</button>' +
+      '      <h2 id="script-workshop-heading" class="script-workshop-heading">Edit Script</h2>' +
+      "    </div>" +
+      '    <div id="script-workshop-body" class="script-workshop-body"></div>' +
+      '    <div id="script-workshop-footer" class="script-workshop-footer"></div>' +
+      "  </div>" +
+      "</div>" +
       "  </div>" +
       '  <div id="library-sub-app" hidden>' +
       '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
@@ -4791,6 +4818,16 @@
       ev.target.value = "";
       if (f) importScriptAudioFromFile(f);
     });
+    var workshopClose = document.getElementById("script-workshop-close");
+    if (workshopClose) {
+      workshopClose.addEventListener("click", closeScriptWorkshop);
+    }
+    var workshopBackdrop = document.getElementById("script-workshop-backdrop");
+    if (workshopBackdrop) {
+      workshopBackdrop.addEventListener("click", function (ev) {
+        if (ev.target === workshopBackdrop) closeScriptWorkshop();
+      });
+    }
     var genOverlayDismiss = document.getElementById("audio-generation-overlay-dismiss");
     if (genOverlayDismiss) {
       genOverlayDismiss.addEventListener("click", function () {
@@ -10889,7 +10926,7 @@
             seedInlineScriptDraft(newScriptId, title, scriptText);
             setMessage("Saved to My Library — edit the title or script below.", "success");
             setHomeFlowStep("landing", ctx.displayName || "");
-            openInlineScriptEditorForScript(newScriptId);
+            openInlineScriptEditorForScript(newScriptId, true);
           });
       })
       .catch(function (e) {
@@ -11449,20 +11486,9 @@
     };
   }
 
-  /** Hash input for a card — includes inline editor draft text when open. */
+  /** Hash input for a library card (saved script state only). */
   function scriptDigestSourceForScriptCard(script) {
-    if (!script) {
-      return { text: "", voiceID: "", backgroundID: "" };
-    }
-    var editorOpen = inlineScriptEditorOpenById[script.id] === true;
-    var draft = editorOpen ? inlineScriptDraftForScript(script) : null;
-    var text =
-      draft && draft.text != null ? String(draft.text) : (script.text && String(script.text)) || "";
-    return {
-      text: text,
-      voiceID: effectiveVoiceIdForScript(script),
-      backgroundID: effectiveBackgroundIdForScript(script),
-    };
+    return scriptDigestSourceFromScript(script);
   }
 
   /** Aligns with iOS `AudioTagUtils` for Eleven v3-style tags. */
@@ -11942,7 +11968,611 @@
   }
 
   function isScriptBusy(scriptId) {
+    if (activeBackgroundAudioTask && activeBackgroundAudioTask.scriptId === scriptId) {
+      return true;
+    }
     return generatingAudioByScriptId[scriptId] === true;
+  }
+
+  function isScriptQueuedForBackgroundAudio(scriptId) {
+    return backgroundAudioQueue.some(function (t) {
+      return t.scriptId === scriptId;
+    });
+  }
+
+  function backgroundAudioTaskCount() {
+    return (activeBackgroundAudioTask ? 1 : 0) + backgroundAudioQueue.length;
+  }
+
+  function scriptHasPlayableAudio(script) {
+    var url = script && script.audioURL ? String(script.audioURL).trim() : "";
+    return !!url;
+  }
+
+  function showSplitEditGenerateOnCard(script, controlsReadOnly) {
+    if (controlsReadOnly || isWebFreeTier()) return false;
+    var text = (script.text || "").trim();
+    if (!text) return false;
+    if (!effectiveVoiceIdForScript(script)) return false;
+    return !scriptHasPlayableAudio(script);
+  }
+
+  function updateBackgroundAudioBadge() {
+    var wrap = document.getElementById("app-generation-badge-wrap");
+    if (!wrap) return;
+    var active = !!activeBackgroundAudioTask;
+    wrap.hidden = !active;
+    if (!active) {
+      if (backgroundAudioBadgeTimerId) {
+        clearInterval(backgroundAudioBadgeTimerId);
+        backgroundAudioBadgeTimerId = null;
+      }
+      return;
+    }
+    var labelEl = document.getElementById("app-generation-badge-label");
+    var elapsedEl = document.getElementById("app-generation-badge-elapsed");
+    var queueEl = document.getElementById("app-generation-badge-queue");
+    var count = backgroundAudioTaskCount();
+    if (labelEl) {
+      labelEl.textContent =
+        activeBackgroundAudioTask.kind === "transcribe" ? "Transcribing" : "Generating";
+    }
+    if (queueEl) {
+      if (count > 1) {
+        queueEl.hidden = false;
+        queueEl.textContent = String(count);
+      } else {
+        queueEl.hidden = true;
+        queueEl.textContent = "";
+      }
+    }
+    if (elapsedEl && activeBackgroundAudioTask.startedAt) {
+      var secs = Math.max(0, Math.floor((Date.now() - activeBackgroundAudioTask.startedAt) / 1000));
+      elapsedEl.textContent = formatGenerationElapsed(secs);
+    }
+    if (!backgroundAudioBadgeTimerId) {
+      backgroundAudioBadgeTimerId = setInterval(function () {
+        updateBackgroundAudioBadge();
+      }, 1000);
+    }
+  }
+
+  function enqueueBackgroundAudioGeneration(script, options) {
+    options = options || {};
+    var scriptId = script.id;
+    if (
+      (activeBackgroundAudioTask && activeBackgroundAudioTask.scriptId === scriptId) ||
+      isScriptQueuedForBackgroundAudio(scriptId)
+    ) {
+      showAppBanner(
+        "Already in Queue",
+        '"' + (script.title || "Script") + '" is already generating or waiting.',
+        "info",
+        { duration: 4500 }
+      );
+      return;
+    }
+    var task = { scriptId: scriptId, script: script, kind: "generate", startedAt: 0 };
+    if (!activeBackgroundAudioTask) {
+      runBackgroundAudioTask(task, !!options.showStartingBanner);
+      return;
+    }
+    if (backgroundAudioTaskCount() >= MAX_BACKGROUND_AUDIO_TASKS) {
+      showAppBanner(
+        "Queue Full",
+        "You can have up to 3 audio jobs at a time. Wait for one to finish.",
+        "info",
+        { duration: 4500 }
+      );
+      return;
+    }
+    backgroundAudioQueue.push(task);
+    showAppBanner(
+      "Added to Queue",
+      '"' +
+        (script.title || "Script") +
+        '" will run after the current job (' +
+        backgroundAudioQueue.length +
+        " waiting).",
+      "info",
+      { duration: 4500 }
+    );
+    updateBackgroundAudioBadge();
+  }
+
+  function runBackgroundAudioTask(task, showStartingBanner) {
+    activeBackgroundAudioTask = {
+      scriptId: task.scriptId,
+      script: task.script,
+      kind: task.kind || "generate",
+      startedAt: Date.now(),
+    };
+    setScriptBusy(task.scriptId, true);
+    updateBackgroundAudioBadge();
+    if (showStartingBanner) {
+      showAppBanner(
+        "Generating audio",
+        "Long scripts can take up to 5 minutes. You can keep using the app.",
+        "info",
+        { duration: 5500 }
+      );
+    } else {
+      showAppBanner(
+        "Generating Next",
+        'Starting "' + (task.script.title || "Script") + '"…',
+        "info",
+        { duration: 3500 }
+      );
+    }
+    executeBackgroundAudioGeneration(task.script)
+      .then(function () {
+        completeBackgroundAudioTask(true, task.script);
+      })
+      .catch(function (e) {
+        completeBackgroundAudioTask(false, task.script, e);
+      });
+  }
+
+  function completeBackgroundAudioTask(success, script, error) {
+    setScriptBusy(script.id, false);
+    activeBackgroundAudioTask = null;
+    if (success) {
+      showAppBanner("Audio Generated", "Your audio was generated and saved.", "success", { duration: 4500 });
+    } else if (error) {
+      var msg = (error && error.message) || "Audio generation failed.";
+      reportClientError(msg, "audio_generation", { script_id: script.id });
+      if (!handleQuotaLimitError(msg)) {
+        showAppBanner("Generation Failed", msg, "error", { duration: 7000 });
+      }
+    }
+    if (backgroundAudioQueue.length) {
+      var next = backgroundAudioQueue.shift();
+      runBackgroundAudioTask(next, false);
+    } else {
+      updateBackgroundAudioBadge();
+    }
+    renderScripts(currentScripts);
+  }
+
+  function executeBackgroundAudioGeneration(script) {
+    if (!currentUser) return Promise.reject(new Error("Not signed in."));
+    var text = (script.text || "").trim();
+    if (!text) return Promise.reject(new Error("Script text is empty."));
+    var genGuard = validateScriptForAudioGeneration(script);
+    if (genGuard) return Promise.reject(new Error(genGuard));
+    setMessage("", "");
+    return currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        var localVoiceId = effectiveVoiceIdForScript(script);
+        var payload = {
+          scriptId: script.id,
+          text: text,
+          scriptTitle: script.title || "Untitled Script",
+          voiceID: localVoiceId,
+          backgroundID: effectiveBackgroundIdForScript(script),
+          createdAt:
+            script.createdAt && typeof script.createdAt.toDate === "function"
+              ? script.createdAt.toDate().getTime() / 1000
+              : Date.now() / 1000,
+        };
+        var vs = voiceSettingsForAudioJob(localVoiceId);
+        if (vs) payload.voice_settings = vs;
+        return backendRequest("/audio-jobs", token, payload).then(function (json) {
+          if (!json || json.ok !== true || !json.jobId) {
+            throw new Error("Audio job did not return a job id.");
+          }
+          return { token: token, jobId: json.jobId };
+        });
+      })
+      .then(function (ctx) {
+        return waitForAudioJob(script, ctx.jobId, effectiveBackgroundIdForScript(script), ctx.token);
+      })
+      .then(function (result) {
+        var vId = effectiveVoiceIdForScript(script);
+        var bId = effectiveBackgroundIdForScript(script);
+        var digestSource = {
+          text: (script && script.text) || "",
+          voiceID: vId,
+          backgroundID: bId,
+        };
+        return scriptContentSha256Hex(digestSource).then(function (digest) {
+          return scriptCollection(currentUser.uid)
+            .doc(script.id)
+            .set(
+              {
+                audioURL: result.audioURL,
+                audioCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                voiceID: vId,
+                backgroundID: bId,
+                audioVoiceID: vId,
+                audioBackgroundID: bId,
+                audioContentHash: digest,
+              },
+              { merge: true }
+            )
+            .then(function () {
+              setStoredGeneratedHash(script.id, digest);
+              delete frozenAudioSettingsByScriptId[script.id];
+            });
+        });
+      });
+  }
+
+  function normalizedWorkshopText(value) {
+    return value == null ? "" : String(value);
+  }
+
+  function workshopHasAudioAffectingChanges() {
+    if (!scriptWorkshopSnapshot || !scriptWorkshopDraft) return true;
+    return (
+      normalizedWorkshopText(scriptWorkshopDraft.text) !==
+        normalizedWorkshopText(scriptWorkshopSnapshot.text) ||
+      normalizedWorkshopText(scriptWorkshopDraft.voiceID).trim() !==
+        normalizedWorkshopText(scriptWorkshopSnapshot.voiceID).trim() ||
+      normalizedWorkshopText(scriptWorkshopDraft.backgroundID).trim() !==
+        normalizedWorkshopText(scriptWorkshopSnapshot.backgroundID).trim()
+    );
+  }
+
+  function workshopHasTitleChange() {
+    if (!scriptWorkshopSnapshot || !scriptWorkshopDraft) return false;
+    return (
+      (scriptWorkshopDraft.title || "").trim() !== (scriptWorkshopSnapshot.title || "").trim()
+    );
+  }
+
+  function getWorkshopPrimaryAction(script) {
+    var hasText = scriptWorkshopDraft && (scriptWorkshopDraft.text || "").trim();
+    if (scriptWorkshopIsNewDraft) {
+      return hasText ? "saveAndGenerate" : "none";
+    }
+    if (!scriptHasPlayableAudio(script)) {
+      return hasText ? "saveAndGenerate" : "none";
+    }
+    if (workshopHasAudioAffectingChanges()) {
+      return hasText ? "saveAndGenerate" : "none";
+    }
+    if (workshopHasTitleChange()) {
+      return "saveOnly";
+    }
+    return "saveAs";
+  }
+
+  function workshopPrimaryButtonTitle(script, action) {
+    if (action === "saveOnly") return "Save";
+    if (action === "saveAs") return "Save as…";
+    if (action === "saveAndGenerate") {
+      return scriptHasPlayableAudio(script) ? "Save and Regenerate" : "Save and Generate";
+    }
+    return "Save";
+  }
+
+  function closeScriptWorkshop() {
+    scriptWorkshopOpenId = null;
+    scriptWorkshopDraft = null;
+    scriptWorkshopSnapshot = null;
+    scriptWorkshopIsNewDraft = false;
+    var backdrop = document.getElementById("script-workshop-backdrop");
+    if (backdrop) {
+      backdrop.hidden = true;
+      backdrop.setAttribute("aria-hidden", "true");
+    }
+    unlockAppBodyScroll();
+  }
+
+  function renderScriptWorkshop() {
+    var body = document.getElementById("script-workshop-body");
+    var footer = document.getElementById("script-workshop-footer");
+    if (!body || !footer || !scriptWorkshopOpenId || !scriptWorkshopDraft) return;
+    var script = currentScripts.find(function (s) {
+      return s.id === scriptWorkshopOpenId;
+    });
+    if (!script) return;
+    var showFmtPref = readShowAudioTagsFormattingPreference();
+    var rawText = scriptWorkshopDraft.text || "";
+    var hasAudioTagsInScript = containsAudioTagsForScript(rawText);
+    var canEditTextBody = !(hasAudioTagsInScript && !showFmtPref);
+    var bodyFieldHtml;
+    if (hasAudioTagsInScript && !showFmtPref) {
+      bodyFieldHtml =
+        '<p class="app-muted" style="margin:0 0 0.4rem;">Turn on <strong>Show formatting</strong> to edit TTS tags.</p>' +
+        '<div class="script-inline-preview-scroll"><pre class="script-inline-preview app-card-text">' +
+        escapeHtml(stripAudioTagsForDisplay(rawText) || "(No text)") +
+        "</pre></div>";
+    } else {
+      bodyFieldHtml =
+        '<textarea id="script-workshop-text" class="script-workshop-textarea" rows="12" maxlength="50000">' +
+        escapeHtml(rawText) +
+        "</textarea>";
+    }
+    var formatToggleHtml = "";
+    if (hasAudioTagsInScript) {
+      formatToggleHtml =
+        '<label class="script-inline-show-format">' +
+        '<input type="checkbox" id="script-workshop-format-toggle"' +
+        (showFmtPref ? " checked" : "") +
+        '> Show formatting <span class="app-muted">(TTS tags)</span></label>';
+    }
+    var voiceId =
+      (scriptWorkshopDraft.voiceID || "").trim() || effectiveVoiceIdForScript(script);
+    var bgId =
+      (scriptWorkshopDraft.backgroundID || "").trim() || effectiveBackgroundIdForScript(script);
+    var primaryAction = getWorkshopPrimaryAction(script);
+    var primaryTitle = workshopPrimaryButtonTitle(script, primaryAction);
+    var primaryDisabled = primaryAction === "none";
+    var chevronHtml = "";
+    if (scriptWorkshopIsNewDraft) {
+      chevronHtml =
+        '<button type="button" class="script-workshop-chevron" id="script-workshop-save-as-is" title="Save as is">▾</button>';
+    } else if (primaryAction !== "saveAs") {
+      chevronHtml =
+        '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="More save options">▾</button>';
+    }
+    body.innerHTML =
+      '<p class="script-workshop-section-label">How you\'ll listen</p>' +
+      '<div class="script-workshop-media-row">' +
+      '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-voice">Voice: ' +
+      escapeHtml(voiceNameById(voiceId)) +
+      "</button>" +
+      '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-background">Background: ' +
+      escapeHtml(backgroundNameById(bgId)) +
+      "</button>" +
+      "</div>" +
+      '<label class="script-inline-field-label" for="script-workshop-title">Title</label>' +
+      '<input type="text" id="script-workshop-title" class="script-workshop-title-input" maxlength="120" value="' +
+      escapeHtml(scriptWorkshopDraft.title || "") +
+      '">' +
+      '<div class="script-workshop-toolbar">' +
+      formatToggleHtml +
+      '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-ai-edit">✨ Edit with AI</button>' +
+      "</div>" +
+      '<label class="script-inline-field-label">Script</label>' +
+      bodyFieldHtml;
+    footer.innerHTML =
+      '<div class="script-workshop-save-row">' +
+      '<button type="button" class="app-btn app-btn-primary script-workshop-primary' +
+      (primaryAction === "saveAndGenerate" ? " script-workshop-primary-generate" : "") +
+      '"' +
+      (primaryDisabled ? " disabled" : "") +
+      ' id="script-workshop-primary">' +
+      escapeHtml(primaryTitle) +
+      "</button>" +
+      chevronHtml +
+      "</div>";
+    var titleInput = document.getElementById("script-workshop-title");
+    var textInput = document.getElementById("script-workshop-text");
+    if (titleInput) {
+      titleInput.oninput = function () {
+        scriptWorkshopDraft.title = titleInput.value;
+        renderScriptWorkshopFooterOnly(script);
+      };
+    }
+    if (textInput) {
+      textInput.oninput = function () {
+        scriptWorkshopDraft.text = textInput.value;
+        renderScriptWorkshopFooterOnly(script);
+      };
+    }
+    var fmtToggle = document.getElementById("script-workshop-format-toggle");
+    if (fmtToggle) {
+      fmtToggle.onchange = function () {
+        try {
+          localStorage.setItem(WEB_SHOW_AUDIO_TAGS_STORAGE_KEY, fmtToggle.checked ? "1" : "0");
+        } catch (_e) {}
+        renderScriptWorkshop();
+      };
+    }
+    document.getElementById("script-workshop-voice").onclick = function () {
+      openMediaPicker({ kind: "workshop", field: "voice" });
+    };
+    document.getElementById("script-workshop-background").onclick = function () {
+      openMediaPicker({ kind: "workshop", field: "background" });
+    };
+    var aiBtn = document.getElementById("script-workshop-ai-edit");
+    if (aiBtn) {
+      aiBtn.disabled = !canEditTextBody;
+      aiBtn.onclick = function () {
+        openAITextEditModal(scriptWorkshopOpenId);
+      };
+    }
+    document.getElementById("script-workshop-primary").onclick = function () {
+      runScriptWorkshopPrimaryAction(script);
+    };
+    var saveAsIs = document.getElementById("script-workshop-save-as-is");
+    if (saveAsIs) {
+      saveAsIs.onclick = function () {
+        persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
+      };
+    }
+    var chev = document.getElementById("script-workshop-chevron");
+    if (chev) {
+      chev.onclick = function () {
+        var items = [];
+        if (scriptWorkshopIsNewDraft) {
+          items.push({ label: "Save as is", action: "saveAsIs" });
+        } else {
+          items.push({ label: "Save as…", action: "saveAs" });
+          if (scriptHasPlayableAudio(script) && workshopHasTitleChange() && !workshopHasAudioAffectingChanges()) {
+            items.push({ label: "Save only", action: "saveOnly" });
+          }
+        }
+        if (!items.length) return;
+        var pick = window.prompt(
+          items.map(function (it, i) {
+            return i + 1 + ". " + it.label;
+          }).join("\n") + "\n\nEnter number:"
+        );
+        var idx = parseInt(pick, 10) - 1;
+        if (idx < 0 || idx >= items.length) return;
+        if (items[idx].action === "saveAsIs" || items[idx].action === "saveOnly") {
+          persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
+        } else if (items[idx].action === "saveAs") {
+          runScriptWorkshopSaveAs(script);
+        }
+      };
+    }
+  }
+
+  function renderScriptWorkshopFooterOnly(script) {
+    var footer = document.getElementById("script-workshop-footer");
+    if (!footer || !scriptWorkshopDraft) return;
+    var primaryAction = getWorkshopPrimaryAction(script);
+    var primaryTitle = workshopPrimaryButtonTitle(script, primaryAction);
+    var primaryDisabled = primaryAction === "none";
+    var chevronHtml = "";
+    if (scriptWorkshopIsNewDraft) {
+      chevronHtml =
+        '<button type="button" class="script-workshop-chevron" id="script-workshop-save-as-is" title="Save as is">▾</button>';
+    } else if (primaryAction !== "saveAs") {
+      chevronHtml =
+        '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="More save options">▾</button>';
+    }
+    footer.innerHTML =
+      '<div class="script-workshop-save-row">' +
+      '<button type="button" class="app-btn app-btn-primary script-workshop-primary' +
+      (primaryAction === "saveAndGenerate" ? " script-workshop-primary-generate" : "") +
+      '"' +
+      (primaryDisabled ? " disabled" : "") +
+      ' id="script-workshop-primary">' +
+      escapeHtml(primaryTitle) +
+      "</button>" +
+      chevronHtml +
+      "</div>";
+    document.getElementById("script-workshop-primary").onclick = function () {
+      runScriptWorkshopPrimaryAction(script);
+    };
+    var saveAsIs = document.getElementById("script-workshop-save-as-is");
+    if (saveAsIs) {
+      saveAsIs.onclick = function () {
+        persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
+      };
+    }
+    var chev = document.getElementById("script-workshop-chevron");
+    if (chev) {
+      chev.onclick = function () {
+        if (primaryAction === "saveAs") {
+          runScriptWorkshopSaveAs(script);
+        } else {
+          persistScriptWorkshop(script, { closeAfter: true, generateAfter: false });
+        }
+      };
+    }
+  }
+
+  function openScriptWorkshop(scriptId, isNewDraft) {
+    var script = currentScripts.find(function (s) {
+      return s.id === scriptId;
+    });
+    if (!script || scriptIsSharedListenOnly(script)) return;
+    if (isWebFreeReadOnlyLibraryScript(script)) {
+      promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.editScript);
+      return;
+    }
+    scriptWorkshopOpenId = scriptId;
+    scriptWorkshopIsNewDraft = !!isNewDraft;
+    scriptWorkshopDraft = {
+      title: script.title || "",
+      text: script.text || "",
+      voiceID: script.voiceID || "",
+      backgroundID: script.backgroundID || "",
+    };
+    scriptWorkshopSnapshot = JSON.parse(JSON.stringify(scriptWorkshopDraft));
+    var backdrop = document.getElementById("script-workshop-backdrop");
+    if (backdrop) {
+      backdrop.hidden = false;
+      backdrop.setAttribute("aria-hidden", "false");
+    }
+    lockAppBodyScroll();
+    renderScriptWorkshop();
+  }
+
+  function runScriptWorkshopPrimaryAction(script) {
+    var action = getWorkshopPrimaryAction(script);
+    if (action === "none") return;
+    if (action === "saveAs") {
+      runScriptWorkshopSaveAs(script);
+      return;
+    }
+    persistScriptWorkshop(script, {
+      closeAfter: true,
+      generateAfter: action === "saveAndGenerate",
+    });
+  }
+
+  function runScriptWorkshopSaveAs(script) {
+    var suggested = uniqueScriptTitle((scriptWorkshopDraft.title || script.title || "Script").trim());
+    var newTitle = window.prompt("Save as new script — enter a title:", suggested);
+    if (newTitle == null) return;
+    newTitle = newTitle.trim();
+    if (!newTitle) {
+      setMessage("Enter a title for the new script.", "error");
+      return;
+    }
+    if (!currentUser) return;
+    var docRef = scriptCollection(currentUser.uid).doc();
+    var payload = buildWorkshopFirestorePayload(scriptWorkshopDraft);
+    payload.title = newTitle;
+    payload.createdAt = firebase.firestore.Timestamp.now();
+    setMessage("Saving…", "");
+    scriptCollection(currentUser.uid)
+      .doc(docRef.id)
+      .set(payload)
+      .then(function () {
+        closeScriptWorkshop();
+        setMessage('Saved as "' + newTitle + '".', "success");
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Could not save script.", "error");
+      });
+  }
+
+  function buildWorkshopFirestorePayload(draft) {
+    return {
+      title: (draft.title || "").trim() || "Untitled Script",
+      text: draft.text || "",
+      voiceID: (draft.voiceID || "").trim(),
+      backgroundID: (draft.backgroundID || "").trim(),
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+  }
+
+  function persistScriptWorkshop(script, options) {
+    options = options || {};
+    if (!currentUser || !scriptWorkshopDraft) return;
+    var title = (scriptWorkshopDraft.title || "").trim();
+    if (!title) {
+      setMessage("Enter a title.", "error");
+      return;
+    }
+    var payload = buildWorkshopFirestorePayload(scriptWorkshopDraft);
+    setMessage("Saving…", "");
+    scriptCollection(currentUser.uid)
+      .doc(script.id)
+      .set(payload, { merge: true })
+      .then(function () {
+        var ix = currentScripts.findIndex(function (s) {
+          return s.id === script.id;
+        });
+        if (ix >= 0) {
+          currentScripts[ix].title = payload.title;
+          currentScripts[ix].text = payload.text;
+          currentScripts[ix].voiceID = payload.voiceID;
+          currentScripts[ix].backgroundID = payload.backgroundID;
+        }
+        var updated = currentScripts[ix] || script;
+        if (options.closeAfter) closeScriptWorkshop();
+        if (options.generateAfter) {
+          generateAudioForScript(updated, { skipHashCheck: true });
+        } else {
+          setMessage("Script saved.", "success");
+          renderScripts(currentScripts);
+        }
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Could not save script.", "error");
+      });
   }
 
   function premadeBusyKey(premadeId) {
@@ -12152,71 +12782,22 @@
   }
 
   function scriptCardHtml(script, contentHashHex) {
-    var editorOpen = inlineScriptEditorOpenById[script.id] === true;
     var isSharedListenOnly = scriptIsSharedListenOnly(script);
     var isFreeReadOnly = isWebFreeReadOnlyLibraryScript(script);
     var controlsReadOnly = isSharedListenOnly || isFreeReadOnly;
-    var showFmtPref = readShowAudioTagsFormattingPreference();
     var isBusy = isScriptBusy(script.id);
-    var hasAudio = !!(script.audioURL && String(script.audioURL).trim());
+    var hasAudio = scriptHasPlayableAudio(script);
     var playingThis = activeAudioScriptId === script.id && activeAudio && !activeAudio.paused;
     var scriptVoiceID = effectiveVoiceIdForScript(script);
     var scriptBackgroundID = effectiveBackgroundIdForScript(script);
     var controlsExpanded = controlsExpandedForScript(script.id);
-    var hasUnsavedEdits = inlineScriptHasUnsavedChanges(script);
     var needsRegen = scriptNeedsAudioRegeneration(script, contentHashHex);
-    var genLabel = isBusy ? "Generating audio..." : "Generate";
-    var genClasses = "app-btn";
-    if (isBusy) {
-      genClasses += " app-btn-secondary";
-    } else if (hasAudio && (needsRegen || hasUnsavedEdits)) {
-      genClasses += " app-btn-generate-warn";
-    } else if (hasAudio && !needsRegen) {
-      genClasses += " app-btn-secondary app-btn-generate-muted";
-    } else {
-      genClasses += " app-btn-generate-fresh";
-    }
-    var genDisabled =
-      isBusy ||
-      controlsReadOnly ||
-      isWebFreeTier() ||
-      hasUnsavedEdits ||
-      (hasAudio && !needsRegen);
+    var showSplit = showSplitEditGenerateOnCard(script, controlsReadOnly);
     var chevChar = controlsExpanded ? "▲" : "▼";
     var showShareLink = controlsExpanded && hasAudio && isWebCreatorTier() && !isSharedListenOnly;
-    if (isSharedListenOnly) {
-      editorOpen = false;
-    }
-    if (isFreeReadOnly) {
-      editorOpen = false;
-    }
-    var audioMatchesCard = hasAudio && !needsRegen && !hasUnsavedEdits;
-    var genTitle = "";
-    if (!isBusy) {
-      if (hasUnsavedEdits && needsRegen) {
-        genTitle =
-          "Script text changed — save first, then tap Generate to refresh your audio.";
-      } else if (hasUnsavedEdits) {
-        genTitle = "Save your script before generating audio.";
-      } else if (hasAudio && audioMatchesCard) {
-        genTitle = "Audio matches this script text, voice, and background.";
-      } else if (hasAudio && needsRegen) {
-        genTitle =
-          "Script text, voice, or background changed since this audio was generated. Tap Generate to refresh.";
-      }
-    }
+    var audioMatchesCard = hasAudio && !needsRegen;
     var audioUrlStr = script.audioURL && String(script.audioURL).trim();
     var hostedAudio = !!(audioUrlStr && /^https?:\/\//i.test(audioUrlStr));
-    var inlineDraft = editorOpen ? inlineScriptDraftForScript(script) : null;
-    var rawScriptText =
-      inlineDraft && inlineDraft.text != null
-        ? String(inlineDraft.text)
-        : (script.text && String(script.text)) || "";
-    var inlineTitle =
-      inlineDraft && inlineDraft.title != null
-        ? String(inlineDraft.title)
-        : script.title || "";
-    var hasAudioTagsInScript = containsAudioTagsForScript(rawScriptText);
     var syncStatusLabel;
     var syncStatusClass = "script-card-sync-muted";
     if (isBusy) {
@@ -12229,9 +12810,6 @@
       syncStatusClass = "script-card-sync-ok";
     } else if (audioMatchesCard && !hostedAudio) {
       syncStatusLabel = "Audio on this device only";
-    } else if (hasUnsavedEdits && !needsRegen) {
-      syncStatusLabel = "Not synced with cloud \u2014 save script, then regenerate";
-      syncStatusClass = "script-card-sync-warn";
     } else {
       syncStatusLabel = "Not synced with cloud \u2014 regeneration needed";
       syncStatusClass = "script-card-sync-warn";
@@ -12251,63 +12829,34 @@
       "</span>" +
       "</div>";
     var playPauseIcon = libraryTransportPlayPauseIconSvg(playingThis);
-    var docIconSvg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>';
     var playlistIconSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>';
 
-    var inlineEditorHtml = "";
-    if (editorOpen && !controlsReadOnly) {
-      var bodyHtml;
-      if (hasAudioTagsInScript && !showFmtPref) {
-        bodyHtml =
-          '<p class="script-inline-help app-muted" style="margin:0 0 0.4rem;line-height:1.45;">Turn on <strong>Show formatting</strong> to edit TTS tags (pauses, emphasis, etc.).</p>' +
-          '<div class="script-inline-preview-scroll"><pre class="script-inline-preview app-card-text">' +
-          escapeHtml(stripAudioTagsForDisplay(rawScriptText) || "(No text)") +
-          "</pre></div>";
+    var primaryActionsHtml = "";
+    if (!controlsReadOnly) {
+      if (showSplit) {
+        if (isBusy) {
+          primaryActionsHtml =
+            '<button type="button" class="app-btn app-btn-secondary script-card-edit-primary" disabled>Generating\u2026</button>';
+        } else {
+          primaryActionsHtml =
+            '<button type="button" class="app-btn app-btn-primary script-card-edit-primary" data-action="open-workshop" data-script-id="' +
+            escapeHtml(script.id) +
+            '">Edit</button>' +
+            '<button type="button" class="app-btn app-btn-generate-fresh script-card-generate-split" data-action="generate-audio" data-script-id="' +
+            escapeHtml(script.id) +
+            '">Generate</button>';
+        }
       } else {
-        bodyHtml =
-          '<textarea class="script-inline-textarea" rows="10" maxlength="50000">' +
-          escapeHtml(rawScriptText) +
-          "</textarea>";
-      }
-      var formatToggleHtml = "";
-      if (hasAudioTagsInScript) {
-        formatToggleHtml =
-          '<label class="script-inline-show-format">' +
-          '<input type="checkbox" data-role="script-formatting-toggle"' +
-          (showFmtPref ? " checked" : "") +
-          '> Show formatting <span class="app-muted">(TTS tags)</span></label>';
-      }
-      var canEditTextBody = !(hasAudioTagsInScript && !showFmtPref);
-      var aiEditBtnHtml = canEditTextBody
-        ? '<button type="button" class="app-btn app-btn-secondary script-inline-ai-edit" data-action="ai-edit-script" data-script-id="' +
+        primaryActionsHtml =
+          '<button type="button" class="app-btn app-btn-primary script-card-edit-primary' +
+          (isBusy ? " is-busy" : "") +
+          '" data-action="open-workshop" data-script-id="' +
           escapeHtml(script.id) +
-          '">✨ Edit with AI</button>'
-        : "";
-      inlineEditorHtml =
-        '<div class="script-inline-editor">' +
-        '<div class="script-inline-editor-scroll">' +
-        '<label class="script-inline-field-label">Title</label>' +
-        '<input type="text" class="script-inline-title-input" maxlength="120" value="' +
-        escapeHtml(inlineTitle) +
-        '" data-script-inline-field="title">' +
-        '<div class="script-inline-toolbar">' +
-        formatToggleHtml +
-        aiEditBtnHtml +
-        "</div>" +
-        '<label class="script-inline-field-label">Script</label>' +
-        bodyHtml +
-        "</div>" +
-        '<div class="script-inline-save-row">' +
-        '<button type="button" class="app-btn app-btn-primary" data-action="save-inline-script" data-script-id="' +
-        escapeHtml(script.id) +
-        '">Save</button>' +
-        '<button type="button" class="app-btn app-btn-secondary" data-action="cancel-inline-script" data-script-id="' +
-        escapeHtml(script.id) +
-        '">Cancel</button>' +
-        "</div>" +
-        "</div>";
+          '"' +
+          (isBusy ? " disabled" : "") +
+          ">Edit</button>";
+      }
     }
 
     var audioSection = controlsExpanded
@@ -12319,44 +12868,16 @@
           : isFreeReadOnly
             ? '<p class="app-muted script-card-shared-note" style="margin:0 0 0.65rem;line-height:1.45;">Free plan: play and add to playlists. Upgrade to Starter or Creator to edit, change voice/background, or generate new audio.</p>'
             : "") +
-        '<div class="script-card-voice-bg-grid">' +
-        (controlsReadOnly
-          ? '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;">Voice: ' +
-            escapeHtml(voiceNameById(scriptVoiceID)) +
-            "</span>" +
-            '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;">Background: ' +
-            escapeHtml(backgroundNameById(scriptBackgroundID)) +
-            "</span>"
-          : '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
-            escapeHtml(script.id) +
-            '" data-script-media-field="voice">Voice: ' +
-            escapeHtml(voiceNameById(scriptVoiceID)) +
-            "</button>" +
-            '  <button type="button" class="app-btn app-btn-secondary" data-script-media-open="' +
-            escapeHtml(script.id) +
-            '" data-script-media-field="background">Background: ' +
-            escapeHtml(backgroundNameById(scriptBackgroundID)) +
-            "</button>") +
+        '<div class="script-card-voice-bg-grid script-card-voice-bg-readonly">' +
+        '  <span class="script-card-media-chip"><span class="script-card-media-chip-label">Voice</span> ' +
+        escapeHtml(voiceNameById(scriptVoiceID)) +
+        "</span>" +
+        '  <span class="script-card-media-chip"><span class="script-card-media-chip-label">Background</span> ' +
+        escapeHtml(backgroundNameById(scriptBackgroundID)) +
+        "</span>" +
         "</div>" +
         '<div class="app-card-actions script-card-actions-bar">' +
-        (controlsReadOnly
-          ? ""
-          : isWebFreeTier()
-            ? '  <button type="button" class="app-btn app-btn-secondary is-tier-locked" data-action="generate-audio" data-script-id="' +
-              escapeHtml(script.id) +
-              '" title="Starter or Creator required">' +
-              genLabel +
-              "</button>"
-            : '  <button type="button" class="' +
-              genClasses +
-              '" data-action="generate-audio" data-script-id="' +
-              escapeHtml(script.id) +
-              '"' +
-              (genDisabled ? " disabled" : "") +
-              (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
-              ">" +
-              genLabel +
-              "</button>") +
+        primaryActionsHtml +
         '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="add-to-playlist" data-script-id="' +
         escapeHtml(script.id) +
         '" title="Add to playlist"' +
@@ -12364,17 +12885,6 @@
         ' aria-label="Add to playlist">' +
         playlistIconSvg +
         "</button>" +
-        (controlsReadOnly
-          ? ""
-          : '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn script-card-actions-edit-btn' +
-            (editorOpen ? " is-active" : "") +
-            '" data-action="toggle-inline-script" data-script-id="' +
-            escapeHtml(script.id) +
-            '" title="' +
-            (editorOpen ? "Hide script editor" : "Show and edit script") +
-            '" aria-label="Edit script">' +
-            docIconSvg +
-            "</button>") +
         (showShareLink
           ? '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="share-audio" data-script-id="' +
             escapeHtml(script.id) +
@@ -12384,8 +12894,7 @@
         "</div>" +
         "</div>"
       : "";
-    var expandableHtml =
-      '<div class="script-card-expandable">' + inlineEditorHtml + audioSection + "</div>";
+    var expandableHtml = '<div class="script-card-expandable">' + audioSection + "</div>";
     var footerHtml =
       '<div class="script-card-footer">' +
       syncStatusHtml +
@@ -12782,6 +13291,9 @@
   }
 
   function getInlineScriptEditorText(scriptId) {
+    if (scriptWorkshopOpenId === scriptId && scriptWorkshopDraft) {
+      return scriptWorkshopDraft.text != null ? String(scriptWorkshopDraft.text) : "";
+    }
     var draft = inlineScriptDraftById[scriptId];
     if (draft && draft.text != null) return String(draft.text);
     var card = getInlineScriptCard(scriptId);
@@ -12800,6 +13312,9 @@
   }
 
   function getInlineScriptTitle(scriptId) {
+    if (scriptWorkshopOpenId === scriptId && scriptWorkshopDraft) {
+      return (scriptWorkshopDraft.title || "").trim();
+    }
     var card = getInlineScriptCard(scriptId);
     if (card) {
       var titleEl = card.querySelector(".script-inline-title-input");
@@ -12853,11 +13368,19 @@
           currentScripts[ix].title = title;
           currentScripts[ix].text = text;
         }
+        if (scriptWorkshopOpenId === scriptId && scriptWorkshopDraft) {
+          scriptWorkshopDraft.title = title;
+          scriptWorkshopDraft.text = text;
+        }
         delete inlineScriptEditorOpenById[scriptId];
         clearInlineScriptDraft(scriptId);
         closeAITextEditModal();
         setMessage("Script updated.", "success");
-        renderScripts(currentScripts);
+        if (scriptWorkshopOpenId === scriptId) {
+          renderScriptWorkshop();
+        } else {
+          renderScripts(currentScripts);
+        }
       })
       .catch(function (e) {
         aiTextEditProcessing = false;
@@ -13130,20 +13653,8 @@
           return s.id === scriptId;
         });
         if (!script) return;
-        if (action === "toggle-inline-script") {
-          if (isWebFreeReadOnlyLibraryScript(script)) {
-            promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.editScript);
-            return;
-          }
-          var opening = inlineScriptEditorOpenById[script.id] !== true;
-          inlineScriptEditorOpenById[script.id] = opening;
-          renderScripts(currentScripts, opening ? script.id : null);
-        } else if (action === "cancel-inline-script") {
-          delete inlineScriptEditorOpenById[script.id];
-          clearInlineScriptDraft(script.id);
-          renderScripts(currentScripts);
-        } else if (action === "save-inline-script") {
-          saveInlineScript(script);
+        if (action === "open-workshop") {
+          openScriptWorkshop(script.id, false);
         } else if (action === "ai-edit-script") {
           openAITextEditModal(script.id);
         } else if (action === "toggle-controls") {
@@ -13264,6 +13775,13 @@
       title.textContent = isVoice ? "Default Voice" : "Default Background";
       subtitle.textContent =
         "Saved to your account — used for new scripts and when a script has no voice or background set.";
+    } else if (mediaPickerTarget.kind === "workshop") {
+      if (!scriptWorkshopDraft) return;
+      currentValue = isVoice
+        ? (scriptWorkshopDraft.voiceID || "").trim() || selectedVoiceId
+        : (scriptWorkshopDraft.backgroundID || "").trim() || selectedBackgroundId;
+      title.textContent = isVoice ? "Select Voice" : "Select Background";
+      subtitle.textContent = (scriptWorkshopDraft.title || "").trim() || "Script";
     } else {
       return;
     }
@@ -13452,6 +13970,17 @@
             closeMediaPicker();
             return;
           }
+          if (mediaPickerTarget.kind === "workshop") {
+            if (!scriptWorkshopDraft) return;
+            if (mediaPickerTarget.field === "voice") {
+              scriptWorkshopDraft.voiceID = selectedID;
+            } else {
+              scriptWorkshopDraft.backgroundID = selectedID;
+            }
+            renderScriptWorkshop();
+            closeMediaPicker();
+            return;
+          }
           if (mediaPickerTarget.kind !== "premade") return;
           if (mediaPickerTarget.field === "voice") {
             premadeVoiceOverrideById[mediaPickerTarget.id] = selectedID;
@@ -13504,11 +14033,6 @@
       return;
     }
     var gen = ++scriptsRenderGeneration;
-    var nextExpanded = {};
-    displayScripts.forEach(function (s) {
-      if (inlineScriptEditorOpenById[s.id] === true) nextExpanded[s.id] = true;
-    });
-    inlineScriptEditorOpenById = nextExpanded;
     Promise.all(
       displayScripts.map(function (s) {
         return scriptContentSha256Hex(scriptDigestSourceForScriptCard(s));
@@ -13539,29 +14063,19 @@
             } catch (_e) {
               found.scrollIntoView({ block: "nearest" });
             }
-            if (inlineScriptEditorOpenById[sid]) {
-              var titleInput = found.querySelector(".script-inline-title-input");
-              if (titleInput) {
-                try {
-                  titleInput.focus();
-                  titleInput.select();
-                } catch (_focus) {}
-              }
-            }
           }
         });
       }
     });
   }
 
-  function openInlineScriptEditorForScript(scriptId) {
+  function openInlineScriptEditorForScript(scriptId, isNewDraft) {
     if (!scriptId) return;
     closeEditor();
     activeLibraryTab = "my-library";
     setAdminTab("library");
-    inlineScriptEditorOpenById[scriptId] = true;
     setScriptControlsExpanded(scriptId, true);
-    renderScripts(currentScripts, scriptId);
+    openScriptWorkshop(scriptId, !!isNewDraft);
   }
 
   function createBlankScriptAndOpenEditor() {
@@ -13612,8 +14126,8 @@
           ].concat(currentScripts);
           updateTabCounts();
         }
-        setMessage("New script created — edit the title and text below.", "success");
-        openInlineScriptEditorForScript(docRef.id);
+        setMessage("New script created — tap Edit to customize.", "success");
+        openInlineScriptEditorForScript(docRef.id, true);
       })
       .catch(function (e) {
         setMessage(e.message || "Could not create script.", "error");
@@ -14235,15 +14749,12 @@
     } catch (_e) {}
   }
 
-  function generateAudioForScript(script) {
+  function generateAudioForScript(script, options) {
+    options = options || {};
     if (!currentUser) return;
     if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
     if (scriptIsSharedListenOnly(script)) {
       setMessage("Shared audio is listen-only — playback uses the sender’s hosted file.", "info");
-      return;
-    }
-    if (inlineScriptHasUnsavedChanges(script)) {
-      setMessage("Save your script before generating audio.", "error");
       return;
     }
     var text = (script.text || "").trim();
@@ -14256,90 +14767,21 @@
       setMessage(genGuard, "error");
       return;
     }
-    scriptContentSha256Hex(scriptDigestSourceFromScript(script)).then(function (hex) {
-      if (!shouldEnableGenerateFromHash(script, hex)) {
-        setMessage("Audio already matches this script, voice, and background.", "");
-        return;
-      }
-      setScriptBusy(script.id, true);
-      showAudioGenerationOverlay(script.title || "Untitled Script");
-      setMessage("", "");
-
-      currentUser
-        .getIdToken(true)
-        .then(function (token) {
-          var localVoiceId = effectiveVoiceIdForScript(script);
-          var payload = {
-            scriptId: script.id,
-            text: text,
-            scriptTitle: script.title || "Untitled Script",
-            voiceID: localVoiceId,
-            backgroundID: effectiveBackgroundIdForScript(script),
-            createdAt:
-              script.createdAt && typeof script.createdAt.toDate === "function"
-                ? script.createdAt.toDate().getTime() / 1000
-                : Date.now() / 1000,
-          };
-          var vs = voiceSettingsForAudioJob(localVoiceId);
-          if (vs) payload.voice_settings = vs;
-          return backendRequest("/audio-jobs", token, payload).then(function (json) {
-            if (!json || json.ok !== true || !json.jobId) {
-              throw new Error("Audio job did not return a job id.");
-            }
-            return { token: token, jobId: json.jobId };
-          });
-        })
-        .then(function (ctx) {
-          return waitForAudioJob(
-            script,
-            ctx.jobId,
-            effectiveBackgroundIdForScript(script),
-            ctx.token
-          );
-        })
-        .then(function (result) {
-          var vId = effectiveVoiceIdForScript(script);
-          var bId = effectiveBackgroundIdForScript(script);
-          var digestSource = {
-            text: (script && script.text) || "",
-            voiceID: vId,
-            backgroundID: bId,
-          };
-          return scriptContentSha256Hex(digestSource).then(function (digest) {
-            return scriptCollection(currentUser.uid)
-              .doc(script.id)
-              .set(
-                {
-                  audioURL: result.audioURL,
-                  audioCreatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                  voiceID: vId,
-                  backgroundID: bId,
-                  audioVoiceID: vId,
-                  audioBackgroundID: bId,
-                  audioContentHash: digest,
-                },
-                { merge: true }
-              )
-              .then(function () {
-                setStoredGeneratedHash(script.id, digest);
-                delete frozenAudioSettingsByScriptId[script.id];
-                setMessage('Audio generated for "' + script.title + '".', "success");
-              });
-          });
-        })
-        .catch(function (e) {
-          var msg = e.message || "Audio generation failed.";
-          reportClientError(msg, "audio_generation", { script_id: script.id });
-          if (!handleQuotaLimitError(msg)) setMessage(msg, "error");
-        })
-        .finally(function () {
-          setScriptBusy(script.id, false);
-          stopAudioGenerationOverlay();
-        });
-    }).catch(function (e) {
-      setMessage((e && e.message) || "Could not verify script state.", "error");
-    });
+    if (options.skipHashCheck) {
+      enqueueBackgroundAudioGeneration(script, { showStartingBanner: true });
+      return;
+    }
+    scriptContentSha256Hex(scriptDigestSourceFromScript(script))
+      .then(function (hex) {
+        if (!shouldEnableGenerateFromHash(script, hex)) {
+          setMessage("Audio already matches this script, voice, and background.", "");
+          return;
+        }
+        enqueueBackgroundAudioGeneration(script, { showStartingBanner: true });
+      })
+      .catch(function (e) {
+        setMessage((e && e.message) || "Could not verify script state.", "error");
+      });
   }
 
   function importScriptAudioFromFile(file) {

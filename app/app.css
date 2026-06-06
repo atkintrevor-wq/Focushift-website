@@ -197,6 +197,52 @@
 .app-playlist-timer-wrap[hidden] {
   display: none !important;
 }
+.app-generation-badge-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  background: rgba(37, 99, 235, 0.12);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #93c5fd;
+}
+.app-generation-badge-wrap[hidden] {
+  display: none !important;
+}
+.app-generation-badge-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid rgba(147, 197, 253, 0.35);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: app-gen-badge-spin 0.8s linear infinite;
+}
+@keyframes app-gen-badge-spin {
+  to { transform: rotate(360deg); }
+}
+.app-generation-badge-elapsed {
+  font-variant-numeric: tabular-nums;
+}
+.app-generation-badge-queue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.2rem;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.app-generation-badge-queue[hidden] {
+  display: none !important;
+}
 .app-playlist-timer-icon { flex-shrink: 0; opacity: 0.9; font-size: 0.95rem; }
 .app-playlist-timer-label {
   min-width: 0;
@@ -1998,6 +2044,140 @@ html.fs-app[data-app-theme="light"] .script-card-actions-edit-btn.is-active {
 .script-card-actions-bar {
   margin-top: 0.35rem;
   align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.script-card-edit-primary {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+.script-card-generate-split {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+.script-card-voice-bg-readonly .script-card-media-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.82rem;
+  color: var(--text, #e8edf7);
+}
+.script-card-media-chip-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+html.fs-app[data-app-theme="light"] .script-card-voice-bg-readonly .script-card-media-chip {
+  background: rgba(15, 23, 42, 0.04);
+  border-color: rgba(100, 116, 139, 0.35);
+}
+.script-workshop-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 13000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0.75rem;
+  background: rgba(2, 6, 23, 0.55);
+}
+.script-workshop-backdrop[hidden] {
+  display: none !important;
+}
+.script-workshop-panel {
+  width: min(720px, 100%);
+  max-height: min(92vh, 900px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  margin: 0;
+}
+.script-workshop-header {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.85rem 1rem 0.35rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+}
+.script-workshop-heading {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.script-workshop-body {
+  flex: 1;
+  overflow: auto;
+  padding: 0.85rem 1rem;
+}
+.script-workshop-footer {
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.2);
+}
+.script-workshop-section-label {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.script-workshop-media-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 0.85rem;
+}
+.script-workshop-title-input,
+.script-workshop-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 0.65rem;
+}
+.script-workshop-textarea {
+  min-height: 220px;
+  resize: vertical;
+}
+.script-workshop-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.script-workshop-save-row {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+  max-width: 360px;
+  margin: 0 auto;
+}
+.script-workshop-primary {
+  flex: 1;
+  border-radius: 8px 0 0 8px !important;
+  margin: 0 !important;
+}
+.script-workshop-primary-generate {
+  background: linear-gradient(135deg, #f59e0b, #ea580c) !important;
+  border-color: rgba(234, 88, 12, 0.6) !important;
+}
+.script-workshop-chevron {
+  width: 44px;
+  border-radius: 0 8px 8px 0;
+  border: 1px solid rgba(96, 165, 250, 0.5);
+  border-left: none;
+  background: rgba(37, 99, 235, 0.85);
+  color: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+}
+@media (min-width: 640px) {
+  .script-workshop-backdrop {
+    align-items: center;
+  }
 }
 .script-card-footer {
   margin-top: auto;
