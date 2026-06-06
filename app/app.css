@@ -1993,7 +1993,8 @@ html.fs-app[data-app-theme="light"] .script-inline-textarea {
 .script-inline-preview {
   white-space: pre-wrap;
   margin: 0;
-  font: inherit;
+  font-family: inherit;
+  font-size: 0.92rem;
   line-height: 1.52;
 }
 .script-inline-save-row {
@@ -2141,10 +2142,30 @@ html.fs-app[data-app-theme="light"] .script-card-voice-bg-readonly .script-card-
   width: 100%;
   box-sizing: border-box;
   margin-bottom: 0.65rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: rgba(255, 255, 255, 0.05);
+  color: inherit;
+  font-family: inherit;
+  line-height: 1.52;
+}
+html.fs-app[data-app-theme="light"] .script-workshop-title-input,
+html.fs-app[data-app-theme="light"] .script-workshop-textarea {
+  background: rgba(255, 255, 255, 0.88);
+}
+.script-workshop-title-input {
+  padding: 0.42rem 0.55rem;
+  font-size: 0.95rem;
 }
 .script-workshop-textarea {
   min-height: 220px;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.92rem;
   resize: vertical;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
 }
 .script-workshop-toolbar {
   display: flex;

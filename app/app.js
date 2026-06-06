@@ -4016,16 +4016,6 @@
       '  <div class="app-section-title-row"><h2>My Library Scripts</h2></div>' +
       '  <div id="scripts-list"><p class="app-muted">Loading scripts...</p></div>' +
       "</section>" +
-      '<div id="script-workshop-backdrop" class="script-workshop-backdrop" hidden aria-hidden="true">' +
-      '  <div class="script-workshop-panel app-card" role="dialog" aria-labelledby="script-workshop-heading">' +
-      '    <div class="script-workshop-header">' +
-      '      <button type="button" class="app-btn app-btn-secondary script-workshop-back" id="script-workshop-close">← Back</button>' +
-      '      <h2 id="script-workshop-heading" class="script-workshop-heading">Edit Script</h2>' +
-      "    </div>" +
-      '    <div id="script-workshop-body" class="script-workshop-body"></div>' +
-      '    <div id="script-workshop-footer" class="script-workshop-footer"></div>' +
-      "  </div>" +
-      "</div>" +
       "  </div>" +
       '  <div id="library-sub-app" hidden>' +
       '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
@@ -4038,6 +4028,16 @@
       '  <div id="premade-list"><p class="app-muted">Loading premade scripts...</p></div>' +
       "</section>" +
       "  </div>" +
+      '<div id="script-workshop-backdrop" class="script-workshop-backdrop" hidden aria-hidden="true">' +
+      '  <div class="script-workshop-panel app-card" role="dialog" aria-labelledby="script-workshop-heading">' +
+      '    <div class="script-workshop-header">' +
+      '      <button type="button" class="app-btn app-btn-secondary script-workshop-back" id="script-workshop-close">← Back</button>' +
+      '      <h2 id="script-workshop-heading" class="script-workshop-heading">Edit Script</h2>' +
+      "    </div>" +
+      '    <div id="script-workshop-body" class="script-workshop-body"></div>' +
+      '    <div id="script-workshop-footer" class="script-workshop-footer"></div>' +
+      "  </div>" +
+      "</div>" +
       "</section>" +
       '<section id="section-playlists" class="app-section">' +
       '  <div id="playlists-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
@@ -12257,6 +12257,17 @@
     };
   }
 
+  function showScriptWorkshopBackdrop() {
+    var backdrop = document.getElementById("script-workshop-backdrop");
+    var body = document.getElementById("script-workshop-body");
+    var footer = document.getElementById("script-workshop-footer");
+    if (!backdrop || !body || !footer) return false;
+    backdrop.hidden = false;
+    backdrop.setAttribute("aria-hidden", "false");
+    lockAppBodyScroll();
+    return true;
+  }
+
   function openPremadeWorkshop(premade) {
     if (!premade) return;
     if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.editScript)) return;
@@ -12266,13 +12277,15 @@
     scriptWorkshopPremadeId = premade.id;
     scriptWorkshopDraft = premadeMyLibraryDraftFromPremade(premade);
     scriptWorkshopSnapshot = JSON.parse(JSON.stringify(scriptWorkshopDraft));
-    var backdrop = document.getElementById("script-workshop-backdrop");
-    if (backdrop) {
-      backdrop.hidden = false;
-      backdrop.setAttribute("aria-hidden", "false");
+    if (!showScriptWorkshopBackdrop()) {
+      setMessage("Could not open editor.", "error");
+      return;
     }
-    lockAppBodyScroll();
     renderScriptWorkshop();
+    if (!document.getElementById("script-workshop-primary")) {
+      closeScriptWorkshop();
+      setMessage("Could not open editor.", "error");
+    }
   }
 
   function getWorkshopPrimaryAction(script) {
@@ -12550,13 +12563,15 @@
       backgroundID: script.backgroundID || "",
     };
     scriptWorkshopSnapshot = JSON.parse(JSON.stringify(scriptWorkshopDraft));
-    var backdrop = document.getElementById("script-workshop-backdrop");
-    if (backdrop) {
-      backdrop.hidden = false;
-      backdrop.setAttribute("aria-hidden", "false");
+    if (!showScriptWorkshopBackdrop()) {
+      setMessage("Could not open editor.", "error");
+      return;
     }
-    lockAppBodyScroll();
     renderScriptWorkshop();
+    if (!document.getElementById("script-workshop-primary")) {
+      closeScriptWorkshop();
+      setMessage("Could not open editor.", "error");
+    }
   }
 
   function runScriptWorkshopPrimaryAction(script) {
