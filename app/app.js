@@ -43,6 +43,8 @@
   var scriptWorkshopDraft = null;
   var scriptWorkshopSnapshot = null;
   var scriptWorkshopIsNewDraft = false;
+  var scriptWorkshopIsPremadeEditor = false;
+  var scriptWorkshopPremadeId = null;
   /** 1s timer for bottom generation overlay (App Library premade only). */
   var generationOverlayTimerId = null;
   var generationOverlayStartedAt = 0;
@@ -987,7 +989,7 @@
         "• While audio generates, a spinner and timer appear in the top bar (number = jobs queued, up to 3).\n" +
         "• Scripts sync from Firebase across devices on the same account.\n" +
         "• A * after a title means it's a custom version of a premade script.\n\n" +
-        "App Library — Pick a category card to browse premade scripts (same categories as iOS). Play, save to My Library, or add audio to a playlist.",
+        "App Library — Pick a category to browse premade scripts. Paid: expand a card, tap Edit to customize in the workshop, then Save to My Library or Save and Generate. Free: play, save to My Library, or add to a playlist.",
     },
     playlists: {
       title: "Playlists",
@@ -12223,8 +12225,64 @@
     );
   }
 
+  function getScriptWorkshopContextScript() {
+    if (!scriptWorkshopDraft) return null;
+    if (scriptWorkshopIsPremadeEditor) {
+      return {
+        id: scriptWorkshopPremadeId || "premade-draft",
+        title: scriptWorkshopDraft.title || "",
+        text: scriptWorkshopDraft.text || "",
+        voiceID: scriptWorkshopDraft.voiceID || "",
+        backgroundID: scriptWorkshopDraft.backgroundID || "",
+        audioURL: scriptWorkshopDraft.audioURL || "",
+        categoryID: scriptWorkshopDraft.categoryID || "",
+      };
+    }
+    if (!scriptWorkshopOpenId) return null;
+    return (
+      currentScripts.find(function (s) {
+        return s.id === scriptWorkshopOpenId;
+      }) || null
+    );
+  }
+
+  function premadeMyLibraryDraftFromPremade(premade) {
+    return {
+      title: premade.title || "",
+      text: premade.scriptText || "",
+      voiceID: premadePublishedVoiceId(premade),
+      backgroundID: premadePublishedBackgroundId(premade),
+      audioURL: (premade.audioURL && String(premade.audioURL).trim()) || "",
+      categoryID: premade.categoryID || "",
+    };
+  }
+
+  function openPremadeWorkshop(premade) {
+    if (!premade) return;
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.editScript)) return;
+    scriptWorkshopOpenId = null;
+    scriptWorkshopIsNewDraft = false;
+    scriptWorkshopIsPremadeEditor = true;
+    scriptWorkshopPremadeId = premade.id;
+    scriptWorkshopDraft = premadeMyLibraryDraftFromPremade(premade);
+    scriptWorkshopSnapshot = JSON.parse(JSON.stringify(scriptWorkshopDraft));
+    var backdrop = document.getElementById("script-workshop-backdrop");
+    if (backdrop) {
+      backdrop.hidden = false;
+      backdrop.setAttribute("aria-hidden", "false");
+    }
+    lockAppBodyScroll();
+    renderScriptWorkshop();
+  }
+
   function getWorkshopPrimaryAction(script) {
     var hasText = scriptWorkshopDraft && (scriptWorkshopDraft.text || "").trim();
+    if (scriptWorkshopIsPremadeEditor) {
+      if (workshopHasAudioAffectingChanges()) {
+        return hasText ? "saveAndGenerate" : "none";
+      }
+      return hasText ? "saveOnly" : "none";
+    }
     if (scriptWorkshopIsNewDraft) {
       return hasText ? "saveAndGenerate" : "none";
     }
@@ -12241,6 +12299,11 @@
   }
 
   function workshopPrimaryButtonTitle(script, action) {
+    if (scriptWorkshopIsPremadeEditor) {
+      if (action === "saveOnly") return "Save to My Library";
+      if (action === "saveAndGenerate") return "Save and Generate";
+      return "Save to My Library";
+    }
     if (action === "saveOnly") return "Save";
     if (action === "saveAs") return "Save as…";
     if (action === "saveAndGenerate") {
@@ -12254,6 +12317,8 @@
     scriptWorkshopDraft = null;
     scriptWorkshopSnapshot = null;
     scriptWorkshopIsNewDraft = false;
+    scriptWorkshopIsPremadeEditor = false;
+    scriptWorkshopPremadeId = null;
     var backdrop = document.getElementById("script-workshop-backdrop");
     if (backdrop) {
       backdrop.hidden = true;
@@ -12265,10 +12330,8 @@
   function renderScriptWorkshop() {
     var body = document.getElementById("script-workshop-body");
     var footer = document.getElementById("script-workshop-footer");
-    if (!body || !footer || !scriptWorkshopOpenId || !scriptWorkshopDraft) return;
-    var script = currentScripts.find(function (s) {
-      return s.id === scriptWorkshopOpenId;
-    });
+    if (!body || !footer || !scriptWorkshopDraft) return;
+    var script = getScriptWorkshopContextScript();
     if (!script) return;
     var showFmtPref = readShowAudioTagsFormattingPreference();
     var rawText = scriptWorkshopDraft.text || "";
@@ -12303,12 +12366,14 @@
     var primaryTitle = workshopPrimaryButtonTitle(script, primaryAction);
     var primaryDisabled = primaryAction === "none";
     var chevronHtml = "";
-    if (scriptWorkshopIsNewDraft) {
-      chevronHtml =
-        '<button type="button" class="script-workshop-chevron" id="script-workshop-save-as-is" title="Save as is">▾</button>';
-    } else if (primaryAction !== "saveAs") {
-      chevronHtml =
-        '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="More save options">▾</button>';
+    if (!scriptWorkshopIsPremadeEditor) {
+      if (scriptWorkshopIsNewDraft) {
+        chevronHtml =
+          '<button type="button" class="script-workshop-chevron" id="script-workshop-save-as-is" title="Save as is">▾</button>';
+      } else if (primaryAction !== "saveAs") {
+        chevronHtml =
+          '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="More save options">▾</button>';
+      }
     }
     body.innerHTML =
       '<p class="script-workshop-section-label">How you\'ll listen</p>' +
@@ -12374,7 +12439,9 @@
     if (aiBtn) {
       aiBtn.disabled = !canEditTextBody;
       aiBtn.onclick = function () {
-        openAITextEditModal(scriptWorkshopOpenId);
+        openAITextEditModal(
+          scriptWorkshopIsPremadeEditor ? scriptWorkshopPremadeId : scriptWorkshopOpenId
+        );
       };
     }
     document.getElementById("script-workshop-primary").onclick = function () {
@@ -12422,12 +12489,14 @@
     var primaryTitle = workshopPrimaryButtonTitle(script, primaryAction);
     var primaryDisabled = primaryAction === "none";
     var chevronHtml = "";
-    if (scriptWorkshopIsNewDraft) {
-      chevronHtml =
-        '<button type="button" class="script-workshop-chevron" id="script-workshop-save-as-is" title="Save as is">▾</button>';
-    } else if (primaryAction !== "saveAs") {
-      chevronHtml =
-        '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="More save options">▾</button>';
+    if (!scriptWorkshopIsPremadeEditor) {
+      if (scriptWorkshopIsNewDraft) {
+        chevronHtml =
+          '<button type="button" class="script-workshop-chevron" id="script-workshop-save-as-is" title="Save as is">▾</button>';
+      } else if (primaryAction !== "saveAs") {
+        chevronHtml =
+          '<button type="button" class="script-workshop-chevron" id="script-workshop-chevron" title="More save options">▾</button>';
+      }
     }
     footer.innerHTML =
       '<div class="script-workshop-save-row">' +
@@ -12472,6 +12541,8 @@
     }
     scriptWorkshopOpenId = scriptId;
     scriptWorkshopIsNewDraft = !!isNewDraft;
+    scriptWorkshopIsPremadeEditor = false;
+    scriptWorkshopPremadeId = null;
     scriptWorkshopDraft = {
       title: script.title || "",
       text: script.text || "",
@@ -12491,6 +12562,13 @@
   function runScriptWorkshopPrimaryAction(script) {
     var action = getWorkshopPrimaryAction(script);
     if (action === "none") return;
+    if (scriptWorkshopIsPremadeEditor) {
+      persistPremadeWorkshop({
+        closeAfter: true,
+        generateAfter: action === "saveAndGenerate",
+      });
+      return;
+    }
     if (action === "saveAs") {
       runScriptWorkshopSaveAs(script);
       return;
@@ -12499,6 +12577,86 @@
       closeAfter: true,
       generateAfter: action === "saveAndGenerate",
     });
+  }
+
+  function persistPremadeWorkshop(options) {
+    options = options || {};
+    if (!currentUser || !scriptWorkshopDraft) return;
+    var title = (scriptWorkshopDraft.title || "").trim();
+    if (!title) {
+      setMessage("Enter a title.", "error");
+      return;
+    }
+    var voiceID = (scriptWorkshopDraft.voiceID || "").trim();
+    var backgroundID = (scriptWorkshopDraft.backgroundID || "").trim();
+    var text = scriptWorkshopDraft.text || "";
+    var audioURL = options.generateAfter ? "" : (scriptWorkshopDraft.audioURL || "").trim();
+    var docRef = scriptCollection(currentUser.uid).doc();
+    setMessage("Saving…", "");
+    scriptCollection(currentUser.uid)
+      .doc(docRef.id)
+      .set({
+        title: title,
+        text: text,
+        createdAt: firebase.firestore.Timestamp.now(),
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        audioURL: audioURL,
+        voiceID: voiceID,
+        backgroundID: backgroundID,
+        audioCreatedAt: audioURL ? firebase.firestore.FieldValue.serverTimestamp() : null,
+        categoryID: scriptWorkshopDraft.categoryID || "",
+      })
+      .then(function () {
+        function finishSave() {
+          if (options.closeAfter) closeScriptWorkshop();
+          activeLibraryTab = "my-library";
+          renderLibrarySubtab();
+          if (options.generateAfter) {
+            var saved = {
+              id: docRef.id,
+              title: title,
+              text: text,
+              voiceID: voiceID,
+              backgroundID: backgroundID,
+              audioURL: "",
+              categoryID: scriptWorkshopDraft.categoryID || "",
+            };
+            enqueueBackgroundAudioGeneration(saved, { showStartingBanner: true });
+            showAppBanner(
+              "Saved to My Library",
+              '"' + title + '" is saved. Generating audio in the background.',
+              "success",
+              { duration: 4500 }
+            );
+          } else {
+            showAppBanner(
+              "Saved to My Library",
+              '"' + title + '" is now in My Library.',
+              "success",
+              { duration: 4500 }
+            );
+            renderScripts(currentScripts);
+          }
+        }
+        if (audioURL && text) {
+          return scriptContentSha256Hex({
+            text: text,
+            voiceID: voiceID,
+            backgroundID: backgroundID,
+          })
+            .then(function (digest) {
+              setStoredGeneratedHash(docRef.id, digest);
+              return scriptCollection(currentUser.uid)
+                .doc(docRef.id)
+                .set({ audioContentHash: digest }, { merge: true });
+            })
+            .then(finishSave);
+        }
+        finishSave();
+      })
+      .catch(function (e) {
+        setMessage(e.message || "Could not save to My Library.", "error");
+      });
   }
 
   function runScriptWorkshopSaveAs(script) {
@@ -13291,7 +13449,11 @@
   }
 
   function getInlineScriptEditorText(scriptId) {
-    if (scriptWorkshopOpenId === scriptId && scriptWorkshopDraft) {
+    if (
+      scriptWorkshopDraft &&
+      (scriptWorkshopOpenId === scriptId ||
+        (scriptWorkshopIsPremadeEditor && scriptWorkshopPremadeId === scriptId))
+    ) {
       return scriptWorkshopDraft.text != null ? String(scriptWorkshopDraft.text) : "";
     }
     var draft = inlineScriptDraftById[scriptId];
@@ -13312,7 +13474,11 @@
   }
 
   function getInlineScriptTitle(scriptId) {
-    if (scriptWorkshopOpenId === scriptId && scriptWorkshopDraft) {
+    if (
+      scriptWorkshopDraft &&
+      (scriptWorkshopOpenId === scriptId ||
+        (scriptWorkshopIsPremadeEditor && scriptWorkshopPremadeId === scriptId))
+    ) {
       return (scriptWorkshopDraft.title || "").trim();
     }
     var card = getInlineScriptCard(scriptId);
@@ -13345,6 +13511,17 @@
       setAITextEditError("Script text is required.", "error");
       return;
     }
+    if (
+      scriptWorkshopIsPremadeEditor &&
+      scriptWorkshopPremadeId === scriptId &&
+      scriptWorkshopDraft
+    ) {
+      scriptWorkshopDraft.title = title;
+      scriptWorkshopDraft.text = text;
+      closeAITextEditModal();
+      renderScriptWorkshop();
+      return;
+    }
     if (aiTextEditProcessing) return;
     aiTextEditProcessing = true;
     setAITextEditError("Saving to your library…", "");
@@ -13368,7 +13545,11 @@
           currentScripts[ix].title = title;
           currentScripts[ix].text = text;
         }
-        if (scriptWorkshopOpenId === scriptId && scriptWorkshopDraft) {
+        if (
+          scriptWorkshopDraft &&
+          (scriptWorkshopOpenId === scriptId ||
+            (scriptWorkshopIsPremadeEditor && scriptWorkshopPremadeId === scriptId))
+        ) {
           scriptWorkshopDraft.title = title;
           scriptWorkshopDraft.text = text;
         }
@@ -13376,7 +13557,10 @@
         clearInlineScriptDraft(scriptId);
         closeAITextEditModal();
         setMessage("Script updated.", "success");
-        if (scriptWorkshopOpenId === scriptId) {
+        if (
+          scriptWorkshopOpenId === scriptId ||
+          (scriptWorkshopIsPremadeEditor && scriptWorkshopPremadeId === scriptId)
+        ) {
           renderScriptWorkshop();
         } else {
           renderScripts(currentScripts);
@@ -16118,72 +16302,18 @@
   }
 
   function premadeCardHtml(p, contentHashHex) {
-    var isExpanded = expandedPremadeTextById[p.id] === true;
+    var paid = isWebPaidTierForAI();
+    var isExpanded = !paid && expandedPremadeTextById[p.id] === true;
     var hasAudio = !!(p.audioURL && String(p.audioURL).trim());
     var playingThis = activeAudioScriptId === p.id && activeAudio && !activeAudio.paused;
-    var premadeVoiceID = resolvePremadeVoiceSelection(p);
-    var premadeBackgroundID = resolvePremadeBackgroundSelection(p);
+    var publishedVoiceID = premadePublishedVoiceId(p);
+    var publishedBackgroundID = premadePublishedBackgroundId(p);
     var isBusy = isPremadeBusy(p.id);
-    var paid = isWebPaidTierForAI();
-    var canGen = !!(p.scriptText && String(p.scriptText).trim());
-    var hasDrift = premadeHasVoiceOrBackgroundDrift(p);
-    var genEnabled = canGen && shouldEnableGeneratePremadeFromHash(p, contentHashHex);
-    var primaryIsGenerate = hasDrift && paid;
-    var genLabel = isBusy ? "Generating audio..." : "Generate";
-    var genClasses = "app-btn";
-    if (isBusy) {
-      genClasses += " app-btn-secondary";
-    } else if (!canGen || !genEnabled) {
-      genClasses += " app-btn-secondary app-btn-generate-muted";
-    } else if (hasAudio) {
-      genClasses += " app-btn-generate-warn";
-    } else {
-      genClasses += " app-btn-generate-fresh";
-    }
-    var genDisabled = isBusy || !canGen || !genEnabled || !paid;
-    var genTitle = !canGen
-      ? "This premade has no script text to turn into audio."
-      : !genEnabled && !isBusy
-        ? "Audio already matches this text, voice, and background."
-        : "";
-    var primaryActionHtml;
-    if (primaryIsGenerate) {
-      primaryActionHtml =
-        '  <button type="button" class="' +
-        genClasses +
-        '" data-premade-action="generate-audio" data-premade-id="' +
-        escapeHtml(p.id) +
-        '"' +
-        (genDisabled ? " disabled" : "") +
-        (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
-        ">" +
-        genLabel +
-        "</button>";
-    } else {
-      primaryActionHtml =
-        '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
-        escapeHtml(p.id) +
-        '"' +
-        (isBusy ? " disabled" : "") +
-        ">Save to My Library</button>";
-    }
-    var showSyncRow = hasAudio && (hasDrift || (paid && isStreamableCloudPremade(p)));
-    var syncMessage = "";
-    var syncColor = "#94a3b8";
-    if (showSyncRow && !isBusy) {
-      if (hasDrift) {
-        if (!genEnabled) {
-          syncMessage = "✓ Audio matches text, voice, and background";
-          syncColor = "#22c55e";
-        } else {
-          syncMessage = "Regeneration needed for current voice or background";
-          syncColor = "#f59e0b";
-        }
-      } else {
-        syncMessage = "Synced with cloud";
-        syncColor = "#22c55e";
-      }
-    }
+    var playlistIconSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>';
+    var showSyncRow = paid && hasAudio && isStreamableCloudPremade(p);
+    var syncMessage = showSyncRow && !isBusy ? "Synced with cloud" : "";
+    var syncColor = "#22c55e";
     var offlineIconHtml = "";
     if (paid && isStreamableCloudPremade(p)) {
       if (premadeOfflineObjectUrlCache[p.id]) {
@@ -16211,49 +16341,60 @@
     var audioControlsExpanded = controlsExpandedForPremade(p.id);
     var chevChar = audioControlsExpanded ? "▲" : "▼";
     var chipLabel = premadeLibraryCategoryDisplayName((p.categoryID || "").trim());
+    var paidActionsHtml =
+      '<button type="button" class="app-btn app-btn-primary script-card-edit-primary" data-premade-action="open-workshop" data-premade-id="' +
+      escapeHtml(p.id) +
+      '">Edit</button>' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
+      escapeHtml(p.id) +
+      '"' +
+      (!hasAudio || isBusy ? " disabled" : "") +
+      ">" +
+      (playingThis ? "Pause" : "Play") +
+      "</button>" +
+      '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-premade-action="add-playlist" data-premade-id="' +
+      escapeHtml(p.id) +
+      '" title="Save and add to playlist"' +
+      (!currentPlaylists.length ? " disabled" : "") +
+      ' aria-label="Save and add to playlist">' +
+      playlistIconSvg +
+      "</button>";
+    var freeActionsHtml =
+      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
+      escapeHtml(p.id) +
+      '">' +
+      (isExpanded ? "Hide Text" : "Show Text") +
+      "</button>" +
+      '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
+      escapeHtml(p.id) +
+      '">Save to My Library</button>' +
+      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
+      escapeHtml(p.id) +
+      '"' +
+      (!hasAudio || isBusy ? " disabled" : "") +
+      ">" +
+      (playingThis ? "Pause" : "Play") +
+      "</button>" +
+      '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="add-playlist" data-premade-id="' +
+      escapeHtml(p.id) +
+      '"' +
+      (!currentPlaylists.length ? " disabled" : "") +
+      ">Save + Add to Playlist</button>";
     var audioSection = audioControlsExpanded
       ? '<div class="premade-card-audio-section">' +
         (!paid
           ? '<p class="app-muted" style="margin:0 0 0.55rem;line-height:1.45;">Free plan: play, save to My Library, or add to a playlist. Upgrade to customize voice/background or generate new audio.</p>'
           : "") +
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.45rem;margin-top:0.55rem;">' +
-        (paid
-          ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
-            escapeHtml(p.id) +
-            '" data-premade-media-field="voice" style="text-align:left;">Voice: ' +
-            escapeHtml(voiceNameById(premadeVoiceID)) +
-            "</button>" +
-            '  <button type="button" class="app-btn app-btn-secondary" data-premade-media-open="' +
-            escapeHtml(p.id) +
-            '" data-premade-media-field="background" style="text-align:left;">Background: ' +
-            escapeHtml(backgroundNameById(premadeBackgroundID)) +
-            "</button>"
-          : '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;text-align:left;">Voice: ' +
-            escapeHtml(voiceNameById(premadeVoiceID)) +
-            "</span>" +
-            '  <span class="app-btn app-btn-secondary" style="pointer-events:none;opacity:0.85;text-align:left;">Background: ' +
-            escapeHtml(backgroundNameById(premadeBackgroundID)) +
-            "</span>") +
+        '<div class="script-card-voice-bg-grid script-card-voice-bg-readonly">' +
+        '  <span class="script-card-media-chip"><span class="script-card-media-chip-label">Voice</span> ' +
+        escapeHtml(voiceNameById(publishedVoiceID)) +
+        "</span>" +
+        '  <span class="script-card-media-chip"><span class="script-card-media-chip-label">Background</span> ' +
+        escapeHtml(backgroundNameById(publishedBackgroundID)) +
+        "</span>" +
         "</div>" +
-        '<div class="app-card-actions">' +
-        '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
-        escapeHtml(p.id) +
-        '">' +
-        (isExpanded ? "Hide Text" : "Show Text") +
-        "</button>" +
-        primaryActionHtml +
-        '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
-        escapeHtml(p.id) +
-        '"' +
-        (!hasAudio || isBusy ? " disabled" : "") +
-        ">" +
-        (playingThis ? "Pause" : "Play") +
-        "</button>" +
-        '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="add-playlist" data-premade-id="' +
-        escapeHtml(p.id) +
-        '"' +
-        (!currentPlaylists.length ? " disabled" : "") +
-        ">Save + Add to Playlist</button>" +
+        '<div class="app-card-actions script-card-actions-bar">' +
+        (paid ? paidActionsHtml : freeActionsHtml) +
         (adminModeEnabled && isStreamableCloudPremade(p)
           ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="hide" data-premade-id="' +
             escapeHtml(p.id) +
@@ -16320,6 +16461,8 @@
           renderPremade();
         } else if (action === "toggle-controls") {
           togglePremadeCardAudioControls(premade.id);
+        } else if (action === "open-workshop") {
+          openPremadeWorkshop(premade);
         } else if (action === "generate-audio") {
           if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
           generateAudioForPremade(premade);
