@@ -12843,7 +12843,7 @@
             '<button type="button" class="app-btn app-btn-primary script-card-edit-primary" data-action="open-workshop" data-script-id="' +
             escapeHtml(script.id) +
             '">Edit</button>' +
-            '<button type="button" class="app-btn app-btn-generate-fresh script-card-generate-split" data-action="generate-audio" data-script-id="' +
+            '<button type="button" class="app-btn script-card-generate-split" data-action="generate-audio" data-script-id="' +
             escapeHtml(script.id) +
             '">Generate</button>';
         }

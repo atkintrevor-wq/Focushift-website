@@ -2055,6 +2055,12 @@ html.fs-app[data-app-theme="light"] .script-card-actions-edit-btn.is-active {
 .script-card-generate-split {
   flex: 1 1 7rem;
   min-width: 0;
+  background: linear-gradient(180deg, #fb923c, #ea580c) !important;
+  border-color: rgba(251, 146, 60, 0.85) !important;
+  color: #fff !important;
+}
+.script-card-generate-split:hover {
+  filter: brightness(1.06);
 }
 .script-card-voice-bg-readonly .script-card-media-chip {
   display: inline-flex;
@@ -3476,6 +3482,13 @@ body.fs-app-body.fs-modal-scroll-lock {
   overscroll-behavior: contain;
 }
 .app-modal-backdrop[hidden] { display: none !important; }
+/* Voice/background picker opened from script workshop (workshop backdrop is 13000) */
+#media-picker-backdrop {
+  z-index: 13100;
+}
+#ai-text-edit-backdrop {
+  z-index: 13100;
+}
 /* Account info popups must stack above the Account & Settings modal */
 #account-info-backdrop,
 .account-sheet-backdrop {
