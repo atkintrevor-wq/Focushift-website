@@ -23,6 +23,9 @@
   var currentPremade = [];
   /** Cloud premades with `active: false` — admin-only, not shown in App Library. */
   var currentHiddenPremade = [];
+  /** User-imported backgrounds synced via `users/{uid}/userBackgrounds`. */
+  var currentCloudUserBackgrounds = [];
+  var userBackgroundsUnsubscribe = null;
   /** Active rows from Firestore `backgroundCatalog` (stream URLs). */
   var currentBackgroundCatalog = [];
   var currentClonedVoices = [];
@@ -433,6 +436,152 @@
     return s.indexOf("user-bg-") === 0;
   }
 
+  function isKnownUserBackgroundId(backgroundID) {
+    var bid = (backgroundID && String(backgroundID).trim()) || "";
+    if (!bid) return false;
+    if (isUserBackgroundId(bid)) return true;
+    return currentCloudUserBackgrounds.some(function (b) {
+      return b && b.id === bid;
+    });
+  }
+
+  function mergedUserBackgroundMetas() {
+    var byId = {};
+    loadUserBackgroundMetaList().forEach(function (m) {
+      if (m && m.id) byId[m.id] = m;
+    });
+    currentCloudUserBackgrounds.forEach(function (b) {
+      if (!b || !b.id || byId[b.id]) return;
+      byId[b.id] = {
+        id: b.id,
+        name: b.name || "Imported audio",
+        audioURL: b.audioURL || "",
+        cloudSynced: true,
+      };
+    });
+    return Object.keys(byId).map(function (k) {
+      return byId[k];
+    });
+  }
+
+  function userBackgroundsCollection(uid) {
+    return db.collection("users").doc(uid).collection("userBackgrounds");
+  }
+
+  function uploadUserBackgroundToCloud(id, name, blob) {
+    if (!currentUser || !id || !blob) return Promise.resolve();
+    var uid = currentUser.uid;
+    var ext = "mp3";
+    var type = (blob.type && String(blob.type).toLowerCase()) || "";
+    if (type.indexOf("wav") >= 0) ext = "wav";
+    else if (type.indexOf("mp4") >= 0 || type.indexOf("m4a") >= 0) ext = "m4a";
+    else if (type.indexOf("aac") >= 0) ext = "aac";
+    else if (type.indexOf("ogg") >= 0) ext = "ogg";
+    var storagePath = "users/" + uid + "/backgroundSamples/" + id + "." + ext;
+    var ref = firebase.storage().ref(storagePath);
+    return ref
+      .put(blob)
+      .then(function () {
+        return ref.getDownloadURL();
+      })
+      .then(function (url) {
+        return userBackgroundsCollection(uid).doc(id).set(
+          {
+            name: name || "Imported audio",
+            audioURL: url,
+            storagePath: storagePath,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true }
+        );
+      });
+  }
+
+  function deleteCloudUserBackground(backgroundId) {
+    if (!currentUser) return Promise.resolve();
+    var bid = (backgroundId && String(backgroundId).trim()) || "";
+    if (!bid) return Promise.resolve();
+    var uid = currentUser.uid;
+    return userBackgroundsCollection(uid)
+      .doc(bid)
+      .get()
+      .then(function (snap) {
+        var storagePath = snap.exists && snap.data() && snap.data().storagePath ? String(snap.data().storagePath).trim() : "";
+        var tasks = [userBackgroundsCollection(uid).doc(bid).delete()];
+        if (storagePath) {
+          tasks.push(
+            firebase.storage()
+              .ref(storagePath)
+              .delete()
+              .catch(function () {})
+          );
+        }
+        return Promise.all(tasks);
+      })
+      .catch(function () {
+        return userBackgroundsCollection(uid).doc(bid).delete().catch(function () {});
+      });
+  }
+
+  function subscribeUserBackgrounds(uid) {
+    if (typeof userBackgroundsUnsubscribe === "function") {
+      userBackgroundsUnsubscribe();
+      userBackgroundsUnsubscribe = null;
+    }
+    userBackgroundsUnsubscribe = userBackgroundsCollection(uid).onSnapshot(
+      function (snap) {
+        currentCloudUserBackgrounds = snap.docs
+          .map(function (doc) {
+            var data = doc.data() || {};
+            return {
+              id: doc.id,
+              name: data.name || "Imported audio",
+              audioURL: (data.audioURL && String(data.audioURL).trim()) || "",
+              storagePath: (data.storagePath && String(data.storagePath).trim()) || "",
+              categoryID: "my-upload",
+              file: "",
+              userUpload: true,
+            };
+          })
+          .sort(function (a, b) {
+            return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+          });
+        applyUserProfileDefaults({ onlyIfNewer: true });
+        backfillLocalUserBackgroundUploads().finally(function () {
+          if (activeAdminTab === "audio") renderAudioPage();
+          if (activeAdminTab === "library") renderPremade();
+        });
+      },
+      function () {
+        currentCloudUserBackgrounds = [];
+        if (activeAdminTab === "audio") renderAudioPage();
+      }
+    );
+  }
+
+  function backfillLocalUserBackgroundUploads() {
+    if (!currentUser) return Promise.resolve();
+    var cloudIds = {};
+    currentCloudUserBackgrounds.forEach(function (b) {
+      if (b && b.id) cloudIds[b.id] = true;
+    });
+    var pending = loadUserBackgroundMetaList().filter(function (m) {
+      return m && m.id && !cloudIds[m.id];
+    });
+    if (!pending.length) return Promise.resolve();
+    return Promise.all(
+      pending.map(function (m) {
+        return getUserBackgroundBlob(m.id)
+          .then(function (blob) {
+            if (!blob) return;
+            return uploadUserBackgroundToCloud(m.id, m.name || "Imported audio", blob);
+          })
+          .catch(function () {});
+      })
+    );
+  }
+
   function newUserBackgroundId() {
     if (window.crypto && typeof crypto.randomUUID === "function") return "user-bg-" + crypto.randomUUID();
     return "user-bg-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
@@ -526,18 +675,43 @@
   }
 
   function getUserBackgroundBlob(id) {
-    return openUserBgIdb().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(USER_BG_IDB_STORE, "readonly");
-        var rq = tx.objectStore(USER_BG_IDB_STORE).get(id);
-        rq.onsuccess = function () {
-          resolve(rq.result != null ? rq.result : null);
-        };
-        rq.onerror = function () {
-          reject(rq.error);
-        };
+    return openUserBgIdb()
+      .then(function (db) {
+        return new Promise(function (resolve, reject) {
+          var tx = db.transaction(USER_BG_IDB_STORE, "readonly");
+          var rq = tx.objectStore(USER_BG_IDB_STORE).get(id);
+          rq.onsuccess = function () {
+            resolve(rq.result != null ? rq.result : null);
+          };
+          rq.onerror = function () {
+            reject(rq.error);
+          };
+        });
+      })
+      .then(function (blob) {
+        if (blob) return blob;
+        var cloud = currentCloudUserBackgrounds.find(function (b) {
+          return b && b.id === id;
+        });
+        var remote = cloud && cloud.audioURL ? String(cloud.audioURL).trim() : "";
+        if (!remote) {
+          var meta = mergedUserBackgroundMetas().find(function (m) {
+            return m && m.id === id;
+          });
+          remote = meta && meta.audioURL ? String(meta.audioURL).trim() : "";
+        }
+        if (!remote) return null;
+        return fetch(remote)
+          .then(function (r) {
+            if (!r.ok) throw new Error("Could not download imported background audio.");
+            return r.blob();
+          })
+          .then(function (fetched) {
+            return putUserBackgroundBlob(id, fetched).then(function () {
+              return fetched;
+            });
+          });
       });
-    });
   }
 
   function putUserBackgroundBlob(id, blob) {
@@ -701,13 +875,14 @@
       return b.id === "bg-none";
     });
     if (none) out.unshift(none);
-    loadUserBackgroundMetaList().forEach(function (m) {
+    mergedUserBackgroundMetas().forEach(function (m) {
       if (!m || !m.id) return;
       out.push({
         id: m.id,
         name: m.name || "Imported audio",
         categoryID: "my-upload",
         file: "",
+        audioURL: m.audioURL || "",
         userUpload: true,
       });
     });
@@ -742,6 +917,9 @@
         });
         next.unshift({ id: id, name: displayName });
         saveUserBackgroundMetaList(next);
+        return uploadUserBackgroundToCloud(id, displayName, file);
+      })
+      .then(function () {
         setBackgroundsMessage('Imported "' + displayName + '". It appears under My Audio.', "success");
         renderAudioPage();
       })
@@ -757,7 +935,8 @@
       !!(b.file && String(b.file).trim()) ||
       !!(b.audioURL && String(b.audioURL).trim()) ||
       !!b.userUpload ||
-      !!isUserBackgroundId(b.id)
+      !!isKnownUserBackgroundId(b.id) ||
+      !!(b.audioURL && String(b.audioURL).trim())
     );
   }
 
@@ -1508,11 +1687,7 @@
     ) {
       return true;
     }
-    if (isUserBackgroundId(id)) {
-      return loadUserBackgroundMetaList().some(function (m) {
-        return m && m.id === id;
-      });
-    }
+    if (isKnownUserBackgroundId(id)) return true;
     return false;
   }
 
@@ -3153,6 +3328,11 @@
     teardownClonedVoicesListener();
     teardownListeningListener();
     teardownUserProfileListener();
+    if (typeof userBackgroundsUnsubscribe === "function") {
+      userBackgroundsUnsubscribe();
+      userBackgroundsUnsubscribe = null;
+    }
+    currentCloudUserBackgrounds = [];
     redirectLogin();
   }
 
@@ -3172,6 +3352,11 @@
     teardownClonedVoicesListener();
     teardownListeningListener();
     teardownUserProfileListener();
+    if (typeof userBackgroundsUnsubscribe === "function") {
+      userBackgroundsUnsubscribe();
+      userBackgroundsUnsubscribe = null;
+    }
+    currentCloudUserBackgrounds = [];
     root.innerHTML =
       "<h1>You're signed in</h1>" +
       "<p class=\"app-muted\">Hi " +
@@ -6057,8 +6242,8 @@
   function backgroundNameById(backgroundID) {
     var bid = (backgroundID && String(backgroundID).trim()) || "";
     if (!bid) return "Background";
-    if (isUserBackgroundId(bid)) {
-      var meta = loadUserBackgroundMetaList().find(function (m) {
+    if (isKnownUserBackgroundId(bid)) {
+      var meta = mergedUserBackgroundMetas().find(function (m) {
         return m && m.id === bid;
       });
       return (meta && meta.name) || "My audio";
@@ -6093,16 +6278,20 @@
       return b.id === bid;
     });
     if (cloud) return cloud;
-    if (isUserBackgroundId(bid)) {
-      var meta = loadUserBackgroundMetaList().find(function (m) {
+    if (isKnownUserBackgroundId(bid)) {
+      var meta = mergedUserBackgroundMetas().find(function (m) {
         return m && m.id === bid;
       });
-      if (!meta) return null;
+      var cloud = currentCloudUserBackgrounds.find(function (b) {
+        return b && b.id === bid;
+      });
+      if (!meta && !cloud) return null;
       return {
         id: bid,
-        name: meta.name || "Imported audio",
-        categoryID: "",
+        name: (meta && meta.name) || (cloud && cloud.name) || "Imported audio",
+        categoryID: "my-upload",
         file: "",
+        audioURL: (meta && meta.audioURL) || (cloud && cloud.audioURL) || "",
         userUpload: true,
       };
     }
@@ -6434,7 +6623,7 @@
       !!(entry.file && String(entry.file).trim()) ||
       !!(entry.audioURL && String(entry.audioURL).trim()) ||
       !!entry.userUpload ||
-      isUserBackgroundId(entry.id);
+      isKnownUserBackgroundId(entry.id);
     if (!canPrev) return Promise.resolve(false);
 
     if (backgroundPreviewAudio && backgroundPreviewId === entry.id) {
@@ -6475,12 +6664,15 @@
           return false;
         });
     }
-    if (entry.userUpload || isUserBackgroundId(entry.id)) {
+    if (entry.userUpload || isKnownUserBackgroundId(entry.id)) {
+      if (entry.audioURL && String(entry.audioURL).trim()) {
+        return playFromUrl(String(entry.audioURL).trim());
+      }
       revokeCachedUserBgObjectUrl(entry.id);
       return getUserBackgroundBlob(entry.id).then(function (blob) {
         if (!blob) {
           stopBackgroundPreview();
-          if (typeof onError === "function") onError("Imported background file is missing from this browser.");
+          if (typeof onError === "function") onError("Imported background could not be loaded.");
           return false;
         }
         var objUrl = URL.createObjectURL(blob);
@@ -6563,7 +6755,7 @@
         return;
       }
       var entry = backgroundEntryById(bgIdRaw);
-      if (!entry && !isUserBackgroundId(bgIdRaw)) {
+      if (!entry && !isKnownUserBackgroundId(bgIdRaw)) {
         reject(new Error("Unknown background for mixing."));
         return;
       }
@@ -6571,7 +6763,7 @@
         !entry ||
         (!entry.file &&
           !(entry.audioURL && String(entry.audioURL).trim()) &&
-          !(entry.userUpload || isUserBackgroundId(bgIdRaw)))
+          !(entry.userUpload || isKnownUserBackgroundId(bgIdRaw)))
       ) {
         reject(new Error("Unknown background for mixing."));
         return;
@@ -6583,10 +6775,10 @@
       }
       var ctx = new ACtx();
       var decodeBgPromise;
-      if (entry.userUpload || isUserBackgroundId(bgIdRaw)) {
+      if (entry.userUpload || isKnownUserBackgroundId(bgIdRaw)) {
         decodeBgPromise = getUserBackgroundBlob(bgIdRaw).then(function (blob) {
           if (!blob) {
-            throw new Error("Imported background audio is missing in this browser. Re-import the file.");
+            throw new Error("Imported background audio could not be loaded. Open My Audio on a device where it was imported.");
           }
           return blob.arrayBuffer().then(function (buf) {
             return ctx.decodeAudioData(buf.slice(0));
@@ -8301,13 +8493,15 @@
 
   function deleteUserBackgroundEntry(backgroundId) {
     var bid = (backgroundId && String(backgroundId).trim()) || "";
-    if (!bid || !isUserBackgroundId(bid)) return Promise.resolve();
+    if (!bid || !isKnownUserBackgroundId(bid)) return Promise.resolve();
     revokeCachedUserBgObjectUrl(bid);
     var next = loadUserBackgroundMetaList().filter(function (m) {
       return !m || m.id !== bid;
     });
     saveUserBackgroundMetaList(next);
-    return deleteUserBackgroundBlob(bid).catch(function () {});
+    return Promise.all([deleteUserBackgroundBlob(bid).catch(function () {}), deleteCloudUserBackground(bid)]).then(
+      function () {}
+    );
   }
 
   function audioBuiltinRowMarkup(b, options) {
@@ -8397,6 +8591,7 @@
       id: meta.id,
       name: meta.name || "Imported audio",
       file: "",
+      audioURL: meta.audioURL || "",
       userUpload: true,
     };
     var isSelected = b.id === selectedBackgroundId;
@@ -8506,7 +8701,7 @@
     if (none && audioSearchQuery && !textMatchesSectionSearch(none.name, audioSearchQuery)) {
       none = null;
     }
-    var users = loadUserBackgroundMetaList().filter(function (m) {
+    var users = mergedUserBackgroundMetas().filter(function (m) {
       if (!m || !m.id) return false;
       return !audioSearchQuery || textMatchesSectionSearch(m.name, audioSearchQuery);
     });
@@ -8518,7 +8713,7 @@
     var parts = [];
     parts.push("<p class=\"app-muted audio-my-lede\">");
     parts.push(
-      "Imports are stored only in this browser (like offline files on iOS). Use them as background when generating mixed audio."
+      "Your imports sync across devices on Starter and Creator. This browser also keeps a local copy for faster mixing."
     );
     parts.push("</p>");
     if (none) {
@@ -16179,6 +16374,7 @@
           subscribePremade();
           subscribeBackgroundCatalog();
           subscribeClonedVoices(user.uid);
+          subscribeUserBackgrounds(user.uid);
           subscribeListeningStats(user.uid);
           maybePresentPendingShareClaim();
         } else {
