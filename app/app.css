@@ -5001,3 +5001,22 @@ html.fs-app[data-app-theme="light"] .mini-player-time {
   min-width: 0;
   word-break: break-word;
 }
+
+.premade-offline-icon-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.15rem 0.25rem;
+  border-radius: 6px;
+  opacity: 0.9;
+}
+.premade-offline-icon-btn:hover {
+  opacity: 1;
+  background: rgba(148, 163, 184, 0.15);
+}
+.premade-offline-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}

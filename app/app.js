@@ -11,6 +11,8 @@
   var backgroundCatalogUnsubscribe = null;
   var clonedVoicesUnsubscribe = null;
   var listeningUnsubscribe = null;
+  var userProfileUnsubscribe = null;
+  var lastAppliedProfileDefaultsAt = 0;
   /** Latest `users/{uid}/meta/listening` (plays, streaks, last played); mirrors iOS UsageManager + Firestore. */
   var webListeningStats = null;
   var currentUser = null;
@@ -1450,6 +1452,128 @@
       listeningUnsubscribe = null;
     }
     webListeningStats = null;
+  }
+
+  function teardownUserProfileListener() {
+    if (typeof userProfileUnsubscribe === "function") {
+      userProfileUnsubscribe();
+      userProfileUnsubscribe = null;
+    }
+    lastAppliedProfileDefaultsAt = 0;
+  }
+
+  function profileDefaultsVersion(profile) {
+    if (!profile) return 0;
+    var wd = profile.webDefaultsUpdatedAt;
+    if (wd && typeof wd.toMillis === "function") return wd.toMillis();
+    var updated = profile.updatedAt;
+    if (updated && typeof updated.toMillis === "function") return updated.toMillis();
+    return 0;
+  }
+
+  function isVoiceIdAvailableForDefault(voiceID) {
+    var id = (voiceID && String(voiceID).trim()) || "";
+    if (!id) return false;
+    if (
+      availableVoices.some(function (v) {
+        return v.id === id;
+      })
+    ) {
+      return true;
+    }
+    if (
+      currentClonedVoices.some(function (v) {
+        return v.id === id;
+      })
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  function isBackgroundIdAvailableForDefault(backgroundID) {
+    var id = (backgroundID && String(backgroundID).trim()) || "";
+    if (!id) return false;
+    if (
+      availableBackgrounds.some(function (b) {
+        return b.id === id;
+      })
+    ) {
+      return true;
+    }
+    if (
+      currentBackgroundCatalog.some(function (b) {
+        return b.id === id;
+      })
+    ) {
+      return true;
+    }
+    if (isUserBackgroundId(id)) {
+      return loadUserBackgroundMetaList().some(function (m) {
+        return m && m.id === id;
+      });
+    }
+    return false;
+  }
+
+  function rerenderDefaultsDependents() {
+    syncAccountDefaultMediaLabels();
+    if (activeAdminTab === "library") renderPremade();
+    if (activeAdminTab === "voices") renderVoices();
+    if (activeAdminTab === "audio") renderAudioPage();
+    if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
+  }
+
+  function applyUserProfileDefaults(options) {
+    options = options || {};
+    if (!currentUserProfile) return false;
+    var version = profileDefaultsVersion(currentUserProfile);
+    var profileVoiceID = (currentUserProfile.defaultVoiceID || "").trim();
+    var profileBackgroundID = (currentUserProfile.defaultBackgroundID || "").trim();
+    var pendingVoice =
+      profileVoiceID && isVoiceIdAvailableForDefault(profileVoiceID) && selectedVoiceId !== profileVoiceID;
+    var pendingBackground =
+      profileBackgroundID &&
+      isBackgroundIdAvailableForDefault(profileBackgroundID) &&
+      selectedBackgroundId !== profileBackgroundID;
+    if (options.onlyIfNewer && version <= lastAppliedProfileDefaultsAt && !pendingVoice && !pendingBackground) {
+      return false;
+    }
+
+    var changed = false;
+    if (pendingVoice) {
+      selectedVoiceId = profileVoiceID;
+      changed = true;
+    }
+    if (pendingBackground) {
+      selectedBackgroundId = profileBackgroundID;
+      changed = true;
+    }
+
+    if (changed || options.forceVersion) {
+      lastAppliedProfileDefaultsAt = version;
+    }
+    if (changed && options.rerender !== false) {
+      rerenderDefaultsDependents();
+    }
+    return changed;
+  }
+
+  function subscribeUserProfile(uid) {
+    teardownUserProfileListener();
+    userProfileUnsubscribe = db
+      .collection("users")
+      .doc(uid)
+      .onSnapshot(
+        function (snap) {
+          currentUserProfile = snap.exists ? snap.data() || {} : {};
+          hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
+          applyUserProfileDefaults({ onlyIfNewer: true });
+          renderAccountInsights();
+          syncAccountSubscriptionHeadline();
+        },
+        function () {}
+      );
   }
 
   function listeningMetaDocRef(uid) {
@@ -3028,6 +3152,7 @@
     teardownBackgroundCatalogListener();
     teardownClonedVoicesListener();
     teardownListeningListener();
+    teardownUserProfileListener();
     redirectLogin();
   }
 
@@ -3046,6 +3171,7 @@
     teardownBackgroundCatalogListener();
     teardownClonedVoicesListener();
     teardownListeningListener();
+    teardownUserProfileListener();
     root.innerHTML =
       "<h1>You're signed in</h1>" +
       "<p class=\"app-muted\">Hi " +
@@ -15404,16 +15530,47 @@
         (isBusy ? " disabled" : "") +
         ">Save to My Library</button>";
     }
-    var syncFooterHtml = "";
-    if (hasDrift && hasAudio) {
-      if (!genEnabled && !isBusy) {
-        syncFooterHtml =
-          '<p class="app-muted" style="margin:0.45rem 0 0;font-size:0.78rem;line-height:1.4;color:#22c55e;">✓ Audio matches text, voice, and background</p>';
-      } else if (!isBusy) {
-        syncFooterHtml =
-          '<p class="app-muted" style="margin:0.45rem 0 0;font-size:0.78rem;line-height:1.4;color:#f59e0b;">Regeneration needed for current voice or background</p>';
+    var showSyncRow = hasAudio && (hasDrift || (paid && isStreamableCloudPremade(p)));
+    var syncMessage = "";
+    var syncColor = "#94a3b8";
+    if (showSyncRow && !isBusy) {
+      if (hasDrift) {
+        if (!genEnabled) {
+          syncMessage = "✓ Audio matches text, voice, and background";
+          syncColor = "#22c55e";
+        } else {
+          syncMessage = "Regeneration needed for current voice or background";
+          syncColor = "#f59e0b";
+        }
+      } else {
+        syncMessage = "Synced with cloud";
+        syncColor = "#22c55e";
       }
     }
+    var offlineIconHtml = "";
+    if (paid && isStreamableCloudPremade(p)) {
+      if (premadeOfflineObjectUrlCache[p.id]) {
+        offlineIconHtml =
+          '<button type="button" class="premade-offline-icon-btn" data-premade-action="remove-offline" data-premade-id="' +
+          escapeHtml(p.id) +
+          '" title="Remove offline download" aria-label="Remove offline download">✓☁️</button>';
+      } else {
+        offlineIconHtml =
+          '<button type="button" class="premade-offline-icon-btn" data-premade-action="download-offline" data-premade-id="' +
+          escapeHtml(p.id) +
+          '" title="Download for offline" aria-label="Download for offline">☁️↓</button>';
+      }
+    }
+    var syncFooterHtml = showSyncRow
+      ? '<div class="premade-sync-row" style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin:0.45rem 0 0;">' +
+        '<span class="app-muted" style="margin:0;font-size:0.78rem;line-height:1.4;color:' +
+        syncColor +
+        ';">' +
+        escapeHtml(syncMessage) +
+        "</span>" +
+        offlineIconHtml +
+        "</div>"
+      : "";
     var audioControlsExpanded = controlsExpandedForPremade(p.id);
     var chevChar = audioControlsExpanded ? "▲" : "▼";
     var chipLabel = premadeLibraryCategoryDisplayName((p.categoryID || "").trim());
@@ -15460,15 +15617,6 @@
         '"' +
         (!currentPlaylists.length ? " disabled" : "") +
         ">Save + Add to Playlist</button>" +
-        (paid && isStreamableCloudPremade(p)
-          ? premadeOfflineObjectUrlCache[p.id]
-            ? '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="remove-offline" data-premade-id="' +
-              escapeHtml(p.id) +
-              '">Remove offline download</button>'
-            : '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="download-offline" data-premade-id="' +
-              escapeHtml(p.id) +
-              '">Download for offline</button>'
-          : "") +
         (adminModeEnabled && isStreamableCloudPremade(p)
           ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="hide" data-premade-id="' +
             escapeHtml(p.id) +
@@ -15481,9 +15629,6 @@
           : "") +
         "</div>" +
         syncFooterHtml +
-        (paid && isStreamableCloudPremade(p)
-          ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;line-height:1.4;">Streams by default. Download only if you want offline playback in this browser.</p>'
-          : "") +
         "</div>"
       : "";
     return (
@@ -15493,9 +15638,6 @@
       '<div class="app-card-header-row">' +
       "<h3>" +
       escapeHtml(p.title || "Untitled Premade") +
-      (paid && isStreamableCloudPremade(p)
-        ? ' <span class="app-chip app-chip-cloud" title="Available for offline download">☁️ Offline</span>'
-        : "") +
       "</h3>" +
       '  <button type="button" class="library-card-chevron" data-premade-action="toggle-controls" data-premade-id="' +
       escapeHtml(p.id) +
@@ -15706,6 +15848,7 @@
             .sort(function (a, b) {
               return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
             });
+          applyUserProfileDefaults({ onlyIfNewer: true });
           if (activeAdminTab === "audio") renderAudioPage();
           if (activeAdminTab === "library") renderPremade();
         },
@@ -15902,6 +16045,7 @@
             settings: data.settings || null,
           };
         });
+        applyUserProfileDefaults({ onlyIfNewer: true });
         if (activeAdminTab === "voices") renderVoices();
       },
       function (_e) {
@@ -16023,38 +16167,13 @@
         } catch (_e) {}
         currentUserProfile = snap.exists ? snap.data() || {} : {};
         hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
-        var profileVoiceID = (currentUserProfile.defaultVoiceID || "").trim();
-        if (
-          profileVoiceID &&
-          availableVoices.some(function (v) {
-            return v.id === profileVoiceID;
-          })
-        ) {
-          selectedVoiceId = profileVoiceID;
-        }
-        var profileBackgroundID = (currentUserProfile.defaultBackgroundID || "").trim();
-        if (profileBackgroundID) {
-          if (
-            availableBackgrounds.some(function (b) {
-              return b.id === profileBackgroundID;
-            }) ||
-            currentBackgroundCatalog.some(function (b) {
-              return b.id === profileBackgroundID;
-            })
-          ) {
-            selectedBackgroundId = profileBackgroundID;
-          } else if (isUserBackgroundId(profileBackgroundID)) {
-            var hasLocalBg = loadUserBackgroundMetaList().some(function (m) {
-              return m && m.id === profileBackgroundID;
-            });
-            if (hasLocalBg) selectedBackgroundId = profileBackgroundID;
-          }
-        }
+        applyUserProfileDefaults({ forceVersion: true });
         var isAdmin = snap.exists && snap.data().isAdmin === true;
         if (isAdmin) {
           adminModeEnabled = readAdminModeEnabled();
           renderAdminShell(user.email, user.displayName);
           handleStripeAndAccountQueryParams();
+          subscribeUserProfile(user.uid);
           subscribeScripts(user.uid);
           subscribePlaylists(user.uid);
           subscribePremade();
