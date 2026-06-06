@@ -580,6 +580,7 @@
 
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
+  var homeDashboardBadgesExpanded = false;
   /** Set while asking Stripe-style follow-ups before final script (see iOS SurveyViewModel). */
   var homeClarifyFlow = null;
   /** Cached Daily Spark payload + playback blob URL (Starter/Creator). */
@@ -600,7 +601,7 @@
         "Create Personalized Mental Script — Tap to start the questionnaire and generate a personalized mental script (Starter and Creator). On Free, you'll be prompted to upgrade.\n\n" +
         "Daily Spark — Tap to play today's short curated affirmation (Starter and Creator).\n\n" +
         "Listen today — Tap to run your saved playlist or library shortcut. Set the target in Account → Preferences.\n\n" +
-        "Listening activity — Your streak, plays (tap Plays to cycle week / month / year / all time), last played track, and milestones. Same Firestore fields as the iOS app.\n\n" +
+        "Dashboard — Streak, plays (tap plays to cycle week / month / year / total), plan, last played, milestones, and reminders status. Same Firestore fields as the iOS app.\n\n" +
         "Account — Open the person icon (top right) for settings, plans, library counts, preferences, and usage.",
     },
     library: {
@@ -1697,6 +1698,38 @@
     } catch (_e2) {}
   }
 
+  function isDailySparkActiveAudio() {
+    var id = (activeAudioScriptId && String(activeAudioScriptId)) || "";
+    return !!activeAudio && id.indexOf("daily_spark_") === 0;
+  }
+
+  function isDailySparkTransportPlaying() {
+    return isDailySparkActiveAudio() && !activeAudio.paused;
+  }
+
+  function refreshHomeDailySparkTransportIfVisible() {
+    if (activeAdminTab === "home" && homeFlowStep === "landing" && currentUser) {
+      renderHomeFlow((currentUser && currentUser.displayName) || "");
+    }
+  }
+
+  function homeDailySparkTransportIconHtml(isPlaying) {
+    if (isPlaying) {
+      return (
+        '<span class="home-daily-spark-play" aria-hidden="true">' +
+        '<svg width="28" height="28" viewBox="0 0 24 24" fill="#60a5fa">' +
+        '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>' +
+        "</svg></span>"
+      );
+    }
+    return (
+      '<span class="home-daily-spark-play" aria-hidden="true">' +
+      '<svg width="28" height="28" viewBox="0 0 24 24" fill="#60a5fa">' +
+      '<path d="M8 5v14l11-7z"/>' +
+      "</svg></span>"
+    );
+  }
+
   function dailySparkSubtitleWeb() {
     var spark = dailySparkState.spark;
     if (spark) {
@@ -1913,8 +1946,21 @@
       openAccountModal();
       return;
     }
-    if (dailySparkState.playing) return;
+    if (isDailySparkActiveAudio()) {
+      if (activeAudio.paused) {
+        activeAudio.play().catch(function () {
+          setMessage("Could not play Daily Spark.", "error");
+        });
+      } else {
+        activeAudio.pause();
+      }
+      updateMiniPlayer();
+      refreshHomeDailySparkTransportIfVisible();
+      return;
+    }
+    if (dailySparkState.loading || dailySparkState.playing) return;
     dailySparkState.playing = true;
+    refreshHomeDailySparkTransportIfVisible();
     fetchDailySparkCurrent(true)
       .then(function (spark) {
         if (!spark) {
@@ -2148,21 +2194,327 @@
 
   function highestPlayMilestone(playCount) {
     var n = Math.max(0, intFromFirestoreListening(playCount));
-    if (n >= 100) return { title: "Centurion", subtitle: "100 plays" };
-    if (n >= 25) return { title: "Devotee", subtitle: "25 plays" };
-    if (n >= 10) return { title: "Listener", subtitle: "10 plays" };
-    if (n >= 3) return { title: "Getting Started", subtitle: "3 plays" };
-    if (n >= 1) return { title: "First Step", subtitle: "1 play" };
+    if (n >= 100) {
+      return { title: "Centurion", subtitle: "100 plays", category: "Total listens", tone: "gold", icon: "star" };
+    }
+    if (n >= 25) {
+      return { title: "Devotee", subtitle: "25 plays", category: "Total listens", tone: "pink", icon: "heart" };
+    }
+    if (n >= 10) {
+      return { title: "Listener", subtitle: "10 plays", category: "Total listens", tone: "purple", icon: "headphones" };
+    }
+    if (n >= 3) {
+      return {
+        title: "Getting Started",
+        subtitle: "3 plays",
+        category: "Total listens",
+        tone: "green",
+        icon: "sparkles",
+      };
+    }
+    if (n >= 1) {
+      return { title: "First Step", subtitle: "1 play", category: "Total listens", tone: "blue", icon: "play" };
+    }
     return null;
   }
 
   function highestStreakMilestone(streak) {
     var s = Math.max(0, intFromFirestoreListening(streak));
-    if (s >= 30) return { title: "30-Day Streak", subtitle: "30 days in a row" };
-    if (s >= 14) return { title: "2-Week Streak", subtitle: "14 days in a row" };
-    if (s >= 7) return { title: "7-Day Streak", subtitle: "7 days in a row" };
-    if (s >= 3) return { title: "3-Day Streak", subtitle: "3 days in a row" };
+    if (s >= 30) {
+      return {
+        title: "30-Day Streak",
+        subtitle: "30 days in a row",
+        category: "Consecutive days",
+        tone: "red",
+        icon: "flame",
+      };
+    }
+    if (s >= 14) {
+      return {
+        title: "2-Week Streak",
+        subtitle: "14 days in a row",
+        category: "Consecutive days",
+        tone: "red",
+        icon: "flame",
+      };
+    }
+    if (s >= 7) {
+      return {
+        title: "7-Day Streak",
+        subtitle: "7 days in a row",
+        category: "Consecutive days",
+        tone: "orange",
+        icon: "flame",
+      };
+    }
+    if (s >= 3) {
+      return {
+        title: "3-Day Streak",
+        subtitle: "3 days in a row",
+        category: "Consecutive days",
+        tone: "orange",
+        icon: "flame",
+      };
+    }
     return null;
+  }
+
+  function homeDashboardIconSvg(kind) {
+    var common =
+      ' xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"';
+    switch (kind) {
+      case "flame":
+        return (
+          "<svg" + common + ' fill="currentColor"><path d="M12 2c1 4 4 6.5 4 10a4 4 0 1 1-8 0c0-3.5 3-6 4-10z"/></svg>'
+        );
+      case "headphones":
+        return (
+          "<svg" +
+          common +
+          ' fill="none" stroke="currentColor" stroke-width="2"><path d="M3 14v3a2 2 0 0 0 2 2h1"/><path d="M21 14v3a2 2 0 0 1-2 2h-1"/><path d="M3 14a8 8 0 0 1 16 0"/></svg>'
+        );
+      case "crown":
+        return (
+          "<svg" +
+          common +
+          ' fill="currentColor"><path d="M3 8l3 4 3-6 3 6 3-4 3 6v4H3V8z"/></svg>'
+        );
+      case "play":
+        return (
+          "<svg" + common + ' fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
+        );
+      case "star":
+        return (
+          "<svg" +
+          common +
+          ' fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+        );
+      case "heart":
+        return (
+          "<svg" +
+          common +
+          ' fill="currentColor"><path d="M12 21s-7-4.5-9.5-9C1 8 3 5 6.5 5 9 5 12 8 12 8s3-3 5.5-3C21 5 23 8 21.5 12 19 16.5 12 21 12 21z"/></svg>'
+        );
+      case "sparkles":
+        return (
+          "<svg" +
+          common +
+          ' fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.2 3.6L17 8l-3.8 1.2L12 13l-1.2-3.8L7 8l3.8-1.2L12 3z"/><path d="M5 16l.6 1.8L7.4 19l-1.8.6L5 21.4l-.6-1.8L2.6 19l1.8-.6L5 16z"/></svg>'
+        );
+      case "bell-off":
+        return (
+          "<svg" +
+          common +
+          ' fill="none" stroke="currentColor" stroke-width="2"><path d="M13 17H5"/><path d="M18 17h-1"/><path d="M6 10a6 6 0 0 1 11.3-2.8"/><path d="M3 3l18 18"/></svg>'
+        );
+      case "chev-right":
+        return (
+          "<svg" +
+          common +
+          ' fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>'
+        );
+      case "chev-down":
+        return (
+          "<svg" +
+          common +
+          ' fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>'
+        );
+      case "chev-up":
+        return (
+          "<svg" +
+          common +
+          ' fill="none" stroke="currentColor" stroke-width="2"><polyline points="18 15 12 9 6 15"/></svg>'
+        );
+      case "dashed":
+        return (
+          "<svg" +
+          common +
+          ' fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="3 3"><circle cx="12" cy="12" r="8"/></svg>'
+        );
+      default:
+        return (
+          "<svg" + common + ' fill="currentColor"><circle cx="12" cy="12" r="4"/></svg>'
+        );
+    }
+  }
+
+  function homeDashboardMilestoneRowHtml(badge, placeholderHint) {
+    if (!badge) {
+      return (
+        '<div class="home-dashboard-milestone-row is-placeholder">' +
+        '<span class="home-dashboard-milestone-icon">' +
+        homeDashboardIconSvg("dashed") +
+        "</span>" +
+        '<div class="home-dashboard-milestone-copy">' +
+        '<span class="home-dashboard-milestone-cat">' +
+        escapeHtml(placeholderHint.category) +
+        "</span>" +
+        '<span class="home-dashboard-milestone-title">No milestone yet</span>' +
+        '<span class="home-dashboard-milestone-sub">' +
+        escapeHtml(placeholderHint.hint) +
+        "</span>" +
+        "</div></div>"
+      );
+    }
+    return (
+      '<div class="home-dashboard-milestone-row tone-' +
+      escapeHtml(badge.tone) +
+      '">' +
+      '<span class="home-dashboard-milestone-icon">' +
+      homeDashboardIconSvg(badge.icon) +
+      "</span>" +
+      '<div class="home-dashboard-milestone-copy">' +
+      '<span class="home-dashboard-milestone-cat">' +
+      escapeHtml(badge.category) +
+      "</span>" +
+      '<span class="home-dashboard-milestone-title">' +
+      escapeHtml(badge.title) +
+      "</span>" +
+      '<span class="home-dashboard-milestone-sub">' +
+      escapeHtml(badge.subtitle) +
+      "</span>" +
+      "</div></div>"
+    );
+  }
+
+  function buildHomeDashboardCardHtml(ls) {
+    var period = readHomePlaysPeriod();
+    var effStreak = effectiveStreakDisplayed(ls);
+    var playsShown = playsCountForHomePeriod(ls, period);
+    var periodParen = escapeHtml(homePlaysPeriodParen(period));
+    var bestStreak = intFromFirestoreListening(ls.bestStreakCount);
+    var bestStreakInline =
+      bestStreak > 0
+        ? ' <span class="home-dashboard-best">(best: ' + escapeHtml(String(bestStreak)) + ")</span>"
+        : "";
+    var tier = resolvedSubscriptionTier();
+    var tierClass =
+      tier === "creator" ? "is-creator" : tier === "starter" ? "is-starter" : "is-free";
+    var upgradeHtml =
+      tier !== "creator"
+        ? ' <button type="button" class="home-dashboard-upgrade-btn" id="home-dashboard-upgrade">Upgrade</button>'
+        : "";
+    var lastTitle = (ls.lastPlayedTitle && String(ls.lastPlayedTitle).trim()) || "";
+    var lastTime = (ls.lastPlayedTime && String(ls.lastPlayedTime).trim()) || "";
+    var hasLastPlayUrl = !!(ls.lastPlayedAudioURL && String(ls.lastPlayedAudioURL).trim());
+    var lastPlayedHtml = "";
+    if (lastTitle || lastTime) {
+      lastPlayedHtml =
+        '<div class="home-dashboard-divider"></div>' +
+        '<button type="button" class="home-dashboard-row-btn" id="home-last-played"' +
+        (hasLastPlayUrl ? "" : " disabled") +
+        ' title="' +
+        (hasLastPlayUrl ? "Play last listened track" : "Last played track unavailable in this browser") +
+        '">' +
+        '<span class="home-dashboard-row-icon is-play">' +
+        homeDashboardIconSvg("play") +
+        "</span>" +
+        '<span class="home-dashboard-row-main">Last: ' +
+        escapeHtml(lastTitle || "Untitled") +
+        "</span>" +
+        '<span class="home-dashboard-row-meta">' +
+        escapeHtml(lastTime) +
+        "</span>" +
+        "</button>";
+    }
+    var pm = highestPlayMilestone(ls.playCount);
+    var sm = highestStreakMilestone(effStreak);
+    var milestonesHtml = "";
+    if (pm || sm) {
+      var badgeIcons = "";
+      if (pm) {
+        badgeIcons +=
+          '<span class="home-dashboard-badge-chip tone-' +
+          escapeHtml(pm.tone) +
+          '">' +
+          homeDashboardIconSvg(pm.icon) +
+          "</span>";
+      }
+      if (sm) {
+        badgeIcons +=
+          '<span class="home-dashboard-badge-chip tone-' +
+          escapeHtml(sm.tone) +
+          '">' +
+          homeDashboardIconSvg(sm.icon) +
+          "</span>";
+      }
+      milestonesHtml =
+        '<div class="home-dashboard-divider"></div>' +
+        '<div class="home-dashboard-milestones-wrap">' +
+        '<button type="button" class="home-dashboard-milestones-toggle" id="home-milestones-toggle" aria-expanded="' +
+        (homeDashboardBadgesExpanded ? "true" : "false") +
+        '">' +
+        '<span class="home-dashboard-milestones-label">Listening milestones</span>' +
+        '<span class="home-dashboard-badge-chips">' +
+        badgeIcons +
+        "</span>" +
+        '<span class="home-dashboard-milestones-chev">' +
+        homeDashboardIconSvg(homeDashboardBadgesExpanded ? "chev-up" : "chev-down") +
+        "</span>" +
+        "</button>" +
+        (homeDashboardBadgesExpanded
+          ? '<div class="home-dashboard-milestones-panel">' +
+            '<p class="home-dashboard-milestones-hint">Your highest milestone in each category.</p>' +
+            homeDashboardMilestoneRowHtml(pm, {
+              category: "Total listens",
+              hint: "1 play to earn First Step",
+            }) +
+            homeDashboardMilestoneRowHtml(sm, {
+              category: "Consecutive days",
+              hint: "3 days in a row to earn first streak badge",
+            }) +
+            "</div>"
+          : "") +
+        "</div>";
+    }
+    return (
+      '<div class="app-glass-card home-dashboard-card">' +
+      '<div class="home-dashboard-body">' +
+      '<div class="home-dashboard-stats-row">' +
+      '<span class="home-dashboard-inline-stat tone-orange">' +
+      '<span class="home-dashboard-stat-icon">' +
+      homeDashboardIconSvg("flame") +
+      "</span>" +
+      "<span>" +
+      escapeHtml(String(effStreak)) +
+      "-day streak" +
+      bestStreakInline +
+      "</span></span>" +
+      '<button type="button" class="home-dashboard-inline-stat home-dashboard-plays-btn tone-purple" id="home-plays-period" title="Tap to cycle: week → month → year → all time">' +
+      '<span class="home-dashboard-stat-icon">' +
+      homeDashboardIconSvg("headphones") +
+      "</span>" +
+      "<span>" +
+      escapeHtml(String(playsShown)) +
+      " plays " +
+      periodParen +
+      "</span></button>" +
+      "</div>" +
+      '<div class="home-dashboard-plan-row">' +
+      '<span class="home-dashboard-plan-pill ' +
+      tierClass +
+      '">' +
+      '<span class="home-dashboard-stat-icon">' +
+      homeDashboardIconSvg("crown") +
+      "</span>" +
+      escapeHtml(subscriptionTierDisplayName()) +
+      "</span>" +
+      upgradeHtml +
+      "</div>" +
+      lastPlayedHtml +
+      milestonesHtml +
+      '<div class="home-dashboard-divider"></div>' +
+      '<button type="button" class="home-dashboard-row-btn" id="home-reminders-row" title="Daily reminders are set up in the iOS app">' +
+      '<span class="home-dashboard-row-icon">' +
+      homeDashboardIconSvg("bell-off") +
+      "</span>" +
+      '<span class="home-dashboard-row-main">Daily reminders off</span>' +
+      '<span class="home-dashboard-row-chev">' +
+      homeDashboardIconSvg("chev-right") +
+      "</span>" +
+      "</button>" +
+      "</div></div>"
+    );
   }
 
   function formatLastPlayedNow() {
@@ -2224,6 +2576,7 @@
         updateMiniPlayer();
         renderScripts(currentScripts);
         renderSelectedPlaylistDetail();
+        refreshHomeDailySparkTransportIfVisible();
         var t = (s.lastPlayedTitle && String(s.lastPlayedTitle).trim()) || "Listen again";
         recordWebListen(t, url);
       })
@@ -9622,59 +9975,9 @@
     var cat = selectedCategory();
     if (homeFlowStep === "landing") {
       var ls = webListeningStats || normalizeListeningDoc({});
-      var period = readHomePlaysPeriod();
-      var effStreak = effectiveStreakDisplayed(ls);
-      var playsShown = playsCountForHomePeriod(ls, period);
-      var periodParen = escapeHtml(homePlaysPeriodParen(period));
-      var periodPhrase =
-        period === "week"
-          ? "This week"
-          : period === "month"
-            ? "This month"
-            : period === "year"
-              ? "This year"
-              : "All time";
-      var lastTitle = (ls.lastPlayedTitle && String(ls.lastPlayedTitle).trim()) || "";
-      var lastTime = (ls.lastPlayedTime && String(ls.lastPlayedTime).trim()) || "";
-      var lastHtml =
-        lastTitle || lastTime
-          ? "<span>" +
-            escapeHtml(lastTitle) +
-            "</span>" +
-            (lastTime ? ' <span class="app-muted">· ' + escapeHtml(lastTime) + "</span>" : "")
-          : '<span class="app-muted">Nothing yet — play something from Library or Playlists.</span>';
-      var pm = highestPlayMilestone(ls.playCount);
-      var sm = highestStreakMilestone(effStreak);
-      var mileParts = [];
-      if (pm) {
-        mileParts.push(
-          '<div class="home-milestone"><strong>' +
-            escapeHtml(pm.title) +
-            '</strong><span class="app-muted"> — ' +
-            escapeHtml(pm.subtitle) +
-            "</span></div>"
-        );
-      }
-      if (sm) {
-        mileParts.push(
-          '<div class="home-milestone"><strong>' +
-            escapeHtml(sm.title) +
-            '</strong><span class="app-muted"> — ' +
-            escapeHtml(sm.subtitle) +
-            "</span></div>"
-        );
-      }
-      var milestonesBlock =
-        mileParts.length > 0
-          ? '<div class="home-milestones">' + mileParts.join("") + "</div>"
-          : '<p class="app-muted" style="margin:0.55rem 0 0;font-size:0.85rem;">Milestones unlock as your play count and streak grow (same thresholds as the iOS app).</p>';
-      var bestStreak = ls.bestStreakCount || 0;
-      var bestStreakHtml =
-        bestStreak > 0
-          ? '<div class="app-muted" style="font-size:0.72rem;margin-top:0.2rem;">Best streak: ' + escapeHtml(String(bestStreak)) + "</div>"
-          : "";
       var dailySparkSub = escapeHtml(dailySparkSubtitleWeb());
-      var dailySparkBusy = dailySparkState.loading || dailySparkState.playing;
+      var dailySparkLoading = dailySparkState.loading || dailySparkState.playing;
+      var dailySparkAudible = isDailySparkTransportPlaying();
       var listenHead = hasPlayedTodayWeb(ls) ? "Listen again" : "Listen to an affirmation today";
       var listenSub = escapeHtml(listenTodaySubtitleWeb(ls));
       el.innerHTML =
@@ -9699,9 +10002,9 @@
         dailySparkSub +
         "</span>" +
         "      </span>" +
-        (dailySparkBusy
+        (dailySparkLoading
           ? '      <span class="home-daily-spark-spinner" aria-hidden="true"></span>'
-          : '      <span class="home-daily-spark-play" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="#60a5fa"><path d="M8 5v14l11-7z"/></svg></span>') +
+          : "      " + homeDailySparkTransportIconHtml(dailySparkAudible)) +
         "    </button>" +
         '    <button type="button" class="home-listen-today-row" id="home-listen-today-row">' +
         '      <span class="home-listen-today-icon" aria-hidden="true">' +
@@ -9718,37 +10021,7 @@
         "    </button>" +
         "    </div>" +
         "  </div>" +
-        '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
-        '    <strong style="font-size:0.95rem;">Listening activity</strong>' +
-        '    <p class="app-muted" style="margin:0.3rem 0 0.65rem;font-size:0.82rem;">Streak, plays, last session, and milestones sync with the iOS app (same Firestore fields).</p>' +
-        '    <div class="home-listening-grid" style="margin-top:0;">' +
-        '      <div class="home-listen-stat">' +
-        '        <div class="app-muted home-listen-label">Streak</div>' +
-        '        <div class="home-listen-value">' +
-        escapeHtml(String(effStreak)) +
-        '<span class="app-muted" style="font-weight:500;font-size:0.78rem;margin-left:0.2rem;">days</span></div>' +
-        bestStreakHtml +
-        "      </div>" +
-        '      <button type="button" class="home-listen-stat home-listen-stat-btn" id="home-plays-period" title="Tap to cycle: week → month → year → all time (matches iOS)">' +
-        '        <div class="app-muted home-listen-label">Plays ' +
-        periodParen +
-        "</div>" +
-        '        <div class="home-listen-value">' +
-        escapeHtml(String(playsShown)) +
-        "</div>" +
-        '        <div class="app-muted" style="font-size:0.72rem;margin-top:0.2rem;">' +
-        escapeHtml(periodPhrase) +
-        "</div>" +
-        "      </button>" +
-        "    </div>" +
-        '    <div style="margin-top:0.65rem;">' +
-        '      <div class="app-muted home-listen-label" style="margin-bottom:0.2rem;">Last played</div>' +
-        '      <div style="font-size:0.9rem;line-height:1.4;">' +
-        lastHtml +
-        "</div>" +
-        "    </div>" +
-        milestonesBlock +
-        "  </div>" +
+        buildHomeDashboardCardHtml(ls) +
         "</div>";
       var startBtn = document.getElementById("home-start-create");
       if (startBtn) {
@@ -9782,6 +10055,34 @@
           ev.stopPropagation();
           cycleHomePlaysPeriod();
           renderHomeFlow(displayName);
+        });
+      }
+      var lastPlayedBtn = document.getElementById("home-last-played");
+      if (lastPlayedBtn) {
+        lastPlayedBtn.addEventListener("click", function () {
+          playLastListenedAgain();
+        });
+      }
+      var milestonesToggle = document.getElementById("home-milestones-toggle");
+      if (milestonesToggle) {
+        milestonesToggle.addEventListener("click", function () {
+          homeDashboardBadgesExpanded = !homeDashboardBadgesExpanded;
+          renderHomeFlow(displayName);
+        });
+      }
+      var upgradeBtn = document.getElementById("home-dashboard-upgrade");
+      if (upgradeBtn) {
+        upgradeBtn.addEventListener("click", function () {
+          openAccountModal();
+        });
+      }
+      var remindersRow = document.getElementById("home-reminders-row");
+      if (remindersRow) {
+        remindersRow.addEventListener("click", function () {
+          setMessage(
+            "Daily listening reminders are set up in the Focus Shift iOS app under Home or Account.",
+            "info"
+          );
         });
       }
       return;
@@ -12360,6 +12661,7 @@
     }
     activeAudioTitle = "";
     updateMiniPlayer();
+    refreshHomeDailySparkTransportIfVisible();
   }
 
   function togglePlayScriptAudio(script) {
@@ -12379,7 +12681,9 @@
       } else {
         activeAudio.pause();
       }
+      updateMiniPlayer();
       renderScripts(currentScripts);
+      refreshHomeDailySparkTransportIfVisible();
       return;
     }
 
@@ -12394,6 +12698,7 @@
       .then(function () {
         updateMiniPlayer();
         renderScripts(currentScripts);
+        refreshHomeDailySparkTransportIfVisible();
         recordWebListen(activeAudioTitle, audioURL);
       })
       .catch(function () {
@@ -12403,6 +12708,7 @@
         setMessage("Could not play audio in browser.", "error");
         stopActiveAudio();
         renderScripts(currentScripts);
+        refreshHomeDailySparkTransportIfVisible();
       });
   }
 
@@ -12521,8 +12827,12 @@
 
   function bindAudioLifecycle(onEnded) {
     if (!activeAudio) return;
-    activeAudio.addEventListener("play", updateMiniPlayer);
-    activeAudio.addEventListener("pause", updateMiniPlayer);
+    function onTransportStateChange() {
+      updateMiniPlayer();
+      refreshHomeDailySparkTransportIfVisible();
+    }
+    activeAudio.addEventListener("play", onTransportStateChange);
+    activeAudio.addEventListener("pause", onTransportStateChange);
     activeAudio.addEventListener("timeupdate", updateMiniPlayer);
     activeAudio.addEventListener("loadedmetadata", updateMiniPlayer);
     activeAudio.addEventListener("ended", function () {
@@ -12536,6 +12846,7 @@
       updateMiniPlayer();
       renderScripts(currentScripts);
       renderSelectedPlaylistDetail();
+      refreshHomeDailySparkTransportIfVisible();
     });
   }
 

@@ -1149,49 +1149,287 @@ html.fs-app[data-app-theme="light"] .library-dropdown-item.is-tier-locked:hover 
   font-weight: 700;
   letter-spacing: -0.01em;
 }
-.home-listening-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+/* Home dashboard — matches iOS HomeView GlassCard dashboard */
+.home-dashboard-card {
+  margin: 0;
 }
-.home-listen-stat {
-  border: 1px solid rgba(255,255,255,0.18);
-  border-radius: 14px;
-  padding: 0.65rem 0.65rem 0.6rem;
-  background: rgba(255,255,255,0.05);
-  text-align: left;
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.2);
-}
-.home-listen-stat-btn {
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  width: 100%;
-  transition: background 0.12s ease, border-color 0.12s ease;
-}
-.home-listen-stat-btn:hover {
-  background: rgba(255,255,255,0.08);
-  border-color: rgba(255,255,255,0.26);
-}
-.home-listen-label {
-  font-size: 0.74rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.home-listen-value {
-  margin-top: 0.2rem;
-  font-size: 1.05rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.home-milestones {
-  margin-top: 0.65rem;
+.home-dashboard-body {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.55rem;
+  padding: 0.75rem 0.875rem;
 }
-.home-milestone { font-size: 0.88rem; line-height: 1.35; }
+.home-dashboard-stats-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem 0.875rem;
+}
+.home-dashboard-inline-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.home-dashboard-inline-stat.tone-orange {
+  color: #fb923c;
+}
+.home-dashboard-inline-stat.tone-purple {
+  color: #c084fc;
+}
+.home-dashboard-stat-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.home-dashboard-stat-icon svg {
+  display: block;
+}
+.home-dashboard-best {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--muted, #94a3b8);
+}
+.home-dashboard-plays-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+.home-dashboard-plays-btn:hover {
+  opacity: 0.82;
+}
+.home-dashboard-plan-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.home-dashboard-plan-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.home-dashboard-plan-pill.is-creator {
+  color: #facc15;
+}
+.home-dashboard-plan-pill.is-starter {
+  color: #60a5fa;
+}
+.home-dashboard-plan-pill.is-free {
+  color: var(--muted, #94a3b8);
+}
+.home-dashboard-upgrade-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.28rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #2563eb;
+  background: rgba(250, 204, 21, 0.16);
+  cursor: pointer;
+  transition: background 0.12s ease, filter 0.12s ease;
+}
+.home-dashboard-upgrade-btn:hover {
+  background: rgba(250, 204, 21, 0.24);
+  filter: brightness(1.05);
+}
+.home-dashboard-divider {
+  height: 1px;
+  background: rgba(148, 163, 184, 0.22);
+  margin: 0.1rem 0;
+}
+.home-dashboard-row-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.15rem 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: opacity 0.12s ease;
+}
+.home-dashboard-row-btn:hover:not(:disabled) {
+  opacity: 0.86;
+}
+.home-dashboard-row-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+.home-dashboard-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--muted, #94a3b8);
+}
+.home-dashboard-row-icon.is-play {
+  color: #60a5fa;
+}
+.home-dashboard-row-main {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.home-dashboard-row-meta {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: var(--muted, #94a3b8);
+}
+.home-dashboard-row-chev {
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted, #94a3b8);
+  opacity: 0.75;
+}
+.home-dashboard-milestones-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.home-dashboard-milestones-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.1rem 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.home-dashboard-milestones-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted, #94a3b8);
+}
+.home-dashboard-badge-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.12);
+}
+.home-dashboard-badge-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.home-dashboard-badge-chip.tone-gold { color: #facc15; }
+.home-dashboard-badge-chip.tone-pink { color: #f472b6; }
+.home-dashboard-badge-chip.tone-purple { color: #c084fc; }
+.home-dashboard-badge-chip.tone-green { color: #4ade80; }
+.home-dashboard-badge-chip.tone-blue { color: #60a5fa; }
+.home-dashboard-badge-chip.tone-orange { color: #fb923c; }
+.home-dashboard-badge-chip.tone-red { color: #f87171; }
+.home-dashboard-milestones-chev {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  color: var(--muted, #94a3b8);
+  opacity: 0.75;
+}
+.home-dashboard-milestones-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.home-dashboard-milestones-hint {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted, #94a3b8);
+  opacity: 0.85;
+}
+.home-dashboard-milestone-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  padding: 0.5rem 0.55rem;
+  border-radius: 10px;
+  background: rgba(96, 165, 250, 0.1);
+}
+.home-dashboard-milestone-row.tone-gold { background: rgba(250, 204, 21, 0.12); color: #facc15; }
+.home-dashboard-milestone-row.tone-pink { background: rgba(244, 114, 182, 0.12); color: #f472b6; }
+.home-dashboard-milestone-row.tone-purple { background: rgba(192, 132, 252, 0.12); color: #c084fc; }
+.home-dashboard-milestone-row.tone-green { background: rgba(74, 222, 128, 0.12); color: #4ade80; }
+.home-dashboard-milestone-row.tone-blue { background: rgba(96, 165, 250, 0.12); color: #60a5fa; }
+.home-dashboard-milestone-row.tone-orange { background: rgba(251, 146, 60, 0.12); color: #fb923c; }
+.home-dashboard-milestone-row.tone-red { background: rgba(248, 113, 113, 0.12); color: #f87171; }
+.home-dashboard-milestone-row.is-placeholder {
+  background: rgba(148, 163, 184, 0.08);
+  color: var(--muted, #94a3b8);
+}
+.home-dashboard-milestone-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  flex-shrink: 0;
+}
+.home-dashboard-milestone-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.08rem;
+  min-width: 0;
+}
+.home-dashboard-milestone-cat {
+  font-size: 0.68rem;
+  color: var(--muted, #94a3b8);
+}
+.home-dashboard-milestone-row:not(.is-placeholder) .home-dashboard-milestone-cat {
+  color: inherit;
+  opacity: 0.75;
+}
+.home-dashboard-milestone-title {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text, #e8edf7);
+}
+.home-dashboard-milestone-row.is-placeholder .home-dashboard-milestone-title {
+  color: var(--muted, #94a3b8);
+}
+.home-dashboard-milestone-sub {
+  font-size: 0.7rem;
+  color: var(--muted, #94a3b8);
+}
+html.fs-app[data-app-theme="light"] .home-dashboard-inline-stat.tone-orange {
+  color: #ea580c;
+}
+html.fs-app[data-app-theme="light"] .home-dashboard-inline-stat.tone-purple {
+  color: #7c3aed;
+}
+html.fs-app[data-app-theme="light"] .home-dashboard-plan-pill.is-creator {
+  color: #ca8a04;
+}
+html.fs-app[data-app-theme="light"] .home-dashboard-plan-pill.is-starter {
+  color: #2563eb;
+}
+html.fs-app[data-app-theme="light"] .home-dashboard-divider {
+  background: rgba(100, 116, 139, 0.2);
+}
 .home-action-buttons-card {
   margin: 0;
   padding: 0.95rem 0.9rem;
