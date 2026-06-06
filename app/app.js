@@ -5895,7 +5895,7 @@
     category.value = premade.categoryID || "confidence";
     if (accessTier) accessTier.value = premade.accessTier === "paid" ? "paid" : "free";
     desc.value = premade.description || "";
-    text.value = premade.scriptText || "";
+    text.value = resolvePremadeScriptText(premade);
     if (createdAtEl) createdAtEl.textContent = formatDate(premade.createdAt);
     if (sourceScriptEl) sourceScriptEl.textContent = premade.sourceScriptID || "-";
     if (publisherEl) {
@@ -6469,12 +6469,20 @@
       titles.forEach(function (title, idx) {
         var data = { title: title, categoryID: cid };
         var staticUrl = resolvePremadeStaticAudioURLFromData(data);
-        rows.push({
+        var premadeRow = {
           id: "static-premade-" + cid + "-" + String(idx + 1),
           title: title,
           categoryID: cid,
           description: "Built-in premade audio",
-          scriptText: title,
+          scriptText: "",
+        };
+        premadeRow.scriptText = resolvePremadeScriptText(premadeRow);
+        rows.push({
+          id: premadeRow.id,
+          title: title,
+          categoryID: cid,
+          description: "Built-in premade audio",
+          scriptText: premadeRow.scriptText,
           audioURL: staticUrl,
           accessTier: "free",
           isCloudCatalog: false,
@@ -11629,7 +11637,7 @@
 
   function premadeDigestSourceFromPremade(premade) {
     return {
-      text: (premade && premade.scriptText) || "",
+      text: resolvePremadeScriptText(premade),
       voiceID: String(resolvePremadeVoiceSelection(premade) || "").trim(),
       backgroundID: String(resolvePremadeBackgroundSelection(premade) || "").trim(),
     };
@@ -11642,7 +11650,7 @@
     if (publishedBg === "bg-none") publishedBg = "";
     if (!publishedBg) publishedBg = selectedBackgroundId || "";
     return {
-      text: (premade && premade.scriptText) || "",
+      text: resolvePremadeScriptText(premade),
       voiceID: publishedVoice,
       backgroundID: publishedBg,
     };
@@ -12246,10 +12254,21 @@
     );
   }
 
+  function resolvePremadeScriptText(premade) {
+    if (
+      typeof PremadeScriptTextsWeb !== "undefined" &&
+      PremadeScriptTextsWeb &&
+      typeof PremadeScriptTextsWeb.resolve === "function"
+    ) {
+      return PremadeScriptTextsWeb.resolve(premade);
+    }
+    return (premade && premade.scriptText) || "";
+  }
+
   function premadeMyLibraryDraftFromPremade(premade) {
     return {
       title: premade.title || "",
-      text: premade.scriptText || "",
+      text: resolvePremadeScriptText(premade),
       voiceID: premadePublishedVoiceId(premade),
       backgroundID: premadePublishedBackgroundId(premade),
       audioURL: (premade.audioURL && String(premade.audioURL).trim()) || "",
@@ -15047,7 +15066,7 @@
   function generateAudioForPremade(premade) {
     if (!currentUser || !premade) return;
     if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
-    var text = (premade.scriptText || "").trim();
+    var text = resolvePremadeScriptText(premade).trim();
     if (!text) {
       setPremadeMessage("This premade has no script text to synthesize.", "error");
       return;
@@ -15098,7 +15117,7 @@
           var vId = String(resolvePremadeVoiceSelection(premade) || "").trim();
           var bId = String(resolvePremadeBackgroundSelection(premade) || "").trim();
           var digestSource = {
-            text: premade.scriptText || "",
+            text: resolvePremadeScriptText(premade),
             voiceID: vId,
             backgroundID: bId,
           };
@@ -16167,7 +16186,7 @@
     return {
       id: premade.id,
       title: premade.title,
-      text: premade.scriptText || "",
+      text: resolvePremadeScriptText(premade),
       audioURL: premadeOfflinePlaybackURL(premade.id, premade.audioURL || ""),
       voiceID: selectedVoiceId,
       backgroundID: "",
@@ -16224,7 +16243,7 @@
       .doc(docRef.id)
       .set({
         title: title,
-        text: premade.scriptText || "",
+        text: resolvePremadeScriptText(premade),
         createdAt: firebase.firestore.Timestamp.now(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         audioURL: premade.audioURL || "",
@@ -16240,7 +16259,7 @@
           return;
         }
         return scriptContentSha256Hex({
-          text: premade.scriptText || "",
+          text: resolvePremadeScriptText(premade),
           voiceID: voiceID,
           backgroundID: backgroundID,
         }).then(function (digest) {
@@ -16452,7 +16471,7 @@
       "</div>" +
       (isExpanded
         ? '<p class="app-card-text">' +
-          escapeHtml((p.scriptText || "").trim() || "(No script text)") +
+          escapeHtml(resolvePremadeScriptText(p).trim() || "(No script text)") +
           "</p>"
         : "") +
       audioSection +
@@ -16656,7 +16675,7 @@
 
   function parsePremadeFirestoreDoc(doc) {
     var data = doc.data() || {};
-    return {
+    var premade = {
       id: doc.id,
       title: data.title || "",
       categoryID: data.categoryID || "",
@@ -16675,6 +16694,8 @@
       createdAt: data.createdAt || null,
       active: data.active !== false,
     };
+    premade.scriptText = resolvePremadeScriptText(premade);
+    return premade;
   }
 
   function sortPremadeByCreatedAtDesc(list) {
