@@ -11474,6 +11474,31 @@
     return b;
   }
 
+  /** Card/workshop labels: stored script fields only (iOS `savedVoiceName` / `savedBackgroundName`). */
+  function storedVoiceDisplayNameForScript(script) {
+    var v = script && script.voiceID ? String(script.voiceID).trim() : "";
+    if (!v || v === "default") return "Default";
+    return voiceNameById(v);
+  }
+
+  function storedBackgroundDisplayNameForScript(script) {
+    var b = script && script.backgroundID ? String(script.backgroundID).trim() : "";
+    if (!b) return "No Background";
+    return backgroundNameById(b);
+  }
+
+  function workshopVoiceLabelFromDraft(draft) {
+    var v = draft && draft.voiceID ? String(draft.voiceID).trim() : "";
+    if (!v || v === "default") return "Default";
+    return voiceNameById(v);
+  }
+
+  function workshopBackgroundLabelFromDraft(draft) {
+    var b = draft && draft.backgroundID ? String(draft.backgroundID).trim() : "";
+    if (!b) return "No Background";
+    return backgroundNameById(b);
+  }
+
   function getFrozenAudioVoiceId(script) {
     if (!script) return "";
     if (script.audioVoiceID && String(script.audioVoiceID).trim()) {
@@ -12566,10 +12591,6 @@
         (showFmtPref ? " checked" : "") +
         '> Show formatting <span class="app-muted">(TTS tags)</span></label>';
     }
-    var voiceId =
-      (scriptWorkshopDraft.voiceID || "").trim() || effectiveVoiceIdForScript(script);
-    var bgId =
-      (scriptWorkshopDraft.backgroundID || "").trim() || effectiveBackgroundIdForScript(script);
     var primaryAction = getWorkshopPrimaryAction(script);
     var primaryTitle = workshopPrimaryButtonTitle(script, primaryAction);
     var primaryDisabled = primaryAction === "none";
@@ -12578,10 +12599,10 @@
       '<p class="script-workshop-section-label">How you\'ll listen</p>' +
       '<div class="script-workshop-media-row">' +
       '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-voice">Voice: ' +
-      escapeHtml(voiceNameById(voiceId)) +
+      escapeHtml(workshopVoiceLabelFromDraft(scriptWorkshopDraft)) +
       "</button>" +
       '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-background">Background: ' +
-      escapeHtml(backgroundNameById(bgId)) +
+      escapeHtml(workshopBackgroundLabelFromDraft(scriptWorkshopDraft)) +
       "</button>" +
       "</div>" +
       '<label class="script-inline-field-label" for="script-workshop-title">Title</label>' +
@@ -13094,8 +13115,6 @@
     var isBusy = isScriptBusy(script.id);
     var hasAudio = scriptHasPlayableAudio(script);
     var playingThis = activeAudioScriptId === script.id && activeAudio && !activeAudio.paused;
-    var scriptVoiceID = effectiveVoiceIdForScript(script);
-    var scriptBackgroundID = effectiveBackgroundIdForScript(script);
     var controlsExpanded = controlsExpandedForScript(script.id);
     var needsRegen = scriptNeedsAudioRegeneration(script, contentHashHex);
     var showSplit = showSplitEditGenerateOnCard(script, controlsReadOnly);
@@ -13176,10 +13195,10 @@
             : "") +
         '<div class="script-card-voice-bg-grid script-card-voice-bg-readonly">' +
         '  <span class="script-card-media-chip"><span class="script-card-media-chip-label">Voice</span> ' +
-        escapeHtml(voiceNameById(scriptVoiceID)) +
+        escapeHtml(storedVoiceDisplayNameForScript(script)) +
         "</span>" +
         '  <span class="script-card-media-chip"><span class="script-card-media-chip-label">Background</span> ' +
-        escapeHtml(backgroundNameById(scriptBackgroundID)) +
+        escapeHtml(storedBackgroundDisplayNameForScript(script)) +
         "</span>" +
         "</div>" +
         '<div class="app-card-actions script-card-actions-bar">' +
@@ -14110,8 +14129,8 @@
     } else if (mediaPickerTarget.kind === "workshop") {
       if (!scriptWorkshopDraft) return;
       currentValue = isVoice
-        ? (scriptWorkshopDraft.voiceID || "").trim() || selectedVoiceId
-        : (scriptWorkshopDraft.backgroundID || "").trim() || selectedBackgroundId;
+        ? (scriptWorkshopDraft.voiceID || "").trim()
+        : (scriptWorkshopDraft.backgroundID || "").trim();
       title.textContent = isVoice ? "Select Voice" : "Select Background";
       subtitle.textContent = (scriptWorkshopDraft.title || "").trim() || "Script";
     } else {
