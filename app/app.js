@@ -11286,6 +11286,28 @@
     };
   }
 
+  function premadePublishedDigestSource(premade) {
+    var publishedVoice = (premade && premade.voiceID && String(premade.voiceID).trim()) || "";
+    if (!publishedVoice) publishedVoice = PREMADE_DEFAULT_VOICE_ID || selectedVoiceId || "";
+    var publishedBg = (premade && premade.backgroundID && String(premade.backgroundID).trim()) || "";
+    if (publishedBg === "bg-none") publishedBg = "";
+    if (!publishedBg) publishedBg = selectedBackgroundId || "";
+    return {
+      text: (premade && premade.scriptText) || "",
+      voiceID: publishedVoice,
+      backgroundID: publishedBg,
+    };
+  }
+
+  function seedPremadeContentHashIfNeeded(premade) {
+    if (!premade || !premade.id) return Promise.resolve();
+    if (!premade.audioURL || !String(premade.audioURL).trim()) return Promise.resolve();
+    if (getStoredGeneratedHashPremade(premade.id)) return Promise.resolve();
+    return scriptContentSha256Hex(premadePublishedDigestSource(premade)).then(function (digest) {
+      setStoredGeneratedHashPremade(premade.id, digest);
+    });
+  }
+
   function shouldEnableGeneratePremadeFromHash(premade, contentHashHex) {
     var hasAudio = !!(premade.audioURL && String(premade.audioURL).trim());
     if (!hasAudio) return true;
@@ -12252,6 +12274,8 @@
       "Upgrade to Starter or Creator to edit scripts, change voices, or generate new audio.",
     setDefault:
       "Setting a default voice or background requires Starter or Creator. Upgrade to customize your generation defaults.",
+    offlineDownload:
+      "Downloading premade audio for offline listening requires Starter or Creator.",
   };
 
   function promptWebPaidUpgrade(detail) {
@@ -15208,6 +15232,26 @@
     return selectedBackgroundId;
   }
 
+  function premadePublishedVoiceId(premade) {
+    var published = (premade && premade.voiceID && String(premade.voiceID).trim()) || "";
+    return published || PREMADE_DEFAULT_VOICE_ID || selectedVoiceId || "";
+  }
+
+  function premadePublishedBackgroundId(premade) {
+    var published = (premade && premade.backgroundID && String(premade.backgroundID).trim()) || "";
+    if (published === "bg-none") published = "";
+    return published || selectedBackgroundId || "";
+  }
+
+  function premadeHasVoiceOrBackgroundDrift(premade) {
+    var currentVoice = String(resolvePremadeVoiceSelection(premade) || "").trim();
+    var currentBg = String(resolvePremadeBackgroundSelection(premade) || "").trim();
+    return (
+      currentVoice !== premadePublishedVoiceId(premade) ||
+      currentBg !== premadePublishedBackgroundId(premade)
+    );
+  }
+
   function savePremadeToMyLibrary(premade) {
     if (!currentUser) return;
     var title = uniqueScriptTitle(premade.title || "Premade Script");
@@ -15319,7 +15363,9 @@
     var isBusy = isPremadeBusy(p.id);
     var paid = isWebPaidTierForAI();
     var canGen = !!(p.scriptText && String(p.scriptText).trim());
+    var hasDrift = premadeHasVoiceOrBackgroundDrift(p);
     var genEnabled = canGen && shouldEnableGeneratePremadeFromHash(p, contentHashHex);
+    var primaryIsGenerate = hasDrift && paid;
     var genLabel = isBusy ? "Generating audio..." : "Generate";
     var genClasses = "app-btn";
     if (isBusy) {
@@ -15337,6 +15383,37 @@
       : !genEnabled && !isBusy
         ? "Audio already matches this text, voice, and background."
         : "";
+    var primaryActionHtml;
+    if (primaryIsGenerate) {
+      primaryActionHtml =
+        '  <button type="button" class="' +
+        genClasses +
+        '" data-premade-action="generate-audio" data-premade-id="' +
+        escapeHtml(p.id) +
+        '"' +
+        (genDisabled ? " disabled" : "") +
+        (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
+        ">" +
+        genLabel +
+        "</button>";
+    } else {
+      primaryActionHtml =
+        '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
+        escapeHtml(p.id) +
+        '"' +
+        (isBusy ? " disabled" : "") +
+        ">Save to My Library</button>";
+    }
+    var syncFooterHtml = "";
+    if (hasDrift && hasAudio) {
+      if (!genEnabled && !isBusy) {
+        syncFooterHtml =
+          '<p class="app-muted" style="margin:0.45rem 0 0;font-size:0.78rem;line-height:1.4;color:#22c55e;">✓ Audio matches text, voice, and background</p>';
+      } else if (!isBusy) {
+        syncFooterHtml =
+          '<p class="app-muted" style="margin:0.45rem 0 0;font-size:0.78rem;line-height:1.4;color:#f59e0b;">Regeneration needed for current voice or background</p>';
+      }
+    }
     var audioControlsExpanded = controlsExpandedForPremade(p.id);
     var chevChar = audioControlsExpanded ? "▲" : "▼";
     var chipLabel = premadeLibraryCategoryDisplayName((p.categoryID || "").trim());
@@ -15370,23 +15447,7 @@
         '">' +
         (isExpanded ? "Hide Text" : "Show Text") +
         "</button>" +
-        (paid
-          ? '  <button type="button" class="' +
-            genClasses +
-            '" data-premade-action="generate-audio" data-premade-id="' +
-            escapeHtml(p.id) +
-            '"' +
-            (genDisabled ? " disabled" : "") +
-            (genTitle ? ' title="' + escapeHtml(genTitle) + '"' : "") +
-            ">" +
-            genLabel +
-            "</button>"
-          : '  <button type="button" class="app-btn app-btn-secondary is-tier-locked" data-premade-action="generate-audio" data-premade-id="' +
-            escapeHtml(p.id) +
-            '" title="Starter or Creator required">Generate</button>') +
-        '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
-        escapeHtml(p.id) +
-        '">Save to My Library</button>' +
+        primaryActionHtml +
         '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
         escapeHtml(p.id) +
         '"' +
@@ -15399,7 +15460,7 @@
         '"' +
         (!currentPlaylists.length ? " disabled" : "") +
         ">Save + Add to Playlist</button>" +
-        (isStreamableCloudPremade(p)
+        (paid && isStreamableCloudPremade(p)
           ? premadeOfflineObjectUrlCache[p.id]
             ? '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="remove-offline" data-premade-id="' +
               escapeHtml(p.id) +
@@ -15419,7 +15480,8 @@
             '">Edit</button>'
           : "") +
         "</div>" +
-        (isStreamableCloudPremade(p)
+        syncFooterHtml +
+        (paid && isStreamableCloudPremade(p)
           ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;line-height:1.4;">Streams by default. Download only if you want offline playback in this browser.</p>'
           : "") +
         "</div>"
@@ -15431,6 +15493,9 @@
       '<div class="app-card-header-row">' +
       "<h3>" +
       escapeHtml(p.title || "Untitled Premade") +
+      (paid && isStreamableCloudPremade(p)
+        ? ' <span class="app-chip app-chip-cloud" title="Available for offline download">☁️ Offline</span>'
+        : "") +
       "</h3>" +
       '  <button type="button" class="library-card-chevron" data-premade-action="toggle-controls" data-premade-id="' +
       escapeHtml(p.id) +
@@ -15510,6 +15575,7 @@
         } else if (action === "play") {
           togglePlayScriptAudio(premadeToScript(premade));
         } else if (action === "download-offline") {
+          if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.offlineDownload)) return;
           btn.disabled = true;
           downloadPremadeForOffline(premade)
             .then(function () {
@@ -15800,13 +15866,17 @@
         });
         expandedPremadeTextById = nextExpanded;
         updateTabCounts();
-        renderPremade();
-        var offlineIds = currentPremade.filter(isStreamableCloudPremade).map(function (p) {
-          return p.id;
-        });
-        hydratePremadeOfflineCacheFromIdb(offlineIds).then(function () {
-          if (activeAdminTab === "library") renderPremade();
-        });
+        Promise.all(currentPremade.map(seedPremadeContentHashIfNeeded))
+          .then(function () {
+            renderPremade();
+            var offlineIds = currentPremade.filter(isStreamableCloudPremade).map(function (p) {
+              return p.id;
+            });
+            return hydratePremadeOfflineCacheFromIdb(offlineIds);
+          })
+          .then(function () {
+            if (activeAdminTab === "library") renderPremade();
+          });
         if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
       },
       function (e) {
