@@ -663,6 +663,7 @@
         return r.blob();
       })
       .then(function (blob) {
+        reportCatalogStorageCost(remote, blob.size || 0, "premade_download");
         return putPremadeOfflineBlob(premade.id, blob).then(function () {
           revokePremadeOfflineObjectUrl(premade.id);
           var objUrl = URL.createObjectURL(blob);
@@ -2870,6 +2871,79 @@
         });
       })
       .catch(function () {});
+  }
+
+  var catalogCostDebounceByKey = {};
+  var CATALOG_COST_DEBOUNCE_MS = 120000;
+
+  function isFirebaseStorageUrl(urlString) {
+    if (!urlString) return false;
+    try {
+      var host = new URL(String(urlString)).hostname.toLowerCase();
+      return host.indexOf("firebasestorage") >= 0 || host.indexOf("storage.googleapis.com") >= 0;
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function inferCatalogCostKind(urlString, fallbackKind) {
+    var raw = String(urlString || "").toLowerCase();
+    if (raw.indexOf("premadeaudio") >= 0) {
+      return fallbackKind === "premade_download" ? "premade_download" : "premade_play";
+    }
+    if (raw.indexOf("backgroundcatalog") >= 0) {
+      return fallbackKind === "background_mix" ? "background_mix" : "background_preview";
+    }
+    if (raw.indexOf("/audios/") >= 0) {
+      return fallbackKind === "user_audio_download" ? "user_audio_download" : "user_audio_play";
+    }
+    return fallbackKind;
+  }
+
+  function estimateFirebaseStorageBytes(urlString) {
+    if (!isFirebaseStorageUrl(urlString)) return Promise.resolve(0);
+    return fetch(String(urlString).trim(), { method: "HEAD" })
+      .then(function (r) {
+        var cl = r.headers.get("content-length");
+        var n = cl ? parseInt(cl, 10) : 0;
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      })
+      .catch(function () {
+        return 0;
+      });
+  }
+
+  function reportCatalogStorageCost(urlString, bytes, kind) {
+    if (!currentUser || !urlString || !bytes || bytes <= 0) return;
+    if (!isFirebaseStorageUrl(urlString)) return;
+    var resolvedKind = inferCatalogCostKind(urlString, kind || "user_audio_play");
+    var key = resolvedKind + "|" + String(urlString);
+    var now = Date.now();
+    if (catalogCostDebounceByKey[key] && now - catalogCostDebounceByKey[key] < CATALOG_COST_DEBOUNCE_MS) {
+      return;
+    }
+    catalogCostDebounceByKey[key] = now;
+    currentUser
+      .getIdToken(false)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/usage/catalog-cost", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: "Bearer " + token,
+          },
+          body: JSON.stringify({
+            events: [{ kind: resolvedKind, bytes: Math.min(Math.floor(bytes), 80 * 1024 * 1024), url: urlString }],
+          }),
+        });
+      })
+      .catch(function () {});
+  }
+
+  function reportCatalogStorageCostFromUrl(urlString, kind) {
+    return estimateFirebaseStorageBytes(urlString).then(function (bytes) {
+      if (bytes > 0) reportCatalogStorageCost(urlString, bytes, kind);
+    });
   }
 
   function installClientErrorReporting() {
@@ -6289,7 +6363,9 @@
       });
     }
     if (entry.audioURL && String(entry.audioURL).trim()) {
-      return playFromUrl(String(entry.audioURL).trim());
+      var cloudBgUrl = String(entry.audioURL).trim();
+      reportCatalogStorageCostFromUrl(cloudBgUrl, "background_preview");
+      return playFromUrl(cloudBgUrl);
     }
     var url = backgroundTrackAssetUrl(entry.file);
     return playFromUrl(url);
@@ -6391,11 +6467,15 @@
           });
         });
       } else if (entry.audioURL && String(entry.audioURL).trim()) {
-        decodeBgPromise = fetch(String(entry.audioURL).trim()).then(function (r) {
+        var cloudMixBgUrl = String(entry.audioURL).trim();
+        decodeBgPromise = fetch(cloudMixBgUrl).then(function (r) {
           if (!r.ok) {
             throw new Error("Cloud background audio could not be loaded (" + r.status + ").");
           }
-          return r.arrayBuffer();
+          return r.arrayBuffer().then(function (bgAb) {
+            reportCatalogStorageCost(cloudMixBgUrl, bgAb.byteLength || 0, "background_mix");
+            return bgAb;
+          });
         }).then(function (bgAb) {
           return ctx.decodeAudioData(bgAb.slice(0));
         });
@@ -13386,6 +13466,8 @@
     }
 
     stopActiveAudio();
+    var playKind = script.isPremade ? "premade_play" : "user_audio_play";
+    reportCatalogStorageCostFromUrl(audioURL, playKind);
     activeAudio = new Audio(audioURL);
     applyPlaybackVolumeToActiveAudio();
     activeAudioScriptId = script.id;
@@ -13435,6 +13517,7 @@
     stopActiveAudio(false);
     activePlaylistIndex = index;
     activeAudioScriptId = script.id;
+    reportCatalogStorageCostFromUrl(audioURL, script.isPremade ? "premade_play" : "user_audio_play");
     activeAudio = new Audio(audioURL);
     applyPlaybackVolumeToActiveAudio();
     activeAudioTitle = script.title || "Playlist audio";
@@ -15103,6 +15186,7 @@
       voiceID: selectedVoiceId,
       backgroundID: "",
       createdAt: null,
+      isPremade: true,
     };
   }
 
