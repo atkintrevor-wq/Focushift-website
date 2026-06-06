@@ -8,6 +8,7 @@
   var incomingSharedScripts = [];
   var playlistsUnsubscribe = null;
   var premadeUnsubscribe = null;
+  var backgroundCatalogUnsubscribe = null;
   var clonedVoicesUnsubscribe = null;
   var listeningUnsubscribe = null;
   /** Latest `users/{uid}/meta/listening` (plays, streaks, last played); mirrors iOS UsageManager + Firestore. */
@@ -18,6 +19,10 @@
   /** Script IDs while the playlist edit modal is open (reorder draft). */
   var playlistEditOrderIds = [];
   var currentPremade = [];
+  /** Cloud premades with `active: false` — admin-only, not shown in App Library. */
+  var currentHiddenPremade = [];
+  /** Active rows from Firestore `backgroundCatalog` (stream URLs). */
+  var currentBackgroundCatalog = [];
   var currentClonedVoices = [];
   var currentUserProfile = null;
   var isEditing = false;
@@ -234,6 +239,8 @@
     "I believe that affirmations work best when they sound like they're coming from within, from my own inner voice. That's why I'm taking the time to create this recording, so the voice that speaks my affirmations will truly feel like my own.\n\n" +
     "Thank you for listening. I hope this captures everything needed to create an accurate and authentic clone of my voice.";
   var activeVoicesTab = "app-voices";
+  /** App Voices tab: `all` | `male` | `female` (iOS VoiceGenderFilter parity). */
+  var activeVoiceGenderFilter = "all";
   var selectedVoiceId = "lnieQLGTodpbhjpZtg1k"; // Bill
   var selectedBackgroundId = "bg-none";
   /** `file` must match the filename in `website/audio/voices/` (same catalog as iOS `VoiceSamples`). */
@@ -268,6 +275,42 @@
     { id: "iZURAYccQtQd12U8kEcq", name: "Roland", description: "Middle-aged male voice", file: "Roland.mp3" },
     { id: "5F6a8n4ijdCrImoXgxM9", name: "Mark", description: "Very Deep, Confident, Professional", file: "Mark.mp3" },
   ];
+  (function assignBuiltInVoiceGenders() {
+    var genderById = {
+      YZHSTqsq1isdXNsFLzBw: "female",
+      rJ9XoWu8gbUhVKZnKY8X: "female",
+      l32B8XDoylOsZKiSdfhE: "female",
+      "1wGbFxmAM3Fgw63G1zZJ": "female",
+      tOEwa4nCo7gciO1FbUBK: "male",
+      "87tjwokZlpNU7QL3HaLP": "male",
+      "7dEuJHhweR5AFXA4INkB": "female",
+      xctasy8XvGp2cVO9HL9k: "female",
+      "6F5Zhi321D3Oq7v1oNT4": "male",
+      FVQMzxJGPUBtfz1Azdoy: "female",
+      NNl6r8mD7vthiJatiJt1: "male",
+      gUABw7pXQjhjt0kNFBTF: "male",
+      kqVT88a5QfII1HNAEPTJ: "male",
+      EkK5I93UQWFDigLMpZcX: "male",
+      NtS6nEHDYMQC9QczMQuq: "female",
+      BpjGufoPiobT79j2vtj4: "female",
+      wAGzRVkxKEs8La0lmdrE: "male",
+      dPah2VEoifKnZT37774q: "male",
+      MFZUKuGQUsGJPQjTS4wC: "male",
+      uju3wxzG5OhpWcoi3SMy: "male",
+      lnieQLGTodpbhjpZtg1k: "male",
+      ZthjuvLPty3kTMaNKVKb: "male",
+      lxYfHSkYm1EzQzGhdbfc: "female",
+      "8LVfoRdkh4zgjr8v5ObE": "female",
+      EiNlNiXeDU1pqqOPrYMO: "male",
+      YgzytRZyVmEux6PCtJYB: "female",
+      A7LE95x99tn9HChsblA6: "female",
+      iZURAYccQtQd12U8kEcq: "male",
+      "5F6a8n4ijdCrImoXgxM9": "male",
+    };
+    availableVoices.forEach(function (v) {
+      if (genderById[v.id]) v.gender = genderById[v.id];
+    });
+  })();
   /** `file` must match the filename in `website/audio/backgrounds/` (same catalog as iOS `BackGroundAudio`). */
   var availableBackgrounds = [
     { id: "bg-none", name: "No Background", categoryID: "general", file: "" },
@@ -340,7 +383,7 @@
     "sports-performance",
     "sleep-rest",
   ];
-  var backgroundCategoryOpenById = { general: true };
+  var backgroundCategoryOpenById = {};
   function backgroundCategoryDisplayName(id) {
     switch (id) {
       case "general":
@@ -371,6 +414,10 @@
   var SAVED_APP_BG_IDS_KEY = "focusshiftWebSavedAppBgIds_v1";
   var USER_BG_IMPORT_MAX_BYTES = 40 * 1024 * 1024;
   var userBgObjectUrlCache = {};
+  /** Optional offline copies of cloud premade audio (stream-first). */
+  var PREMADE_OFFLINE_IDB_NAME = "focusshiftWebPremadeOfflineBlobs";
+  var PREMADE_OFFLINE_IDB_STORE = "blobs";
+  var premadeOfflineObjectUrlCache = {};
   var activeAudioPageTab = "my-audio";
   var PREF_AUDIO_PAGE_SUB_KEY = "focusshiftWebPrefAudioPageSub";
 
@@ -521,8 +568,136 @@
     });
   }
 
+  function openPremadeOfflineIdb() {
+    return new Promise(function (resolve, reject) {
+      var req = indexedDB.open(PREMADE_OFFLINE_IDB_NAME, 1);
+      req.onerror = function () {
+        reject(req.error || new Error("IndexedDB failed"));
+      };
+      req.onupgradeneeded = function () {
+        var db = req.result;
+        if (!db.objectStoreNames.contains(PREMADE_OFFLINE_IDB_STORE)) {
+          db.createObjectStore(PREMADE_OFFLINE_IDB_STORE);
+        }
+      };
+      req.onsuccess = function () {
+        resolve(req.result);
+      };
+    });
+  }
+
+  function getPremadeOfflineBlob(id) {
+    return openPremadeOfflineIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(PREMADE_OFFLINE_IDB_STORE, "readonly");
+        var rq = tx.objectStore(PREMADE_OFFLINE_IDB_STORE).get(id);
+        rq.onsuccess = function () {
+          resolve(rq.result != null ? rq.result : null);
+        };
+        rq.onerror = function () {
+          reject(rq.error);
+        };
+      });
+    });
+  }
+
+  function putPremadeOfflineBlob(id, blob) {
+    return openPremadeOfflineIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(PREMADE_OFFLINE_IDB_STORE, "readwrite");
+        tx.objectStore(PREMADE_OFFLINE_IDB_STORE).put(blob, id);
+        tx.oncomplete = function () {
+          resolve();
+        };
+        tx.onerror = function () {
+          reject(tx.error);
+        };
+      });
+    });
+  }
+
+  function deletePremadeOfflineBlob(id) {
+    return openPremadeOfflineIdb().then(function (db) {
+      return new Promise(function (resolve, reject) {
+        var tx = db.transaction(PREMADE_OFFLINE_IDB_STORE, "readwrite");
+        tx.objectStore(PREMADE_OFFLINE_IDB_STORE).delete(id);
+        tx.oncomplete = function () {
+          resolve();
+        };
+        tx.onerror = function () {
+          reject(tx.error);
+        };
+      });
+    });
+  }
+
+  function revokePremadeOfflineObjectUrl(premadeId) {
+    var id = (premadeId && String(premadeId).trim()) || "";
+    if (!id || !premadeOfflineObjectUrlCache[id]) return;
+    try {
+      URL.revokeObjectURL(premadeOfflineObjectUrlCache[id]);
+    } catch (_r) {}
+    delete premadeOfflineObjectUrlCache[id];
+  }
+
+  function premadeOfflinePlaybackURL(premadeId, remoteUrl) {
+    var id = (premadeId && String(premadeId).trim()) || "";
+    if (id && premadeOfflineObjectUrlCache[id]) return premadeOfflineObjectUrlCache[id];
+    return (remoteUrl && String(remoteUrl).trim()) || "";
+  }
+
+  function isStreamableCloudPremade(premade) {
+    if (!premade || !premade.isCloudCatalog) return false;
+    var url = (premade.audioURL && String(premade.audioURL).trim()) || "";
+    return /^https?:/i.test(url);
+  }
+
+  function downloadPremadeForOffline(premade) {
+    if (!premade || !isStreamableCloudPremade(premade)) {
+      return Promise.reject(new Error("This premade is not available for offline download."));
+    }
+    var remote = String(premade.audioURL).trim();
+    return fetch(remote)
+      .then(function (r) {
+        if (!r.ok) throw new Error("Could not download premade audio.");
+        return r.blob();
+      })
+      .then(function (blob) {
+        return putPremadeOfflineBlob(premade.id, blob).then(function () {
+          revokePremadeOfflineObjectUrl(premade.id);
+          var objUrl = URL.createObjectURL(blob);
+          premadeOfflineObjectUrlCache[premade.id] = objUrl;
+          return objUrl;
+        });
+      });
+  }
+
+  function removePremadeOfflineDownload(premadeId) {
+    var id = (premadeId && String(premadeId).trim()) || "";
+    if (!id) return Promise.resolve();
+    revokePremadeOfflineObjectUrl(id);
+    return deletePremadeOfflineBlob(id);
+  }
+
+  function hydratePremadeOfflineCacheFromIdb(premadeIds) {
+    if (!premadeIds || !premadeIds.length || !window.indexedDB) return Promise.resolve();
+    return Promise.all(
+      premadeIds.map(function (id) {
+        if (!id || premadeOfflineObjectUrlCache[id]) return Promise.resolve();
+        return getPremadeOfflineBlob(id).then(function (blob) {
+          if (!blob) return;
+          premadeOfflineObjectUrlCache[id] = URL.createObjectURL(blob);
+        });
+      })
+    );
+  }
+
   function allBackgroundTracksForPicker() {
-    var out = availableBackgrounds.slice();
+    var out = allAppBackgroundTracksIncludingCloud().slice();
+    var none = availableBackgrounds.find(function (b) {
+      return b.id === "bg-none";
+    });
+    if (none) out.unshift(none);
     loadUserBackgroundMetaList().forEach(function (m) {
       if (!m || !m.id) return;
       out.push({
@@ -575,7 +750,12 @@
   function backgroundRowCanPreview(b) {
     if (!b) return false;
     if (b.id === "bg-none") return false;
-    return !!(b.file && String(b.file).trim()) || !!b.userUpload || !!isUserBackgroundId(b.id);
+    return (
+      !!(b.file && String(b.file).trim()) ||
+      !!(b.audioURL && String(b.audioURL).trim()) ||
+      !!b.userUpload ||
+      !!isUserBackgroundId(b.id)
+    );
   }
 
   var activeCategoryId = "confidence";
@@ -1024,21 +1204,36 @@
           ? '<svg class="app-banner-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>'
           : '<svg class="app-banner-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>';
 
+    var tappable = typeof options.onTap === "function";
     host.hidden = false;
     host.innerHTML =
       '<div class="app-banner app-banner--' +
       escapeHtml(type) +
+      (tappable ? " app-banner--tappable" : "") +
       '" role="status">' +
       '<div class="app-banner-inner">' +
-      iconSvg +
-      '<div class="app-banner-text">' +
-      '<div class="app-banner-title">' +
-      escapeHtml(textTitle) +
-      "</div>" +
-      '<div class="app-banner-detail">' +
-      escapeHtml(textDetail) +
-      "</div>" +
-      "</div>" +
+      (tappable
+        ? '<button type="button" class="app-banner-body" aria-label="Open account settings">' +
+            iconSvg +
+            '<div class="app-banner-text">' +
+            '<div class="app-banner-title">' +
+            escapeHtml(textTitle) +
+            "</div>" +
+            '<div class="app-banner-detail">' +
+            escapeHtml(textDetail) +
+            "</div>" +
+            "</div>" +
+            '<span class="app-banner-chevron" aria-hidden="true">›</span>' +
+            "</button>"
+        : iconSvg +
+            '<div class="app-banner-text">' +
+            '<div class="app-banner-title">' +
+            escapeHtml(textTitle) +
+            "</div>" +
+            '<div class="app-banner-detail">' +
+            escapeHtml(textDetail) +
+            "</div>" +
+            "</div>") +
       '<button type="button" class="app-banner-dismiss" aria-label="Dismiss">&times;</button>' +
       "</div>" +
       "</div>";
@@ -1046,7 +1241,18 @@
     var banner = host.querySelector(".app-banner");
     var dismissBtn = host.querySelector(".app-banner-dismiss");
     if (dismissBtn) {
-      dismissBtn.addEventListener("click", hideAppBanner);
+      dismissBtn.addEventListener("click", function (ev) {
+        ev.stopPropagation();
+        hideAppBanner();
+      });
+    }
+    if (tappable) {
+      var bodyBtn = host.querySelector(".app-banner-body");
+      if (bodyBtn) {
+        bodyBtn.addEventListener("click", function () {
+          options.onTap();
+        });
+      }
     }
 
     requestAnimationFrame(function () {
@@ -1220,6 +1426,14 @@
       premadeUnsubscribe();
       premadeUnsubscribe = null;
     }
+  }
+
+  function teardownBackgroundCatalogListener() {
+    if (typeof backgroundCatalogUnsubscribe === "function") {
+      backgroundCatalogUnsubscribe();
+      backgroundCatalogUnsubscribe = null;
+    }
+    currentBackgroundCatalog = [];
   }
 
   function teardownClonedVoicesListener() {
@@ -2618,6 +2832,10 @@
     return db.collection("premadeAudio");
   }
 
+  function backgroundCatalogCollection() {
+    return db.collection("backgroundCatalog");
+  }
+
   function clonedVoicesCollection(uid) {
     return db.collection("users").doc(uid).collection("clonedVoices");
   }
@@ -2708,9 +2926,16 @@
     if (!adminModeEnabled) {
       closePublishPremadeModal();
       closeEditPremadeModal();
+      closeBackgroundPublishModal();
     }
     if (document.getElementById("premade-list")) {
       renderPremade();
+    }
+    if (document.getElementById("audio-app-list")) {
+      renderAudioPage();
+    }
+    if (document.getElementById("voices-list")) {
+      renderVoices();
     }
   }
 
@@ -2726,6 +2951,7 @@
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
+    teardownBackgroundCatalogListener();
     teardownClonedVoicesListener();
     teardownListeningListener();
     redirectLogin();
@@ -2743,6 +2969,7 @@
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
+    teardownBackgroundCatalogListener();
     teardownClonedVoicesListener();
     teardownListeningListener();
     root.innerHTML =
@@ -2834,9 +3061,10 @@
   }
 
   function filteredPremadesForDisplay(premades) {
+    var tierFiltered = filterPremadesByCatalogAccess(premades);
     var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
-    if (!q || activeLibraryTab !== "app-library") return premades;
-    return premades.filter(function (p) {
+    if (!q || activeLibraryTab !== "app-library") return tierFiltered;
+    return tierFiltered.filter(function (p) {
       return (
         textMatchesSectionSearch(p.title, q) ||
         textMatchesSectionSearch(p.scriptText, q) ||
@@ -2853,12 +3081,49 @@
     });
   }
 
+  function voiceMatchesGenderFilter(voice, filter) {
+    if (!filter || filter === "all") return true;
+    return voice && voice.gender === filter;
+  }
+
+  function voiceMatchesSearchQuery(voice, rawQuery) {
+    var query = normalizeSectionSearchQuery(rawQuery);
+    if (!query) return true;
+    if (query === "male" || query === "man" || query === "men" || query === "masculine" || query === "m") {
+      return voice.gender === "male";
+    }
+    if (query === "female" || query === "woman" || query === "women" || query === "feminine" || query === "f") {
+      return voice.gender === "female";
+    }
+    return textMatchesSectionSearch(voice.name, query) || textMatchesSectionSearch(voice.description, query);
+  }
+
   function filteredVoicesForDisplay(voices) {
-    var q = normalizeSectionSearchQuery(sectionSearchQuery.voices);
-    if (!q) return voices;
     return voices.filter(function (v) {
-      return textMatchesSectionSearch(v.name, q) || textMatchesSectionSearch(v.description, q);
+      if (!voiceMatchesGenderFilter(v, activeVoiceGenderFilter)) return false;
+      return voiceMatchesSearchQuery(v, sectionSearchQuery.voices);
     });
+  }
+
+  function voiceGenderFilterBarHtml() {
+    return (
+      '<div class="app-tabs voice-segmented-tabs voice-gender-filter-tabs" id="voice-gender-filter-tabs" role="group" aria-label="Voice gender filter">' +
+      ["all", "male", "female"]
+        .map(function (filter) {
+          var label = filter === "all" ? "All" : filter === "male" ? "Male" : "Female";
+          return (
+            '<button type="button" class="app-tab-btn' +
+            (activeVoiceGenderFilter === filter ? " is-active" : "") +
+            '" data-voice-gender-filter="' +
+            filter +
+            '">' +
+            label +
+            "</button>"
+          );
+        })
+        .join("") +
+      "</div>"
+    );
   }
 
   function filteredBackgroundsForDisplay(backgrounds) {
@@ -3406,6 +3671,7 @@
       "    </div>" +
       "  </div>" +
       sectionSearchWrapHtml("voices", "Search voices…") +
+      '  <div id="voice-gender-filter-wrap" hidden style="margin:0.35rem 0 0.55rem;"></div>' +
       '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Upload Voice Audio</button>' +
       '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Clone Voice</button>' +
@@ -3837,6 +4103,11 @@
       '    <div id="publish-title-dirty" class="app-inline-msg" style="display:none;margin-top:-0.35rem;margin-bottom:0.4rem;">Title edited from selected script.</div>' +
       '    <label for="publish-category">Category</label>' +
       '    <select id="publish-category"></select>' +
+      '    <label for="publish-access-tier">Who can access</label>' +
+      '    <select id="publish-access-tier">' +
+      '      <option value="paid" selected>Paid (Starter &amp; Creator)</option>' +
+      '      <option value="free">Free (all users)</option>' +
+      "    </select>" +
       '    <label for="publish-description">Description (optional)</label>' +
       '    <input id="publish-description" type="text" maxlength="180" placeholder="Short description">' +
       '    <label for="publish-script-text">Script text (optional, defaults from selected script)</label>' +
@@ -3846,6 +4117,28 @@
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="premade-publish-cancel">Cancel</button>' +
       '      <button type="button" class="app-btn" id="premade-publish-submit">Publish</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="background-publish-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Publish background">' +
+      "    <h3>Publish Background to Cloud</h3>" +
+      '    <p class="app-muted" style="margin:0 0 0.55rem;">Uploads to Firebase Storage <code>backgroundCatalog/</code> and Firestore <code>backgroundCatalog</code>. Tracks stream during preview and generation.</p>' +
+      '    <label for="bg-publish-name">Display name</label>' +
+      '    <input id="bg-publish-name" type="text" maxlength="120" placeholder="Background name">' +
+      '    <label for="bg-publish-category">Category</label>' +
+      '    <select id="bg-publish-category"></select>' +
+      '    <label for="bg-publish-access-tier">Who can access</label>' +
+      '    <select id="bg-publish-access-tier">' +
+      '      <option value="paid" selected>Paid (Starter &amp; Creator)</option>' +
+      '      <option value="free">Free (all users)</option>' +
+      "    </select>" +
+      '    <label for="bg-publish-file">Audio file (MP3, M4A, WAV)</label>' +
+      '    <input id="bg-publish-file" type="file" accept="audio/*,.mp3,.m4a,.wav">' +
+      '    <div id="bg-publish-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn" id="bg-publish-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="bg-publish-submit">Publish to Cloud</button>' +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -3861,13 +4154,18 @@
       '    <input id="premade-edit-title" type="text" maxlength="120">' +
       '    <label for="premade-edit-category">Category</label>' +
       '    <select id="premade-edit-category"></select>' +
+      '    <label for="premade-edit-access-tier">Who can access</label>' +
+      '    <select id="premade-edit-access-tier">' +
+      '      <option value="paid">Paid (Starter &amp; Creator)</option>' +
+      '      <option value="free">Free (all users)</option>' +
+      "    </select>" +
       '    <label for="premade-edit-description">Description</label>' +
       '    <input id="premade-edit-description" type="text" maxlength="180">' +
       '    <label for="premade-edit-text">Script text</label>' +
       '    <textarea id="premade-edit-text" rows="6"></textarea>' +
       '    <div id="premade-edit-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '    <div class="app-modal-actions">' +
-      '      <button type="button" class="app-btn app-btn-danger" id="premade-edit-delete">Unpublish</button>' +
+      '      <button type="button" class="app-btn app-btn-danger" id="premade-edit-delete">Hide from catalog</button>' +
       '      <button type="button" class="app-btn" id="premade-edit-cancel">Cancel</button>' +
       '      <button type="button" class="app-btn" id="premade-edit-save">Save changes</button>' +
       "    </div>" +
@@ -4565,6 +4863,12 @@
     document.getElementById("premade-publish-submit").addEventListener("click", function () {
       publishPremadeFromModal();
     });
+    document.getElementById("bg-publish-cancel").addEventListener("click", function () {
+      closeBackgroundPublishModal();
+    });
+    document.getElementById("bg-publish-submit").addEventListener("click", function () {
+      publishBackgroundFromModal();
+    });
     document.getElementById("publish-script-id").addEventListener("change", function () {
       syncPublishFormFromSelectedScript();
     });
@@ -4889,9 +5193,193 @@
     if (textBadge) textBadge.style.display = publishTextDirty ? "block" : "none";
   }
 
+  function makeSafePremadeFilename(title) {
+    var cleaned = (title || "premade-audio")
+      .replace(/[^\w\s\-]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .toLowerCase();
+    return cleaned || "premade-audio";
+  }
+
+  function makeSafeBackgroundFilename(title) {
+    var cleaned = makeSafePremadeFilename(title || "background");
+    return cleaned === "premade-audio" ? "background" : cleaned;
+  }
+
+  function setBackgroundPublishMessage(text, kind) {
+    postScreenMessage("bg-publish-message", text, kind);
+  }
+
+  function populateBgPublishCategorySelect() {
+    var select = document.getElementById("bg-publish-category");
+    if (!select) return;
+    select.innerHTML = backgroundCategoryOrder
+      .map(function (cid) {
+        return (
+          '<option value="' +
+          escapeHtml(cid) +
+          '">' +
+          escapeHtml(backgroundCategoryDisplayName(cid)) +
+          "</option>"
+        );
+      })
+      .join("");
+    if (!select.value) select.value = "general";
+  }
+
+  function openBackgroundPublishModal() {
+    if (!adminModeEnabled) return;
+    var backdrop = document.getElementById("background-publish-backdrop");
+    if (!backdrop) return;
+    populateBgPublishCategorySelect();
+    var name = document.getElementById("bg-publish-name");
+    var file = document.getElementById("bg-publish-file");
+    var tier = document.getElementById("bg-publish-access-tier");
+    if (name) name.value = "";
+    if (file) file.value = "";
+    if (tier) tier.value = "paid";
+    setBackgroundPublishMessage("", "");
+    backdrop.hidden = false;
+  }
+
+  function closeBackgroundPublishModal() {
+    var backdrop = document.getElementById("background-publish-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    setBackgroundPublishMessage("", "");
+  }
+
+  function newBgCloudDocId() {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return "bg-cloud-" + crypto.randomUUID().toLowerCase();
+    }
+    return "bg-cloud-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+  }
+
+  function publishBackgroundFromModal() {
+    if (!adminModeEnabled) return;
+    if (!currentUser) return;
+    if (typeof firebase.storage !== "function") {
+      setBackgroundPublishMessage("Firebase Storage is not loaded. Refresh and try again.", "error");
+      return;
+    }
+    var displayName = ((document.getElementById("bg-publish-name").value || "").trim());
+    var categoryID = (document.getElementById("bg-publish-category").value || "").trim() || "general";
+    var accessTierEl = document.getElementById("bg-publish-access-tier");
+    var accessTier = accessTierEl && accessTierEl.value === "free" ? "free" : "paid";
+    var fileInput = document.getElementById("bg-publish-file");
+    var file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+    if (!displayName) {
+      setBackgroundPublishMessage("Display name is required.", "error");
+      return;
+    }
+    if (!file) {
+      setBackgroundPublishMessage("Choose an audio file to upload.", "error");
+      return;
+    }
+    setBackgroundPublishMessage("Publishing (uploading to catalog storage)...", "");
+    var docId = newBgCloudDocId();
+    var ext = (file.name.split(".").pop() || "mp3").toLowerCase();
+    if (ext !== "mp3" && ext !== "m4a" && ext !== "wav") ext = "mp3";
+    var storagePath =
+      "backgroundCatalog/" + makeSafeBackgroundFilename(displayName) + "-" + docId.slice(-8) + "." + ext;
+    var contentType = ext === "wav" ? "audio/wav" : ext === "m4a" ? "audio/mp4" : "audio/mpeg";
+    var storageRef = firebase.storage().ref(storagePath);
+    storageRef
+      .put(file, { contentType: contentType })
+      .then(function (snap) {
+        return snap.ref.getDownloadURL();
+      })
+      .then(function (downloadURL) {
+        return backgroundCatalogCollection().doc(docId).set({
+          name: displayName,
+          categoryID: categoryID,
+          accessTier: accessTier,
+          audioURL: downloadURL,
+          storagePath: storagePath,
+          active: true,
+          sortOrder: 0,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: currentUser.uid,
+        });
+      })
+      .then(function () {
+        setBackgroundPublishMessage("Published to cloud catalog.", "success");
+        setBackgroundsMessage('Published "' + displayName + '" to App Audio cloud catalog.', "success");
+        setTimeout(function () {
+          closeBackgroundPublishModal();
+        }, 600);
+      })
+      .catch(function (e) {
+        setBackgroundPublishMessage(e.message || "Could not publish background.", "error");
+      });
+  }
+
+  function renderAdminCloudBackgroundsSection() {
+    if (!adminModeEnabled) return "";
+    var count = currentBackgroundCatalog.length;
+    var intro =
+      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Cloud tracks in Firestore <code>backgroundCatalog</code>. Bundled App Audio files are unchanged.</p>';
+    var header =
+      '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin:0.5rem 0 0.65rem;">' +
+      '<span class="app-muted" style="font-size:0.88rem;">Admin: cloud background catalog</span>' +
+      '<button type="button" class="app-btn app-btn-secondary" id="btn-open-publish-background">Publish Background</button>' +
+      "</div>";
+    if (!count) {
+      return (
+        '<details class="admin-cloud-bg-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+        '<summary style="cursor:pointer;font-weight:600;">Cloud backgrounds (0)</summary>' +
+        intro +
+        header +
+        '<p class="app-muted" style="margin:0.35rem 0 0;">No cloud backgrounds yet.</p>' +
+        "</details>"
+      );
+    }
+    var rows = currentBackgroundCatalog
+      .map(function (b) {
+        return (
+          '<div class="admin-cloud-bg-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
+          '<div style="flex:1;min-width:0;"><strong>' +
+          escapeHtml(b.name || "Background") +
+          '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
+          escapeHtml(backgroundCategoryDisplayName((b.categoryID || "").trim() || "general")) +
+          " · " +
+          escapeHtml((b.accessTier || "free") === "paid" ? "Paid" : "Free") +
+          "</span></div>" +
+          "</div>"
+        );
+      })
+      .join("");
+    return (
+      '<details class="admin-cloud-bg-panel" open style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+      '<summary style="cursor:pointer;font-weight:600;">Cloud backgrounds (' +
+      count +
+      ")</summary>" +
+      intro +
+      header +
+      rows +
+      "</details>"
+    );
+  }
+
+  function bindAdminCloudBackgroundActions(scopeRoot) {
+    if (!scopeRoot) return;
+    var btn = scopeRoot.querySelector("#btn-open-publish-background");
+    if (btn) {
+      btn.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        openBackgroundPublishModal();
+      });
+    }
+  }
+
   function publishPremadeFromModal() {
     if (!adminModeEnabled) return;
     if (!currentUser) return;
+    if (typeof firebase.storage !== "function") {
+      setPublishPremadeMessage("Firebase Storage is not loaded. Refresh and try again.", "error");
+      return;
+    }
     var s = selectedPublishScript();
     if (!s) {
       setPublishPremadeMessage("Choose a script with audio first.", "error");
@@ -4901,25 +5389,47 @@
     var description = (document.getElementById("publish-description").value || "").trim();
     var categoryID = (document.getElementById("publish-category").value || "").trim() || "confidence";
     var scriptText = (document.getElementById("publish-script-text").value || "").trim() || s.text || "";
+    var accessTierEl = document.getElementById("publish-access-tier");
+    var accessTier = accessTierEl && accessTierEl.value === "free" ? "free" : "paid";
     var audioURL = (s.audioURL || "").trim();
     if (!audioURL) {
       setPublishPremadeMessage("Selected script has no audio URL.", "error");
       return;
     }
-    setPublishPremadeMessage("Publishing...", "");
+    setPublishPremadeMessage("Publishing (uploading to catalog storage)...", "");
     var docRef = premadeCollection().doc();
-    docRef
-      .set({
-        title: title,
-        categoryID: categoryID,
-        description: description,
-        scriptText: scriptText,
-        audioURL: audioURL,
-        sourceScriptID: s.id,
-        createdByUID: currentUser.uid,
-        createdByEmail: currentUser.email || "",
-        createdByName: currentUser.displayName || "",
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    var docId = docRef.id;
+    fetch(audioURL)
+      .then(function (r) {
+        if (!r.ok) throw new Error("Could not download script audio for publishing.");
+        return r.blob();
+      })
+      .then(function (blob) {
+        var ext = /\.wav(\?|$)/i.test(audioURL) ? "wav" : "mp3";
+        var filename = makeSafePremadeFilename(title) + "-" + docId.slice(0, 8) + "." + ext;
+        var storagePath = "premadeAudio/" + filename;
+        var ref = firebase.storage().ref(storagePath);
+        return ref.put(blob, { contentType: blob.type || (ext === "wav" ? "audio/wav" : "audio/mpeg") }).then(function (snap) {
+          return snap.ref.getDownloadURL().then(function (downloadURL) {
+            return docRef.set({
+              title: title,
+              categoryID: categoryID,
+              description: description,
+              scriptText: scriptText,
+              audioURL: downloadURL,
+              storagePath: storagePath,
+              accessTier: accessTier,
+              active: true,
+              sourceScriptID: s.id,
+              voiceID: (s.voiceID && String(s.voiceID).trim()) || "",
+              backgroundID: (s.backgroundID && String(s.backgroundID).trim()) || "",
+              createdByUID: currentUser.uid,
+              createdByEmail: currentUser.email || "",
+              createdByName: currentUser.displayName || "",
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          });
+        });
       })
       .then(function () {
         setPublishPremadeMessage("Published to App Library.", "success");
@@ -4944,6 +5454,7 @@
     var backdrop = document.getElementById("premade-edit-backdrop");
     var title = document.getElementById("premade-edit-title");
     var category = document.getElementById("premade-edit-category");
+    var accessTier = document.getElementById("premade-edit-access-tier");
     var desc = document.getElementById("premade-edit-description");
     var text = document.getElementById("premade-edit-text");
     var createdAtEl = document.getElementById("premade-edit-created-at");
@@ -4958,6 +5469,7 @@
       .join("");
     title.value = premade.title || "";
     category.value = premade.categoryID || "confidence";
+    if (accessTier) accessTier.value = premade.accessTier === "paid" ? "paid" : "free";
     desc.value = premade.description || "";
     text.value = premade.scriptText || "";
     if (createdAtEl) createdAtEl.textContent = formatDate(premade.createdAt);
@@ -4986,6 +5498,8 @@
     if (!editingPremadeId) return;
     var title = ((document.getElementById("premade-edit-title").value || "").trim());
     var categoryID = ((document.getElementById("premade-edit-category").value || "").trim() || "confidence");
+    var accessTierEl = document.getElementById("premade-edit-access-tier");
+    var accessTier = accessTierEl && accessTierEl.value === "free" ? "free" : "paid";
     var description = ((document.getElementById("premade-edit-description").value || "").trim());
     var scriptText = ((document.getElementById("premade-edit-text").value || "").trim());
     if (!title) {
@@ -4999,6 +5513,7 @@
         {
           title: title,
           categoryID: categoryID,
+          accessTier: accessTier,
           description: description,
           scriptText: scriptText,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -5014,21 +5529,86 @@
       });
   }
 
+  function storagePathFromPremadeDownloadURL(urlString) {
+    if (!urlString) return "";
+    try {
+      var path = new URL(urlString).pathname || "";
+      var marker = "/o/";
+      var idx = path.indexOf(marker);
+      if (idx < 0) return "";
+      return decodeURIComponent(path.slice(idx + marker.length));
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function hidePremadeById(premadeId) {
+    return premadeCollection()
+      .doc(premadeId)
+      .set(
+        {
+          active: false,
+          hiddenAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+  }
+
+  function restorePremadeById(premadeId) {
+    return premadeCollection()
+      .doc(premadeId)
+      .set(
+        {
+          active: true,
+          hiddenAt: firebase.firestore.FieldValue.delete(),
+        },
+        { merge: true }
+      );
+  }
+
+  function deletePremadeStorageIfPresent(premade) {
+    if (!premade) return Promise.resolve();
+    var path =
+      (premade.storagePath && String(premade.storagePath).trim()) ||
+      storagePathFromPremadeDownloadURL(premade.audioURL);
+    if (!path || typeof firebase.storage !== "function") return Promise.resolve();
+    return firebase.storage().ref(path).delete().catch(function () {
+      return null;
+    });
+  }
+
+  function deletePremadePermanentlyById(premadeId) {
+    var premade = currentHiddenPremade.find(function (x) {
+      return x.id === premadeId;
+    });
+    return deletePremadeStorageIfPresent(premade).then(function () {
+      return premadeCollection().doc(premadeId).delete();
+    });
+  }
+
   function unpublishPremade() {
     if (!adminModeEnabled) return;
     if (!editingPremadeId) return;
-    var premade = currentPremade.find(function (x) { return x.id === editingPremadeId; });
-    if (!window.confirm('Unpublish "' + ((premade && premade.title) || "this premade") + '"?')) return;
-    setEditPremadeMessage("Unpublishing...", "");
-    premadeCollection()
-      .doc(editingPremadeId)
-      .delete()
+    var premade = currentPremade.find(function (x) {
+      return x.id === editingPremadeId;
+    });
+    if (
+      !window.confirm(
+        'Hide "' +
+          ((premade && premade.title) || "this premade") +
+          '" from the App Library?\n\nYou can restore it later from Hidden premades.'
+      )
+    ) {
+      return;
+    }
+    setEditPremadeMessage("Hiding...", "");
+    hidePremadeById(editingPremadeId)
       .then(function () {
-        setPremadeMessage("Premade unpublished.", "success");
+        setPremadeMessage("Premade hidden from App Library.", "success");
         closeEditPremadeModal();
       })
       .catch(function (e) {
-        setEditPremadeMessage(e.message || "Could not unpublish premade.", "error");
+        setEditPremadeMessage(e.message || "Could not hide premade.", "error");
       });
   }
 
@@ -5283,9 +5863,7 @@
       });
       return (meta && meta.name) || "My audio";
     }
-    var found = availableBackgrounds.find(function (b) {
-      return b.id === bid;
-    });
+    var found = backgroundEntryById(bid);
     return (found && found.name) || "Background";
   }
 
@@ -5301,7 +5879,20 @@
     var builtin = availableBackgrounds.find(function (b) {
       return b.id === bid;
     });
-    if (builtin) return builtin;
+    if (builtin) {
+      return {
+        id: builtin.id,
+        name: builtin.name,
+        categoryID: builtin.categoryID,
+        file: builtin.file,
+        accessTier: "free",
+        isCloudCatalog: false,
+      };
+    }
+    var cloud = currentBackgroundCatalog.find(function (b) {
+      return b.id === bid;
+    });
+    if (cloud) return cloud;
     if (isUserBackgroundId(bid)) {
       var meta = loadUserBackgroundMetaList().find(function (m) {
         return m && m.id === bid;
@@ -5457,6 +6048,8 @@
           description: "Built-in premade audio",
           scriptText: title,
           audioURL: staticUrl,
+          accessTier: "free",
+          isCloudCatalog: false,
           sourceScriptID: "",
           createdByUID: "",
           createdByEmail: "",
@@ -5637,7 +6230,11 @@
   function previewBackgroundById(backgroundId, onError) {
     var entry = backgroundEntryById(backgroundId);
     if (!entry || entry.id === "bg-none") return Promise.resolve(false);
-    var canPrev = !!(entry.file && String(entry.file).trim()) || !!entry.userUpload || isUserBackgroundId(entry.id);
+    var canPrev =
+      !!(entry.file && String(entry.file).trim()) ||
+      !!(entry.audioURL && String(entry.audioURL).trim()) ||
+      !!entry.userUpload ||
+      isUserBackgroundId(entry.id);
     if (!canPrev) return Promise.resolve(false);
 
     if (backgroundPreviewAudio && backgroundPreviewId === entry.id) {
@@ -5690,6 +6287,9 @@
         userBgObjectUrlCache[entry.id] = objUrl;
         return playFromUrl(objUrl);
       });
+    }
+    if (entry.audioURL && String(entry.audioURL).trim()) {
+      return playFromUrl(String(entry.audioURL).trim());
     }
     var url = backgroundTrackAssetUrl(entry.file);
     return playFromUrl(url);
@@ -5765,7 +6365,12 @@
         reject(new Error("Unknown background for mixing."));
         return;
       }
-      if (!entry || (!entry.file && !(entry.userUpload || isUserBackgroundId(bgIdRaw)))) {
+      if (
+        !entry ||
+        (!entry.file &&
+          !(entry.audioURL && String(entry.audioURL).trim()) &&
+          !(entry.userUpload || isUserBackgroundId(bgIdRaw)))
+      ) {
         reject(new Error("Unknown background for mixing."));
         return;
       }
@@ -5784,6 +6389,15 @@
           return blob.arrayBuffer().then(function (buf) {
             return ctx.decodeAudioData(buf.slice(0));
           });
+        });
+      } else if (entry.audioURL && String(entry.audioURL).trim()) {
+        decodeBgPromise = fetch(String(entry.audioURL).trim()).then(function (r) {
+          if (!r.ok) {
+            throw new Error("Cloud background audio could not be loaded (" + r.status + ").");
+          }
+          return r.arrayBuffer();
+        }).then(function (bgAb) {
+          return ctx.decodeAudioData(bgAb.slice(0));
         });
       } else {
         decodeBgPromise = fetch(backgroundTrackAssetUrl(entry.file)).then(function (r) {
@@ -6048,14 +6662,33 @@
       });
   }
 
+  function bindVoiceGenderFilterActions() {
+    var wrap = document.getElementById("voice-gender-filter-wrap");
+    if (!wrap) return;
+    wrap.querySelectorAll("[data-voice-gender-filter]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var filter = btn.getAttribute("data-voice-gender-filter") || "all";
+        if (filter === activeVoiceGenderFilter) return;
+        activeVoiceGenderFilter = filter;
+        renderVoices();
+      });
+    });
+  }
+
   function renderVoices() {
     var list = document.getElementById("voices-list");
     if (!list) return;
     var tabMy = document.getElementById("voices-tab-my");
     var tabApp = document.getElementById("voices-tab-app");
+    var genderWrap = document.getElementById("voice-gender-filter-wrap");
     if (tabMy) tabMy.classList.toggle("is-active", activeVoicesTab === "my-voices");
     if (tabApp) tabApp.classList.toggle("is-active", activeVoicesTab === "app-voices");
     if (tabMy) tabMy.classList.toggle("is-tier-locked", !isWebPaidTierForAI());
+    if (genderWrap) {
+      genderWrap.hidden = activeVoicesTab !== "app-voices";
+      genderWrap.innerHTML = activeVoicesTab === "app-voices" ? voiceGenderFilterBarHtml() : "";
+      bindVoiceGenderFilterActions();
+    }
     syncVoiceSegmentedPill();
 
     var savedAppVoiceIDs = Array.isArray((currentUserProfile || {}).savedAppVoiceIDs)
@@ -6076,9 +6709,10 @@
     var sourceVoices = activeVoicesTab === "my-voices" ? myVoices : availableVoices;
     sourceVoices = filteredVoicesForDisplay(sourceVoices);
     if (!sourceVoices.length) {
-      list.innerHTML = normalizeSectionSearchQuery(sectionSearchQuery.voices)
-        ? '<div class="app-empty-hint">No voices match your search.</div>'
-        : '<div class="app-empty-hint">No voices here yet. Save from App Voices or create a cloned voice.</div>';
+      list.innerHTML =
+        normalizeSectionSearchQuery(sectionSearchQuery.voices) || activeVoiceGenderFilter !== "all"
+          ? '<div class="app-empty-hint">No voices match your search or filter.</div>'
+          : '<div class="app-empty-hint">No voices here yet. Save from App Voices or create a cloned voice.</div>';
       return;
     }
 
@@ -7475,6 +8109,13 @@
     var isSelected = b.id === selectedBackgroundId;
     var isAudible = isBackgroundPreviewing(b.id);
     var canPrev = backgroundRowCanPreview(b);
+    var badges = "";
+    if (b.isCloudCatalog) {
+      badges += ' <span class="app-chip">Cloud</span>';
+    }
+    if (!canPrev) {
+      badges += ' <span class="app-chip">Silent</span>';
+    }
     var trailing = "";
     if (options.showPinToMy) {
       var savedNow = !!loadSavedAppBackgroundIdSet()[b.id];
@@ -7494,6 +8135,7 @@
       '  <div class="media-card-row-main">' +
       '    <div class="app-modal-row-name">' +
       escapeHtml(b.name) +
+      badges +
       "</div>" +
       "  </div>" +
       '<div class="media-card-actions">' +
@@ -7587,7 +8229,7 @@
     backgroundCategoryOrder.forEach(function (cid) {
       grouped[cid] = [];
     });
-    availableBackgrounds.forEach(function (b) {
+    allAppBackgroundTracksIncludingCloud().forEach(function (b) {
       if (b.id === "bg-none") return;
       if (audioSearchQuery && !textMatchesSectionSearch(b.name, audioSearchQuery)) return;
       var cid = (b.categoryID && String(b.categoryID).trim()) || "general";
@@ -7605,11 +8247,7 @@
         var items = grouped[cid] || [];
         if (!items.length) return "";
         if (backgroundCategoryOpenById[cid] == null) {
-          var containsSelected =
-            selectedBackgroundId !== "bg-none" && items.some(function (b) {
-              return b.id === selectedBackgroundId;
-            });
-          backgroundCategoryOpenById[cid] = cid === "general" || containsSelected;
+          backgroundCategoryOpenById[cid] = false;
         }
         var open = backgroundCategoryOpenById[cid] === true;
         return (
@@ -7642,11 +8280,13 @@
       return;
     }
     list.innerHTML =
+      renderAdminCloudBackgroundsSection() +
       '<p class="app-muted audio-app-lede">' +
       "Premade background tracks for generation and mixing — same catalog as App Audio on iOS. Preview any track here; pin to My Audio with Starter or Creator." +
       "</p>" +
       (none ? '<div class="app-bg-none-row">' + audioBuiltinRowMarkup(none, { showPinToMy: false }) + "</div>" : "") +
       sections;
+    bindAdminCloudBackgroundActions(list);
     bindAudioTrackRowHandlers(list);
   }
 
@@ -8330,11 +8970,15 @@
     if (!isQuotaLimitError(message)) return false;
     showAppBanner(
       "Usage limit reached",
-      "Add a usage pack in Account Settings to keep creating scripts and voice audio this billing period.",
+      "Add a usage pack in Account Settings to keep creating scripts and voice audio this billing period. Tap here to open Account.",
       "info",
-      { duration: 7000 }
+      {
+        autoDismiss: false,
+        onTap: function () {
+          openAccountModal({ focusUsageAddOn: true });
+        },
+      }
     );
-    openAccountModal({ focusUsageAddOn: true });
     return true;
   }
 
@@ -10314,7 +10958,7 @@
     var cPre = document.getElementById("count-premade");
     if (cLib) cLib.textContent = String(currentScripts.length);
     if (cPlay) cPlay.textContent = String(currentPlaylists.length);
-    if (cPre) cPre.textContent = String(currentPremade.length);
+    if (cPre) cPre.textContent = String(filterPremadesByCatalogAccess(currentPremade).length);
     renderAccountInsights();
   }
 
@@ -10645,7 +11289,7 @@
       if (v === "0") return false;
       if (v === "1") return true;
     } catch (_e) {}
-    return true;
+    return false;
   }
 
   function setPremadeCardAudioControlsExpanded(premadeId, expanded) {
@@ -10661,7 +11305,7 @@
   }
 
   function allPremadeAudioControlsExpanded(ids) {
-    if (!ids.length) return true;
+    if (!ids.length) return false;
     return ids.every(function (id) {
       return controlsExpandedForPremade(id);
     });
@@ -11420,6 +12064,58 @@
     return tier === "starter" || tier === "creator";
   }
 
+  function catalogAccessTierFromData(data) {
+    var raw =
+      data && data.accessTier != null ? String(data.accessTier).trim().toLowerCase() : "";
+    return raw === "paid" ? "paid" : "free";
+  }
+
+  function canAccessCatalogTier(accessTier) {
+    if (!accessTier || accessTier === "free") return true;
+    return isWebPaidTierForAI();
+  }
+
+  function filterPremadesByCatalogAccess(premades) {
+    return (premades || []).filter(function (p) {
+      return canAccessCatalogTier(p.accessTier || "free");
+    });
+  }
+
+  function filterBackgroundsByCatalogAccess(backgrounds) {
+    return (backgrounds || []).filter(function (b) {
+      return canAccessCatalogTier(b.accessTier || "free");
+    });
+  }
+
+  function bundledAppBackgroundTracks() {
+    return availableBackgrounds
+      .filter(function (b) {
+        return b.id !== "bg-none";
+      })
+      .map(function (b) {
+        return {
+          id: b.id,
+          name: b.name,
+          categoryID: b.categoryID,
+          file: b.file,
+          accessTier: "free",
+          isCloudCatalog: false,
+        };
+      });
+  }
+
+  function allAppBackgroundTracksIncludingCloud() {
+    var bundled = bundledAppBackgroundTracks();
+    var bundledIds = {};
+    bundled.forEach(function (b) {
+      bundledIds[b.id] = true;
+    });
+    var cloud = filterBackgroundsByCatalogAccess(currentBackgroundCatalog).filter(function (b) {
+      return !bundledIds[b.id];
+    });
+    return bundled.concat(cloud);
+  }
+
   var WEB_FREE_TIER_VOICE_IDS = {
     lnieQLGTodpbhjpZtg1k: true,
     "8LVfoRdkh4zgjr8v5ObE": true,
@@ -11513,6 +12209,8 @@
       if (activeAudioPageTab === "my-audio") activeAudioPageTab = "app-audio";
     }
     syncAccountDefaultMediaLabels();
+    if (activeAdminTab === "library") renderPremade();
+    if (activeAdminTab === "audio") renderAudioPage();
   }
 
   function setAITextEditError(message, kind) {
@@ -14401,21 +15099,29 @@
       id: premade.id,
       title: premade.title,
       text: premade.scriptText || "",
-      audioURL: premade.audioURL || "",
+      audioURL: premadeOfflinePlaybackURL(premade.id, premade.audioURL || ""),
       voiceID: selectedVoiceId,
       backgroundID: "",
       createdAt: null,
     };
   }
 
+  var PREMADE_DEFAULT_VOICE_ID = "lnieQLGTodpbhjpZtg1k";
+
   function resolvePremadeVoiceSelection(premade) {
     if (!premade) return selectedVoiceId;
-    return premadeVoiceOverrideById[premade.id] || selectedVoiceId;
+    if (premadeVoiceOverrideById[premade.id]) return premadeVoiceOverrideById[premade.id];
+    var published = (premade.voiceID && String(premade.voiceID).trim()) || "";
+    if (published) return published;
+    return selectedVoiceId || PREMADE_DEFAULT_VOICE_ID;
   }
 
   function resolvePremadeBackgroundSelection(premade) {
     if (!premade) return selectedBackgroundId;
-    return premadeBackgroundOverrideById[premade.id] || selectedBackgroundId;
+    if (premadeBackgroundOverrideById[premade.id]) return premadeBackgroundOverrideById[premade.id];
+    var published = (premade.backgroundID && String(premade.backgroundID).trim()) || "";
+    if (published && published !== "bg-none") return published;
+    return selectedBackgroundId;
   }
 
   function savePremadeToMyLibrary(premade) {
@@ -14609,12 +15315,29 @@
         '"' +
         (!currentPlaylists.length ? " disabled" : "") +
         ">Save + Add to Playlist</button>" +
+        (isStreamableCloudPremade(p)
+          ? premadeOfflineObjectUrlCache[p.id]
+            ? '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="remove-offline" data-premade-id="' +
+              escapeHtml(p.id) +
+              '">Remove offline download</button>'
+            : '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="download-offline" data-premade-id="' +
+              escapeHtml(p.id) +
+              '">Download for offline</button>'
+          : "") +
+        (adminModeEnabled && isStreamableCloudPremade(p)
+          ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="hide" data-premade-id="' +
+            escapeHtml(p.id) +
+            '">Hide</button>'
+          : "") +
         (adminModeEnabled
           ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="edit" data-premade-id="' +
             escapeHtml(p.id) +
             '">Edit</button>'
           : "") +
         "</div>" +
+        (isStreamableCloudPremade(p)
+          ? '<p class="app-muted" style="margin:0.35rem 0 0;font-size:0.78rem;line-height:1.4;">Streams by default. Download only if you want offline playback in this browser.</p>'
+          : "") +
         "</div>"
       : "";
     return (
@@ -14678,8 +15401,55 @@
           addPremadeToPlaylist(premade);
         } else if (action === "edit") {
           openEditPremadeModal(premade);
+        } else if (action === "hide") {
+          if (!adminModeEnabled || !isStreamableCloudPremade(premade)) return;
+          if (
+            !window.confirm(
+              'Hide "' +
+                (premade.title || "this premade") +
+                '" from the App Library?\n\nYou can restore it later from Hidden premades.'
+            )
+          ) {
+            return;
+          }
+          btn.disabled = true;
+          hidePremadeById(premade.id)
+            .then(function () {
+              showAppBanner("Premade hidden", "Removed from the live App Library.", "success", { duration: 5000 });
+            })
+            .catch(function (e) {
+              showAppBanner("Hide failed", e.message || "Could not hide premade.", "error", { duration: 7000 });
+            })
+            .finally(function () {
+              btn.disabled = false;
+            });
         } else if (action === "play") {
           togglePlayScriptAudio(premadeToScript(premade));
+        } else if (action === "download-offline") {
+          btn.disabled = true;
+          downloadPremadeForOffline(premade)
+            .then(function () {
+              showAppBanner("Downloaded", "You can play this premade offline in this browser.", "success", {
+                duration: 5000,
+              });
+              renderPremade();
+            })
+            .catch(function (e) {
+              showAppBanner("Download failed", e.message || "Could not download premade.", "error", {
+                duration: 7000,
+              });
+            })
+            .finally(function () {
+              btn.disabled = false;
+            });
+        } else if (action === "remove-offline") {
+          removePremadeOfflineDownload(premade.id)
+            .then(function () {
+              renderPremade();
+            })
+            .catch(function () {
+              showAppBanner("Could not remove download", "Try again.", "error", { duration: 5000 });
+            });
         }
       });
     });
@@ -14706,15 +15476,17 @@
     var hasSearch = !!normalizeSectionSearchQuery(sectionSearchQuery.library);
 
     function finishListHtml(html) {
-      list.innerHTML = html;
+      list.innerHTML = renderHiddenPremadesAdminSection() + html;
       bindPremadeCategoryNavActions();
+      bindHiddenPremadeAdminActions();
       updatePremadeExpandAllToggleUi();
     }
 
     function finishDetailHtml(html) {
-      list.innerHTML = html;
+      list.innerHTML = renderHiddenPremadesAdminSection() + html;
       bindPremadeCardActions();
       bindPremadeCategoryNavActions();
+      bindHiddenPremadeAdminActions();
       updatePremadeExpandAllToggleUi();
     }
 
@@ -14762,32 +15534,181 @@
     finishListHtml(premadeCategoryListHtml(grouped));
   }
 
+  function subscribeBackgroundCatalog() {
+    teardownBackgroundCatalogListener();
+    backgroundCatalogUnsubscribe = backgroundCatalogCollection()
+      .where("active", "==", true)
+      .onSnapshot(
+        function (snap) {
+          currentBackgroundCatalog = snap.docs
+            .map(function (doc) {
+              var data = doc.data() || {};
+              return {
+                id: doc.id,
+                name: data.name || "Background",
+                categoryID: (data.categoryID && String(data.categoryID).trim()) || "general",
+                file: "",
+                audioURL: (data.audioURL && String(data.audioURL).trim()) || "",
+                accessTier: catalogAccessTierFromData(data),
+                isCloudCatalog: true,
+              };
+            })
+            .sort(function (a, b) {
+              return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+            });
+          if (activeAdminTab === "audio") renderAudioPage();
+          if (activeAdminTab === "library") renderPremade();
+        },
+        function () {
+          currentBackgroundCatalog = [];
+          if (activeAdminTab === "audio") renderAudioPage();
+        }
+      );
+  }
+
+  function parsePremadeFirestoreDoc(doc) {
+    var data = doc.data() || {};
+    return {
+      id: doc.id,
+      title: data.title || "",
+      categoryID: data.categoryID || "",
+      description: data.description || "",
+      scriptText: data.scriptText || "",
+      audioURL: (data.audioURL && String(data.audioURL).trim()) || resolvePremadeStaticAudioURLFromData(data),
+      accessTier: catalogAccessTierFromData(data),
+      isCloudCatalog: true,
+      storagePath: data.storagePath || "",
+      voiceID: (data.voiceID && String(data.voiceID).trim()) || "",
+      backgroundID: (data.backgroundID && String(data.backgroundID).trim()) || "",
+      sourceScriptID: data.sourceScriptID || "",
+      createdByUID: data.createdByUID || "",
+      createdByEmail: data.createdByEmail || "",
+      createdByName: data.createdByName || "",
+      createdAt: data.createdAt || null,
+      active: data.active !== false,
+    };
+  }
+
+  function sortPremadeByCreatedAtDesc(list) {
+    return list.slice().sort(function (a, b) {
+      var at = a.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
+      var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
+      return bt - at;
+    });
+  }
+
+  function renderHiddenPremadesAdminSection() {
+    if (!adminModeEnabled) return "";
+    var count = currentHiddenPremade.length;
+    var intro =
+      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Removed from the live App Library but kept in Firestore and Storage. Restore or delete permanently.</p>';
+    if (!count) {
+      return (
+        '<details class="admin-hidden-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+        '<summary style="cursor:pointer;font-weight:600;">Hidden premades (0)</summary>' +
+        intro +
+        '<p class="app-muted" style="margin:0.35rem 0 0;">No hidden premades yet.</p>' +
+        "</details>"
+      );
+    }
+    var rows = currentHiddenPremade
+      .map(function (p) {
+        return (
+          '<div class="admin-hidden-premade-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
+          '<div style="flex:1;min-width:0;"><strong>' +
+          escapeHtml(p.title || "Untitled") +
+          '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
+          escapeHtml(premadeLibraryCategoryDisplayName((p.categoryID || "").trim())) +
+          "</span></div>" +
+          '<button type="button" class="app-btn app-btn-secondary" data-hidden-premade-action="restore" data-hidden-premade-id="' +
+          escapeHtml(p.id) +
+          '">Restore</button>' +
+          '<button type="button" class="app-btn app-btn-danger" data-hidden-premade-action="delete" data-hidden-premade-id="' +
+          escapeHtml(p.id) +
+          '">Delete</button>' +
+          "</div>"
+        );
+      })
+      .join("");
+    return (
+      '<details class="admin-hidden-premades-panel" open style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+      '<summary style="cursor:pointer;font-weight:600;">Hidden premades (' +
+      count +
+      ")</summary>" +
+      intro +
+      rows +
+      "</details>"
+    );
+  }
+
+  function bindHiddenPremadeAdminActions() {
+    var list = document.getElementById("premade-list");
+    if (!list) return;
+    list.querySelectorAll("[data-hidden-premade-action]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        var action = btn.getAttribute("data-hidden-premade-action");
+        var pid = btn.getAttribute("data-hidden-premade-id");
+        if (!pid) return;
+        var premade = currentHiddenPremade.find(function (x) {
+          return x.id === pid;
+        });
+        var title = (premade && premade.title) || "this premade";
+        if (action === "restore") {
+          btn.disabled = true;
+          restorePremadeById(pid)
+            .then(function () {
+              showAppBanner("Premade restored", '"' + title + '" is live again.', "success", { duration: 5000 });
+            })
+            .catch(function (e) {
+              showAppBanner("Restore failed", e.message || "Could not restore premade.", "error", { duration: 7000 });
+            })
+            .finally(function () {
+              btn.disabled = false;
+            });
+        } else if (action === "delete") {
+          if (
+            !window.confirm(
+              'Permanently delete "' +
+                title +
+                '"?\n\nThis removes the Firestore record and Storage audio. This cannot be undone.'
+            )
+          ) {
+            return;
+          }
+          btn.disabled = true;
+          deletePremadePermanentlyById(pid)
+            .then(function () {
+              showAppBanner("Premade deleted", '"' + title + '" was permanently removed.', "success", {
+                duration: 5000,
+              });
+            })
+            .catch(function (e) {
+              showAppBanner("Delete failed", e.message || "Could not delete premade.", "error", { duration: 7000 });
+            })
+            .finally(function () {
+              btn.disabled = false;
+            });
+        }
+      });
+    });
+  }
+
   function subscribePremade() {
     teardownPremadeListener();
     premadeUnsubscribe = premadeCollection().onSnapshot(
       function (snap) {
-        var cloudPremade = snap.docs
-          .map(function (doc) {
-            var data = doc.data() || {};
-            return {
-              id: doc.id,
-              title: data.title || "",
-              categoryID: data.categoryID || "",
-              description: data.description || "",
-              scriptText: data.scriptText || "",
-              audioURL: (data.audioURL && String(data.audioURL).trim()) || resolvePremadeStaticAudioURLFromData(data),
-              sourceScriptID: data.sourceScriptID || "",
-              createdByUID: data.createdByUID || "",
-              createdByEmail: data.createdByEmail || "",
-              createdByName: data.createdByName || "",
-              createdAt: data.createdAt || null,
-            };
+        var parsed = snap.docs.map(parsePremadeFirestoreDoc);
+        var cloudPremade = sortPremadeByCreatedAtDesc(
+          parsed.filter(function (p) {
+            return p.active !== false;
           })
-          .sort(function (a, b) {
-            var at = a.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
-            var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
-            return bt - at;
-          });
+        );
+        currentHiddenPremade = sortPremadeByCreatedAtDesc(
+          parsed.filter(function (p) {
+            return p.active === false;
+          })
+        );
         currentPremade = mergeCloudAndStaticPremades(cloudPremade);
         var nextExpanded = {};
         currentPremade.forEach(function (p) {
@@ -14796,6 +15717,12 @@
         expandedPremadeTextById = nextExpanded;
         updateTabCounts();
         renderPremade();
+        var offlineIds = currentPremade.filter(isStreamableCloudPremade).map(function (p) {
+          return p.id;
+        });
+        hydratePremadeOfflineCacheFromIdb(offlineIds).then(function () {
+          if (activeAdminTab === "library") renderPremade();
+        });
         if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
       },
       function (e) {
@@ -14956,6 +15883,9 @@
           if (
             availableBackgrounds.some(function (b) {
               return b.id === profileBackgroundID;
+            }) ||
+            currentBackgroundCatalog.some(function (b) {
+              return b.id === profileBackgroundID;
             })
           ) {
             selectedBackgroundId = profileBackgroundID;
@@ -14974,6 +15904,7 @@
           subscribeScripts(user.uid);
           subscribePlaylists(user.uid);
           subscribePremade();
+          subscribeBackgroundCatalog();
           subscribeClonedVoices(user.uid);
           subscribeListeningStats(user.uid);
           maybePresentPendingShareClaim();
