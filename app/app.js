@@ -563,6 +563,7 @@
         backfillLocalUserBackgroundUploads().finally(function () {
           if (activeAdminTab === "audio") renderAudioPage();
           if (activeAdminTab === "library") renderPremade();
+          rerenderMyLibraryCardsIfNeeded();
         });
       },
       function () {
@@ -14366,6 +14367,12 @@
     setMediaPickerMessage("", "");
   }
 
+  function rerenderMyLibraryCardsIfNeeded() {
+    if (!currentScripts.length) return;
+    if (activeAdminTab !== "library" || activeLibraryTab !== "my-library") return;
+    renderScripts(currentScripts);
+  }
+
   function renderScripts(scripts, scrollScriptIdIntoView) {
     var list = document.getElementById("scripts-list");
     if (!list) return;
@@ -16798,10 +16805,12 @@
           applyUserProfileDefaults({ onlyIfNewer: true });
           if (activeAdminTab === "audio") renderAudioPage();
           if (activeAdminTab === "library") renderPremade();
+          rerenderMyLibraryCardsIfNeeded();
         },
         function () {
           currentBackgroundCatalog = [];
           if (activeAdminTab === "audio") renderAudioPage();
+          rerenderMyLibraryCardsIfNeeded();
         }
       );
   }
@@ -16996,10 +17005,12 @@
         });
         applyUserProfileDefaults({ onlyIfNewer: true });
         if (activeAdminTab === "voices") renderVoices();
+        rerenderMyLibraryCardsIfNeeded();
       },
       function (_e) {
         currentClonedVoices = [];
         if (activeAdminTab === "voices") renderVoices();
+        rerenderMyLibraryCardsIfNeeded();
       }
     );
   }
