@@ -536,6 +536,53 @@
       });
   }
 
+  /** Mirror iOS `loadUserBackgrounds`: persist Firestore imports into this browser's meta cache. */
+  function syncCloudUserBackgroundsToLocalMeta() {
+    var cloudById = {};
+    currentCloudUserBackgrounds.forEach(function (b) {
+      if (b && b.id) cloudById[b.id] = b;
+    });
+    var next = [];
+    var seen = {};
+    loadUserBackgroundMetaList().forEach(function (m) {
+      if (!m || !m.id) return;
+      if (m.cloudSynced && !cloudById[m.id]) return;
+      var cloud = cloudById[m.id];
+      if (cloud) {
+        next.push({
+          id: m.id,
+          name: cloud.name || m.name || "Imported audio",
+          audioURL: cloud.audioURL || m.audioURL || "",
+          cloudSynced: true,
+        });
+      } else {
+        next.push(m);
+      }
+      seen[m.id] = true;
+    });
+    currentCloudUserBackgrounds.forEach(function (b) {
+      if (!b || !b.id || seen[b.id]) return;
+      next.push({
+        id: b.id,
+        name: b.name || "Imported audio",
+        audioURL: b.audioURL || "",
+        cloudSynced: true,
+      });
+    });
+    saveUserBackgroundMetaList(next);
+  }
+
+  function rerenderUserBackgroundDependents() {
+    if (document.getElementById("audio-my-list") || document.getElementById("audio-app-list")) {
+      renderAudioPage();
+    }
+    rerenderMyLibraryCardsIfNeeded();
+    if (activeAdminTab === "library" && activeLibraryTab === "app-library") {
+      renderPremade();
+    }
+    syncAccountDefaultMediaLabels();
+  }
+
   function subscribeUserBackgrounds(uid) {
     if (typeof userBackgroundsUnsubscribe === "function") {
       userBackgroundsUnsubscribe();
@@ -559,11 +606,11 @@
           .sort(function (a, b) {
             return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
           });
+        syncCloudUserBackgroundsToLocalMeta();
         applyUserProfileDefaults({ onlyIfNewer: true });
+        rerenderUserBackgroundDependents();
         backfillLocalUserBackgroundUploads().finally(function () {
-          if (activeAdminTab === "audio") renderAudioPage();
-          if (activeAdminTab === "library") renderPremade();
-          rerenderMyLibraryCardsIfNeeded();
+          rerenderUserBackgroundDependents();
         });
       },
       function () {
@@ -6223,6 +6270,9 @@
       renderLibrarySubtab();
       if (activeLibraryTab === "my-library") renderScripts(currentScripts);
       else renderPremade();
+    }
+    if (activeAdminTab === "audio") {
+      renderAudioPage();
     }
     if (activeAdminTab === "library" || activeAdminTab === "voices" || activeAdminTab === "audio") {
       requestAnimationFrame(function () {
