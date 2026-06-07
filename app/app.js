@@ -569,6 +569,7 @@
       function () {
         currentCloudUserBackgrounds = [];
         if (activeAdminTab === "audio") renderAudioPage();
+        rerenderMyLibraryCardsIfNeeded();
       }
     );
   }
@@ -6218,6 +6219,11 @@
       updatePlaylistSectionVisibility();
     }
     syncScreenHelpButtonLabel();
+    if (activeAdminTab === "library") {
+      renderLibrarySubtab();
+      if (activeLibraryTab === "my-library") renderScripts(currentScripts);
+      else renderPremade();
+    }
     if (activeAdminTab === "library" || activeAdminTab === "voices" || activeAdminTab === "audio") {
       requestAnimationFrame(function () {
         syncSubnavStickyOffset();
@@ -6302,28 +6308,55 @@
   }
 
   function voiceNameById(voiceID) {
-    var found = availableVoices.find(function (v) {
-      return v.id === voiceID;
-    });
-    if (!found) {
-      found = currentClonedVoices.find(function (v) {
-        return v.id === voiceID;
-      });
-    }
+    var id = (voiceID && String(voiceID).trim()) || "";
+    if (!id) return "Voice";
+    var found = voiceOptionById(id, allVoiceOptionsForSelection());
     return (found && found.name) || "Voice";
+  }
+
+  /** Built-in + full cloud catalog + user imports (no subscription filter; iOS `BackgroundTrack.resolve`). */
+  function allBackgroundTracksForNameLookup() {
+    var out = availableBackgrounds.slice();
+    var bundledIds = {};
+    availableBackgrounds.forEach(function (b) {
+      if (b && b.id) bundledIds[b.id] = true;
+    });
+    currentBackgroundCatalog.forEach(function (b) {
+      if (!b || !b.id || bundledIds[b.id]) return;
+      bundledIds[b.id] = true;
+      out.push(b);
+    });
+    mergedUserBackgroundMetas().forEach(function (m) {
+      if (!m || !m.id || bundledIds[m.id]) return;
+      bundledIds[m.id] = true;
+      out.push({
+        id: m.id,
+        name: m.name || "Imported audio",
+        categoryID: "my-upload",
+        file: "",
+        audioURL: m.audioURL || "",
+        userUpload: true,
+      });
+    });
+    return out;
+  }
+
+  function backgroundTrackById(backgroundID) {
+    var bid = (backgroundID && String(backgroundID).trim()) || "";
+    if (!bid) return null;
+    var fromLookup = allBackgroundTracksForNameLookup().find(function (b) {
+      return b && b.id === bid;
+    });
+    if (fromLookup) return fromLookup;
+    return backgroundEntryById(bid);
   }
 
   function backgroundNameById(backgroundID) {
     var bid = (backgroundID && String(backgroundID).trim()) || "";
     if (!bid) return "Background";
-    if (isKnownUserBackgroundId(bid)) {
-      var meta = mergedUserBackgroundMetas().find(function (m) {
-        return m && m.id === bid;
-      });
-      return (meta && meta.name) || "My audio";
-    }
-    var found = backgroundEntryById(bid);
-    return (found && found.name) || "Background";
+    if (bid === "bg-none") return "No Background";
+    var found = backgroundTrackById(bid);
+    return (found && found.name) || (isKnownUserBackgroundId(bid) ? "My audio" : "Background");
   }
 
   /** Same timing as iOS `AudioMixingService` (lead-in / tail / bed level). */
@@ -6352,24 +6385,21 @@
       return b.id === bid;
     });
     if (cloud) return cloud;
-    if (isKnownUserBackgroundId(bid)) {
-      var meta = mergedUserBackgroundMetas().find(function (m) {
-        return m && m.id === bid;
-      });
-      var cloud = currentCloudUserBackgrounds.find(function (b) {
-        return b && b.id === bid;
-      });
-      if (!meta && !cloud) return null;
-      return {
-        id: bid,
-        name: (meta && meta.name) || (cloud && cloud.name) || "Imported audio",
-        categoryID: "my-upload",
-        file: "",
-        audioURL: (meta && meta.audioURL) || (cloud && cloud.audioURL) || "",
-        userUpload: true,
-      };
-    }
-    return null;
+    var meta = mergedUserBackgroundMetas().find(function (m) {
+      return m && m.id === bid;
+    });
+    var cloudUser = currentCloudUserBackgrounds.find(function (b) {
+      return b && b.id === bid;
+    });
+    if (!meta && !cloudUser) return null;
+    return {
+      id: bid,
+      name: (meta && meta.name) || (cloudUser && cloudUser.name) || "Imported audio",
+      categoryID: "my-upload",
+      file: "",
+      audioURL: (meta && meta.audioURL) || (cloudUser && cloudUser.audioURL) || "",
+      userUpload: true,
+    };
   }
 
   function backgroundTrackAssetUrl(filename) {
@@ -6678,22 +6708,31 @@
     );
   }
 
+  function voiceIdsMatch(storedId, voice) {
+    if (!storedId || !voice) return false;
+    var sid = String(storedId).trim();
+    if (!sid) return false;
+    if (voice.id === sid) return true;
+    var el = voice.elevenLabsVoiceID && String(voice.elevenLabsVoiceID).trim();
+    return !!el && el === sid;
+  }
+
   function voiceOptionById(voiceId, fallbackList) {
     var id = (voiceId && String(voiceId).trim()) || "";
     if (!id) return null;
     if (Array.isArray(fallbackList) && fallbackList.length) {
       var fromList = fallbackList.find(function (v) {
-        return v && v.id === id;
+        return voiceIdsMatch(id, v);
       });
       if (fromList) return fromList;
     }
     var builtIn = availableVoices.find(function (v) {
-      return v.id === id;
+      return voiceIdsMatch(id, v);
     });
     if (builtIn) return builtIn;
     return (
       currentClonedVoices.find(function (v) {
-        return v.id === id;
+        return voiceIdsMatch(id, v);
       }) || null
     );
   }
@@ -14368,9 +14407,12 @@
   }
 
   function rerenderMyLibraryCardsIfNeeded() {
-    if (!currentScripts.length) return;
-    if (activeAdminTab !== "library" || activeLibraryTab !== "my-library") return;
-    renderScripts(currentScripts);
+    if (activeAdminTab !== "library") return;
+    if (activeLibraryTab === "my-library" && currentScripts.length) {
+      renderScripts(currentScripts);
+    } else if (activeLibraryTab === "app-library") {
+      renderPremade();
+    }
   }
 
   function renderScripts(scripts, scrollScriptIdIntoView) {
