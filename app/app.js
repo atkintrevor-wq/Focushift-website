@@ -70,6 +70,8 @@
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
   var PREF_RESUME_ADMIN_KEY = "focusshiftWebPrefResumeAdmin";
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
+  /** Free tier: device-local My Library scripts (no Firestore `users/{uid}/scripts`). */
+  var FREE_LOCAL_SCRIPTS_KEY_PREFIX = "focusshiftWebFreeLocalScripts_";
   var PREF_AUTO_PLAY_KEY = "focusshiftWebPrefAutoPlay";
   var PREF_LISTEN_SHORTCUT_KEY = "focusshiftWebPrefListenTodayShortcut";
   /** Display name when shortcut raw is playlist:<id> (same idea as iOS ListenTodayShortcut). */
@@ -3184,6 +3186,57 @@
 
   function scriptCollection(uid) {
     return db.collection("users").doc(uid).collection("scripts");
+  }
+
+  function freeLocalScriptsStorageKey(uid) {
+    return FREE_LOCAL_SCRIPTS_KEY_PREFIX + uid;
+  }
+
+  function loadFreeLocalScripts(uid) {
+    try {
+      var raw = localStorage.getItem(freeLocalScriptsStorageKey(uid));
+      if (!raw) return [];
+      var parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (_e) {
+      return [];
+    }
+  }
+
+  function saveFreeLocalScripts(uid, scripts) {
+    try {
+      localStorage.setItem(freeLocalScriptsStorageKey(uid), JSON.stringify(scripts || []));
+    } catch (_e) {}
+  }
+
+  function upsertFreeLocalScript(uid, entry) {
+    if (!uid || !entry || !entry.id) return;
+    var scripts = loadFreeLocalScripts(uid);
+    var ix = scripts.findIndex(function (s) {
+      return s.id === entry.id;
+    });
+    if (ix >= 0) {
+      scripts[ix] = Object.assign({}, scripts[ix], entry);
+    } else {
+      scripts.unshift(entry);
+    }
+    saveFreeLocalScripts(uid, scripts);
+    if (isWebFreeTier() && currentUser && currentUser.uid === uid) {
+      ownedScripts = scripts;
+      rebuildCurrentScriptsFromSources();
+    }
+  }
+
+  function deleteFreeLocalScript(uid, scriptId) {
+    if (!uid || !scriptId) return;
+    var scripts = loadFreeLocalScripts(uid).filter(function (s) {
+      return s.id !== scriptId;
+    });
+    saveFreeLocalScripts(uid, scripts);
+    if (isWebFreeTier() && currentUser && currentUser.uid === uid) {
+      ownedScripts = scripts;
+      rebuildCurrentScriptsFromSources();
+    }
   }
 
   function playlistCollection(uid) {
@@ -14712,6 +14765,12 @@
     var ok = window.confirm('Delete "' + (script.title || "Untitled Script") + '"?');
     if (!ok) return;
     setMessage("Deleting...", "");
+    if (isWebFreeTier()) {
+      deleteFreeLocalScript(currentUser.uid, script.id);
+      setMessage("Script deleted.", "success");
+      if (editingScriptId === script.id) closeEditor();
+      return;
+    }
     scriptCollection(currentUser.uid)
       .doc(script.id)
       .delete()
@@ -16470,35 +16529,73 @@
     var title = uniqueScriptTitle(premade.title || "Premade Script");
     var voiceID = resolvePremadeVoiceSelection(premade);
     var backgroundID = resolvePremadeBackgroundSelection(premade);
+    var text = resolvePremadeScriptText(premade);
+    var audio = (premade.audioURL || "").trim();
+
+    function finishSave(scriptId, digest) {
+      if (digest) setStoredGeneratedHash(scriptId, digest);
+      setPremadeMessage('Saved "' + title + '" to My Library.', "success");
+    }
+
+    if (isWebFreeTier()) {
+      var scriptId = "local_" + Date.now() + "_" + Math.random().toString(36).slice(2, 9);
+      var entry = {
+        id: scriptId,
+        title: title,
+        text: text,
+        audioURL: premade.audioURL || "",
+        backgroundID: backgroundID,
+        voiceID: voiceID,
+        categoryID: premade.categoryID || "",
+        createdAt: { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 },
+        updatedAt: null,
+        audioCreatedAt: audio ? { seconds: Math.floor(Date.now() / 1000), nanoseconds: 0 } : null,
+        audioContentHash: "",
+      };
+      if (!audio) {
+        upsertFreeLocalScript(currentUser.uid, entry);
+        finishSave(scriptId, "");
+        return;
+      }
+      scriptContentSha256Hex({ text: text, voiceID: voiceID, backgroundID: backgroundID })
+        .then(function (digest) {
+          entry.audioContentHash = digest;
+          upsertFreeLocalScript(currentUser.uid, entry);
+          finishSave(scriptId, digest);
+        })
+        .catch(function (e) {
+          setPremadeMessage(e.message || "Could not save premade script.", "error");
+        });
+      return;
+    }
+
     var docRef = scriptCollection(currentUser.uid).doc();
     scriptCollection(currentUser.uid)
       .doc(docRef.id)
       .set({
         title: title,
-        text: resolvePremadeScriptText(premade),
+        text: text,
         createdAt: firebase.firestore.Timestamp.now(),
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
         audioURL: premade.audioURL || "",
         backgroundID: backgroundID,
         voiceID: voiceID,
-        audioCreatedAt: premade.audioURL ? firebase.firestore.FieldValue.serverTimestamp() : null,
+        audioCreatedAt: audio ? firebase.firestore.FieldValue.serverTimestamp() : null,
         categoryID: premade.categoryID || "",
       })
       .then(function () {
-        var audio = (premade.audioURL || "").trim();
         if (!audio) {
-          setPremadeMessage('Saved "' + title + '" to My Library.', "success");
+          finishSave(docRef.id, "");
           return;
         }
         return scriptContentSha256Hex({
-          text: resolvePremadeScriptText(premade),
+          text: text,
           voiceID: voiceID,
           backgroundID: backgroundID,
         }).then(function (digest) {
-          setStoredGeneratedHash(docRef.id, digest);
-          return scriptCollection(currentUser.uid).doc(docRef.id).set({ audioContentHash: digest }, { merge: true });
-        }).then(function () {
-          setPremadeMessage('Saved "' + title + '" to My Library.', "success");
+          return scriptCollection(currentUser.uid).doc(docRef.id).set({ audioContentHash: digest }, { merge: true }).then(function () {
+            finishSave(docRef.id, digest);
+          });
         });
       })
       .catch(function (e) {
@@ -17142,6 +17239,12 @@
       scriptsUnsubscribe = null;
     }
     ownedScripts = [];
+    if (isWebFreeTier()) {
+      ownedScripts = loadFreeLocalScripts(uid);
+      rebuildCurrentScriptsFromSources();
+      subscribeIncomingSharedScripts(uid);
+      return;
+    }
     scriptsUnsubscribe = scriptCollection(uid)
       .orderBy("createdAt", "desc")
       .onSnapshot(
