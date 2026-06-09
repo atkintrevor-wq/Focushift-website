@@ -903,14 +903,42 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   background: rgba(0, 0, 0, 0.22);
 }
 .account-plans-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
 }
 .account-plan-option {
-  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
+  gap: 0.2rem;
+  width: 100%;
+  min-height: 4.25rem;
+  margin: 0;
+  padding: 0.72rem 0.65rem;
+  box-sizing: border-box;
   text-align: center;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+}
+.account-plan-option__tier {
+  display: block;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.account-plan-option__period {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.25;
+  opacity: 0.88;
+}
+@media (max-width: 420px) {
+  .account-plans-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .account-insights-grid {
   display: grid;
@@ -1158,6 +1186,32 @@ html.fs-app[data-app-theme="light"] .library-dropdown-item.is-tier-locked:hover 
   transition:
     box-shadow var(--app-transition),
     border-color var(--app-transition);
+}
+.catalog-card--included {
+  /* Bundled / included catalog — default card surface */
+}
+.catalog-card--extended {
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.14) 0%, var(--app-surface-card) 12%);
+  border-left: 3px solid rgba(96, 165, 250, 0.52);
+}
+html.fs-app[data-app-theme="light"] .catalog-card--extended {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.1) 0%, var(--app-surface-card) 14%);
+  border-left-color: rgba(59, 130, 246, 0.45);
+}
+.catalog-legend {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.media-card-row.catalog-card--extended {
+  background: linear-gradient(90deg, rgba(96, 165, 250, 0.12) 0%, transparent 18%);
+  border-left: 3px solid rgba(96, 165, 250, 0.48);
+  border-radius: 12px;
+  padding-left: 0.55rem;
+}
+html.fs-app[data-app-theme="light"] .media-card-row.catalog-card--extended {
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, transparent 20%);
+  border-left-color: rgba(59, 130, 246, 0.42);
 }
 .app-glass-card {
   background: linear-gradient(180deg, var(--app-surface-glass-top), var(--app-surface-glass-bottom));
@@ -2896,7 +2950,7 @@ html.fs-app[data-app-theme="light"] .voices-toolbar-row {
   display: inline-flex;
   border-radius: 10px;
   overflow: hidden;
-  /* Match .app-glass-card — same shell as Create Personalized Mental Script */
+  /* Match .app-glass-card — same shell as Create Personalized Mind Training Script */
   border: 1px solid var(--app-surface-card-border);
   box-shadow: var(--app-surface-card-shadow);
   background: linear-gradient(180deg, var(--app-surface-glass-top), var(--app-surface-glass-bottom));

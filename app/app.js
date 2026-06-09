@@ -332,97 +332,123 @@
   })();
   /** `file` must match the filename in `website/audio/backgrounds/` (same catalog as iOS `BackGroundAudio`). */
   var availableBackgrounds = [
-    { id: "bg-none", name: "No Background", categoryID: "general", file: "" },
-    // General (original calm/focus tracks)
-    { id: "bg-rain", name: "Rain", categoryID: "general", file: "background-music-soft-calm-333111.mp3" },
-    { id: "bg-calm-night", name: "Calm Night", categoryID: "general", file: "calm-night-312296.mp3" },
-    { id: "bg-calm-soft", name: "Calm Soft", categoryID: "general", file: "calm-soft-background-music-398280.mp3" },
-    { id: "bg-just-relax", name: "Just Relax", categoryID: "general", file: "just-relax-11157.mp3" },
-    { id: "bg-meditation", name: "Meditation Background", categoryID: "general", file: "meditation-relaxing-music-background-320405.mp3" },
+    { id: "bg-none", name: "No Background", categoryID: "bg-ambient", file: "" },
+    // Nature & Rain
+    { id: "bg-rain", name: "Rain", categoryID: "bg-nature", file: "background-music-soft-calm-333111.mp3" },
+    { id: "bg-nature-presence-glow", name: "Nature Presence Glow", categoryID: "bg-nature", file: "Nature Presence Glow.mp3" },
+    { id: "bg-breeze-glow", name: "Breeze Glow", categoryID: "bg-nature", file: "Breeze Glow.mp3" },
+    { id: "bg-serene-wave-drift", name: "Serene Wave Drift", categoryID: "bg-nature", file: "Serene Wave Drift.mp3" },
+    { id: "bg-whisper-flow", name: "Whisper Flow", categoryID: "bg-nature", file: "Whisper Flow.mp3" },
+    // Piano & Soft Keys
+    { id: "bg-piano", name: "Piano Background", categoryID: "bg-piano", file: "piano-background-music-337774.mp3" },
+    { id: "bg-soft-calm-piano", name: "Soft Calm Piano", categoryID: "bg-piano", file: "soft-calm-piano-music-405074.mp3" },
+    { id: "bg-warm-melody", name: "Warm Melody", categoryID: "bg-piano", file: "Warm Melody.mp3" },
+    { id: "bg-calm-piano-whisper", name: "Calm Piano Whisper", categoryID: "bg-piano", file: "Calm Piano Whisper.mp3" },
+    { id: "bg-kindness-melody", name: "Kindness Melody", categoryID: "bg-piano", file: "Kindness Melody.mp3" },
+    // Ambient & Meditation
+    { id: "bg-calm-soft", name: "Calm Soft", categoryID: "bg-ambient", file: "calm-soft-background-music-398280.mp3" },
+    { id: "bg-meditation", name: "Meditation Background", categoryID: "bg-ambient", file: "meditation-relaxing-music-background-320405.mp3" },
+    { id: "bg-please-calm", name: "Please Calm My Mind", categoryID: "bg-ambient", file: "please-calm-my-mind-125566.mp3" },
+    { id: "bg-mindful-drift", name: "Mindful Drift", categoryID: "bg-ambient", file: "Mindful Drift.mp3" },
+    { id: "bg-inner-calm", name: "Inner Calm", categoryID: "bg-ambient", file: "Inner Calm.mp3" },
+    { id: "bg-serene-mind-whisper", name: "Serene Mind Whisper", categoryID: "bg-ambient", file: "Serene Mind Whisper.mp3" },
+    { id: "bg-connection-drift", name: "Connection Drift", categoryID: "bg-ambient", file: "Cennection Drift.mp3" },
+    { id: "bg-theta-peace-drift", name: "Theta Peace Drift", categoryID: "bg-ambient", file: "Theta Peace Drift.mp3" },
+    { id: "bg-deep-serenity-pulse", name: "Deep Serenity Pulse", categoryID: "bg-ambient", file: "Deep Serenity Pulse.mp3" },
+    // Chill & Lo-fi
+    { id: "bg-calm-night", name: "Calm Night", categoryID: "bg-chill", file: "calm-night-312296.mp3" },
+    { id: "bg-just-relax", name: "Just Relax", categoryID: "bg-chill", file: "just-relax-11157.mp3" },
     {
       id: "bg-oasis",
       name: "Oasis (Chill)",
-      categoryID: "general",
+      categoryID: "bg-chill",
       file: "oasis-background-relax-hip-hop-vlog-music-for-video-stories-short-379505.mp3",
     },
-    { id: "bg-penguin", name: "Modern Chillout", categoryID: "general", file: "penguinmusic-modern-chillout-future-calm-12641.mp3" },
-    { id: "bg-piano", name: "Piano Background", categoryID: "general", file: "piano-background-music-337774.mp3" },
-    { id: "bg-please-calm", name: "Please Calm My Mind", categoryID: "general", file: "please-calm-my-mind-125566.mp3" },
-    { id: "bg-soft-calm-piano", name: "Soft Calm Piano", categoryID: "general", file: "soft-calm-piano-music-405074.mp3" },
-    // Confidence & Self-Worth
-    { id: "bg-assertive-whisper", name: "Assertive Whisper", categoryID: "confidence", file: "Assertive Whisper.mp3" },
-    { id: "bg-calm-groove", name: "Calm Groove", categoryID: "confidence", file: "Calm Groove.mp3" },
-    { id: "bg-kindness-melody", name: "Kindness Melody", categoryID: "confidence", file: "Kindness Melody.mp3" },
-    { id: "bg-purpose-pulse", name: "Purpose Pulse", categoryID: "confidence", file: "Purpose Pulse.mp3" },
-    { id: "bg-resilience-ascend", name: "Resilience Ascend", categoryID: "confidence", file: "Resilience Ascend.mp3" },
-    // Health & Fitness
-    { id: "bg-groove-bloom", name: "Groove Bloom", categoryID: "health-fitness", file: "Groove Bloom.mp3" },
-    { id: "bg-joyful-fusion", name: "Joyful Fusion", categoryID: "health-fitness", file: "Joyful Fusion.mp3" },
-    { id: "bg-mindful-drift", name: "Mindful Drift", categoryID: "health-fitness", file: "Mindful Drift.mp3" },
-    { id: "bg-recovery-glow", name: "Recovery Glow", categoryID: "health-fitness", file: "Recovery Glow.mp3" },
-    { id: "bg-vitality-wave-rise", name: "Vitality Wave Rise", categoryID: "health-fitness", file: "Vitality Wave Rise.mp3" },
-    // Mental Well-Being
-    { id: "bg-clarity-sting-echo", name: "Clarity Sting Echo", categoryID: "mental-wellbeing", file: "Clarity Sting Echo.mp3" },
-    { id: "bg-compassion-rise", name: "Compassion Rise", categoryID: "mental-wellbeing", file: "Compassion Rise.mp3" },
-    { id: "bg-inner-calm", name: "Inner Calm", categoryID: "mental-wellbeing", file: "Inner Calm.mp3" },
-    { id: "bg-nature-presence-glow", name: "Nature Presence Glow", categoryID: "mental-wellbeing", file: "Nature Presence Glow.mp3" },
-    { id: "bg-serene-mind-whisper", name: "Serene Mind Whisper", categoryID: "mental-wellbeing", file: "Serene Mind Whisper.mp3" },
-    // Relationships & Love
-    { id: "bg-breeze-glow", name: "Breeze Glow", categoryID: "relationships", file: "Breeze Glow.mp3" },
-    { id: "bg-connection-drift", name: "Connection Drift", categoryID: "relationships", file: "Cennection Drift.mp3" },
-    { id: "bg-harmony-rise", name: "Harmony Rise", categoryID: "relationships", file: "Harmony Rise.mp3" },
-    { id: "bg-warm-melody", name: "Warm Melody", categoryID: "relationships", file: "Warm Melody.mp3" },
-    { id: "bg-whisper-flow", name: "Whisper Flow", categoryID: "relationships", file: "Whisper Flow.mp3" },
-    // Sleep & Rest
-    { id: "bg-calm-piano-whisper", name: "Calm Piano Whisper", categoryID: "sleep-rest", file: "Calm Piano Whisper.mp3" },
-    { id: "bg-deep-serenity-pulse", name: "Deep Serenity Pulse", categoryID: "sleep-rest", file: "Deep Serenity Pulse.mp3" },
-    { id: "bg-orchestral-calm-embrace", name: "Orchestral Calm Embrace", categoryID: "sleep-rest", file: "Orchestral Calm Embrace.mp3" },
-    { id: "bg-serene-wave-drift", name: "Serene Wave Drift", categoryID: "sleep-rest", file: "Serene Wave Drift.mp3" },
-    { id: "bg-theta-peace-drift", name: "Theta Peace Drift", categoryID: "sleep-rest", file: "Theta Peace Drift.mp3" },
-    // Sports Performance
-    { id: "bg-ambient-mastery-pulse", name: "Ambient Mastery Pulse", categoryID: "sports-performance", file: "Ambient Mastery Pulse.mp3" },
-    { id: "bg-orchestral-resilience-rush", name: "Orchestral Resilience Rush", categoryID: "sports-performance", file: "orchestral Resilience Rush.mp3" },
-    { id: "bg-relentless-edge-surge", name: "Relentless Edge Surge", categoryID: "sports-performance", file: "Relentless Edge Surge.mp3" },
-    { id: "bg-riff-resilience-rush", name: "Riff Resilience Rush", categoryID: "sports-performance", file: "Riff Resilience Rush.mp3" },
-    { id: "bg-synth-flow-fury", name: "Synth Flow Fury", categoryID: "sports-performance", file: "Synth Flow Fury.mp3" },
-    // Success & Prosperity
-    { id: "bg-breakthrough-surge", name: "Breakthrough Surge", categoryID: "success-prosperity", file: "Breakthrough Surge.mp3" },
-    { id: "bg-freedom-whisper", name: "Freedom Whisper", categoryID: "success-prosperity", file: "Freedom Whisper.mp3" },
-    { id: "bg-growth-glow", name: "Growth Glow", categoryID: "success-prosperity", file: "Growth Glow.mp3" },
-    { id: "bg-momentum-desire", name: "Momentum Desire", categoryID: "success-prosperity", file: "Momentum Desire.mp3" },
-    { id: "bg-symphony-ascend", name: "Symphony Ascend", categoryID: "success-prosperity", file: "Symphony Ascend.mp3" },
+    { id: "bg-penguin", name: "Modern Chillout", categoryID: "bg-chill", file: "penguinmusic-modern-chillout-future-calm-12641.mp3" },
+    { id: "bg-calm-groove", name: "Calm Groove", categoryID: "bg-chill", file: "Calm Groove.mp3" },
+    { id: "bg-growth-glow", name: "Growth Glow", categoryID: "bg-chill", file: "Growth Glow.mp3" },
+    { id: "bg-freedom-whisper", name: "Freedom Whisper", categoryID: "bg-chill", file: "Freedom Whisper.mp3" },
+    // Orchestral & Cinematic
+    { id: "bg-orchestral-calm-embrace", name: "Orchestral Calm Embrace", categoryID: "bg-orchestral", file: "Orchestral Calm Embrace.mp3" },
+    { id: "bg-harmony-rise", name: "Harmony Rise", categoryID: "bg-orchestral", file: "Harmony Rise.mp3" },
+    { id: "bg-symphony-ascend", name: "Symphony Ascend", categoryID: "bg-orchestral", file: "Symphony Ascend.mp3" },
+    { id: "bg-resilience-ascend", name: "Resilience Ascend", categoryID: "bg-orchestral", file: "Resilience Ascend.mp3" },
+    { id: "bg-compassion-rise", name: "Compassion Rise", categoryID: "bg-orchestral", file: "Compassion Rise.mp3" },
+    { id: "bg-clarity-sting-echo", name: "Clarity Sting Echo", categoryID: "bg-orchestral", file: "Clarity Sting Echo.mp3" },
+    // Upbeat & Energetic
+    { id: "bg-assertive-whisper", name: "Assertive Whisper", categoryID: "bg-upbeat", file: "Assertive Whisper.mp3" },
+    { id: "bg-purpose-pulse", name: "Purpose Pulse", categoryID: "bg-upbeat", file: "Purpose Pulse.mp3" },
+    { id: "bg-groove-bloom", name: "Groove Bloom", categoryID: "bg-upbeat", file: "Groove Bloom.mp3" },
+    { id: "bg-joyful-fusion", name: "Joyful Fusion", categoryID: "bg-upbeat", file: "Joyful Fusion.mp3" },
+    { id: "bg-recovery-glow", name: "Recovery Glow", categoryID: "bg-upbeat", file: "Recovery Glow.mp3" },
+    { id: "bg-vitality-wave-rise", name: "Vitality Wave Rise", categoryID: "bg-upbeat", file: "Vitality Wave Rise.mp3" },
+    { id: "bg-ambient-mastery-pulse", name: "Ambient Mastery Pulse", categoryID: "bg-upbeat", file: "Ambient Mastery Pulse.mp3" },
+    { id: "bg-orchestral-resilience-rush", name: "Orchestral Resilience Rush", categoryID: "bg-upbeat", file: "orchestral Resilience Rush.mp3" },
+    { id: "bg-relentless-edge-surge", name: "Relentless Edge Surge", categoryID: "bg-upbeat", file: "Relentless Edge Surge.mp3" },
+    { id: "bg-riff-resilience-rush", name: "Riff Resilience Rush", categoryID: "bg-upbeat", file: "Riff Resilience Rush.mp3" },
+    { id: "bg-synth-flow-fury", name: "Synth Flow Fury", categoryID: "bg-upbeat", file: "Synth Flow Fury.mp3" },
+    { id: "bg-breakthrough-surge", name: "Breakthrough Surge", categoryID: "bg-upbeat", file: "Breakthrough Surge.mp3" },
+    { id: "bg-momentum-desire", name: "Momentum Desire", categoryID: "bg-upbeat", file: "Momentum Desire.mp3" },
   ];
   var backgroundCategoryOrder = [
-    "general",
-    "confidence",
-    "relationships",
-    "success-prosperity",
-    "mental-wellbeing",
-    "health-fitness",
-    "sports-performance",
-    "sleep-rest",
+    "bg-nature",
+    "bg-piano",
+    "bg-ambient",
+    "bg-chill",
+    "bg-orchestral",
+    "bg-upbeat",
   ];
   var backgroundCategoryOpenById = {};
   function backgroundCategoryDisplayName(id) {
     switch (id) {
+      case "bg-nature":
+        return "Nature & Rain";
+      case "bg-piano":
+        return "Piano & Soft Keys";
+      case "bg-ambient":
+        return "Ambient & Meditation";
+      case "bg-chill":
+        return "Chill & Lo-fi";
+      case "bg-orchestral":
+        return "Orchestral & Cinematic";
+      case "bg-upbeat":
+        return "Upbeat & Energetic";
       case "general":
-        return "General";
-      case "confidence":
-        return "Confidence & Self-Worth";
-      case "relationships":
-        return "Relationships & Love";
-      case "success-prosperity":
-        return "Success & Prosperity";
       case "mental-wellbeing":
-        return "Mental Well-Being";
-      case "health-fitness":
-        return "Health & Fitness";
-      case "sports-performance":
-        return "Sports Performance";
       case "sleep-rest":
-        return "Sleep & Rest";
+        return "Ambient & Meditation";
+      case "confidence":
+        return "Chill & Lo-fi";
+      case "relationships":
+        return "Piano & Soft Keys";
+      case "success-prosperity":
+      case "health-fitness":
+      case "sports-performance":
+        return "Upbeat & Energetic";
       default:
         return id || "Other";
+    }
+  }
+  function normalizedBackgroundBrowseCategoryID(raw) {
+    var id = String(raw || "")
+      .trim()
+      .toLowerCase();
+    if (backgroundCategoryOrder.indexOf(id) >= 0) return id;
+    switch (id) {
+      case "general":
+      case "mental-wellbeing":
+      case "sleep-rest":
+        return "bg-ambient";
+      case "confidence":
+        return "bg-chill";
+      case "relationships":
+        return "bg-piano";
+      case "success-prosperity":
+      case "health-fitness":
+      case "sports-performance":
+        return "bg-upbeat";
+      default:
+        return "bg-ambient";
     }
   }
 
@@ -1023,7 +1049,7 @@
     home: {
       title: "Home",
       content:
-        "Create Personalized Mental Script — Tap to start the questionnaire and generate a personalized mental script (Starter and Creator). On Free, you'll be prompted to upgrade.\n\n" +
+        "Create Personalized Mind Training Script — Tap to start the questionnaire and generate a personalized mind training script (Starter and Creator). On Free, you'll be prompted to upgrade.\n\n" +
         "Daily Spark — Tap to play today's short curated affirmation (Starter and Creator).\n\n" +
         "Listen today — Tap to run your saved playlist or library shortcut. Set the target in Account → Preferences.\n\n" +
         "Dashboard — Streak, plays (tap plays to cycle week / month / year / total), plan, last played, milestones, and reminders status. Same Firestore fields as the iOS app.\n\n" +
@@ -4373,10 +4399,22 @@
       '          <div id="account-plans-stripe-wrap">' +
       '            <p class="app-muted account-plans-panel-note">Choose a billing period. You will be redirected to Stripe Checkout.</p>' +
       '            <div class="account-plans-grid">' +
-      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-month">Starter — monthly</button>' +
-      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-year">Starter — yearly</button>' +
-      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-month">Creator — monthly</button>' +
-      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-year">Creator — yearly</button>' +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-month">' +
+      '                <span class="account-plan-option__tier">Starter</span>' +
+      '                <span class="account-plan-option__period">Monthly billing</span>' +
+      "              </button>" +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-year">' +
+      '                <span class="account-plan-option__tier">Starter</span>' +
+      '                <span class="account-plan-option__period">Yearly billing</span>' +
+      "              </button>" +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-month">' +
+      '                <span class="account-plan-option__tier">Creator</span>' +
+      '                <span class="account-plan-option__period">Monthly billing</span>' +
+      "              </button>" +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-year">' +
+      '                <span class="account-plan-option__tier">Creator</span>' +
+      '                <span class="account-plan-option__period">Yearly billing</span>' +
+      "              </button>" +
       "            </div>" +
       "          </div>" +
       '          <div id="account-plans-appstore-wrap" hidden>' +
@@ -5824,7 +5862,7 @@
       return;
     }
     var displayName = ((document.getElementById("bg-publish-name").value || "").trim());
-    var categoryID = (document.getElementById("bg-publish-category").value || "").trim() || "general";
+    var categoryID = (document.getElementById("bg-publish-category").value || "").trim() || "bg-ambient";
     var accessTierEl = document.getElementById("bg-publish-access-tier");
     var accessTier = accessTierEl && accessTierEl.value === "free" ? "free" : "paid";
     var fileInput = document.getElementById("bg-publish-file");
@@ -5902,7 +5940,7 @@
           '<div style="flex:1;min-width:0;"><strong>' +
           escapeHtml(b.name || "Background") +
           '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
-          escapeHtml(backgroundCategoryDisplayName((b.categoryID || "").trim() || "general")) +
+          escapeHtml(backgroundCategoryDisplayName(normalizedBackgroundBrowseCategoryID(b.categoryID))) +
           " · " +
           escapeHtml((b.accessTier || "free") === "paid" ? "Paid" : "Free") +
           "</span></div>" +
@@ -8734,9 +8772,6 @@
     var isAudible = isBackgroundPreviewing(b.id);
     var canPrev = backgroundRowCanPreview(b);
     var badges = "";
-    if (b.isCloudCatalog) {
-      badges += ' <span class="app-chip">Cloud</span>';
-    }
     if (!canPrev) {
       badges += ' <span class="app-chip">Silent</span>';
     }
@@ -8754,8 +8789,11 @@
       }
     }
     var transportHtml = canPrev ? mediaCardPlayBtnHtml("data-background-preview", b.id, isAudible) : "";
+    var catalogClass = b.isCloudCatalog ? " catalog-card--extended" : " catalog-card--included";
     return (
-      '<div class="app-modal-row media-card-row">' +
+      '<div class="app-modal-row media-card-row' +
+      catalogClass +
+      '">' +
       '  <div class="media-card-row-main">' +
       '    <div class="app-modal-row-name">' +
       escapeHtml(b.name) +
@@ -8789,7 +8827,7 @@
       '  <div class="media-card-row-main">' +
       '    <div class="app-modal-row-name">' +
       escapeHtml(b.name) +
-      ' <span class="app-muted" style="font-weight:400;">(App)</span></div>' +
+      "</div>" +
       "  </div>" +
       '<div class="media-card-actions">' +
       (canPrev ? mediaCardPlayBtnHtml("data-background-preview", b.id, isAudible) : "") +
@@ -8857,7 +8895,7 @@
     allAppBackgroundTracksIncludingCloud().forEach(function (b) {
       if (b.id === "bg-none") return;
       if (audioSearchQuery && !textMatchesSectionSearch(b.name, audioSearchQuery)) return;
-      var cid = (b.categoryID && String(b.categoryID).trim()) || "general";
+      var cid = normalizedBackgroundBrowseCategoryID(b.categoryID);
       if (!grouped[cid]) grouped[cid] = [];
       grouped[cid].push(b);
     });
@@ -8907,8 +8945,9 @@
     list.innerHTML =
       renderAdminCloudBackgroundsSection() +
       '<p class="app-muted audio-app-lede">' +
-      "Premade background tracks for generation and mixing — same catalog as App Audio on iOS. Preview any track here; pin to My Audio with Starter or Creator." +
+      "Background tracks for generation and mixing — same catalog as App Audio on iOS. Preview any track here; pin to My Audio with Starter or Creator." +
       "</p>" +
+      '<p class="app-muted catalog-legend">Cards with a blue edge are from the extended catalog.</p>' +
       (none ? '<div class="app-bg-none-row">' + audioBuiltinRowMarkup(none, { showPinToMy: false }) + "</div>" : "") +
       sections;
     bindAdminCloudBackgroundActions(list);
@@ -11254,11 +11293,11 @@
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
         '    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">' +
         "      <div>" +
-        '        <strong style="font-size:1rem;">Create Personalized Mental Script</strong>' +
+        '        <strong style="font-size:1rem;">Create Personalized Mind Training Script</strong>' +
         '        <p class="app-muted" style="margin:0.25rem 0 0;">Follow category selection, then answer your survey questions.</p>' +
         "      </div>" +
         "    </div>" +
-        '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mental Script</button></div>' +
+        '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mind Training Script</button></div>' +
         "  </div>" +
         '  <div class="app-card app-glass-card home-action-buttons-card">' +
         '    <div class="home-action-buttons-grid">' +
@@ -12131,6 +12170,7 @@
       '  <h3 class="premade-category-detail-title">' +
       escapeHtml(categoryName) +
       "</h3>" +
+      '<p class="app-muted catalog-legend">Cards with a blue edge are from the extended catalog.</p>' +
       '  <div class="premade-category-detail-cards">' +
       cardsHtml +
       "  </div>" +
@@ -14295,15 +14335,20 @@
         });
         return out;
       }
-      if (!categoryID) return ["bg-none", "bg-rain", "bg-piano"];
-      return availableBackgrounds
-        .filter(function (b) {
-          return b.id === "bg-none" || b.categoryID === categoryID || b.categoryID === "general";
+      var candidates = ["bg-none", "bg-rain", "bg-piano", "bg-meditation"];
+      if (categoryID && CATEGORY_MEDIA_RECOMMENDATIONS[categoryID] && CATEGORY_MEDIA_RECOMMENDATIONS[categoryID].backgroundID) {
+        candidates.unshift(CATEGORY_MEDIA_RECOMMENDATIONS[categoryID].backgroundID);
+      }
+      var seen = {};
+      return candidates
+        .filter(function (id) {
+          if (seen[id]) return false;
+          seen[id] = true;
+          return availableBackgrounds.some(function (b) {
+            return b.id === id;
+          });
         })
-        .slice(0, 4)
-        .map(function (b) {
-          return b.id;
-        });
+        .slice(0, 4);
     }
 
     var activeCategoryID = null;
@@ -14531,7 +14576,7 @@
     if (!displayScripts.length) {
       list.innerHTML = scripts.length && normalizeSectionSearchQuery(sectionSearchQuery.library) && activeLibraryTab === "my-library"
         ? '<div class="app-empty-hint">No scripts match your search.</div>'
-        : '<div class="app-empty-hint">No scripts yet. Use <strong>New</strong> or <strong>Import Audio</strong> in the toolbar, or use the <strong>Home</strong> tab flow to generate a personalized mental script and auto-save it here.</div>';
+        : '<div class="app-empty-hint">No scripts yet. Use <strong>New</strong> or <strong>Import Audio</strong> in the toolbar, or use the <strong>Home</strong> tab flow to generate a personalized mind training script and auto-save it here.</div>';
       updateLibraryExpandAllToggleUi();
       return;
     }
@@ -14739,6 +14784,13 @@
       });
   }
 
+  function libraryRemovalMessage(script, removed) {
+    var name = (script && script.title && String(script.title).trim()) || "";
+    var label = name ? '"' + name + '"' : "This item";
+    var verb = removed ? "removed" : "deleted";
+    return label + " has been " + verb + " from your library.";
+  }
+
   function deleteScript(script) {
     if (!currentUser) return;
     if (scriptIsSharedListenOnly(script)) {
@@ -14755,7 +14807,7 @@
         .doc(token)
         .delete()
         .then(function () {
-          setMessage("Shared audio removed from your library.", "success");
+          setMessage(libraryRemovalMessage(script, true), "success");
         })
         .catch(function (e) {
           setMessage(e.message || "Could not remove shared audio.", "error");
@@ -14767,7 +14819,7 @@
     setMessage("Deleting...", "");
     if (isWebFreeTier()) {
       deleteFreeLocalScript(currentUser.uid, script.id);
-      setMessage("Script deleted.", "success");
+      setMessage(libraryRemovalMessage(script, false), "success");
       if (editingScriptId === script.id) closeEditor();
       return;
     }
@@ -14775,7 +14827,7 @@
       .doc(script.id)
       .delete()
       .then(function () {
-        setMessage("Script deleted.", "success");
+        setMessage(libraryRemovalMessage(script, false), "success");
         if (editingScriptId === script.id) closeEditor();
       })
       .catch(function (e) {
@@ -16772,8 +16824,11 @@
         syncFooterHtml +
         "</div>"
       : "";
+    var catalogClass = p.isCloudCatalog ? " catalog-card--extended" : " catalog-card--included";
     return (
-      '<article class="app-card" data-premade-id="' +
+      '<article class="app-card' +
+      catalogClass +
+      '" data-premade-id="' +
       escapeHtml(p.id) +
       '">' +
       '<div class="app-card-header-row">' +
@@ -16981,7 +17036,7 @@
               return {
                 id: doc.id,
                 name: data.name || "Background",
-                categoryID: (data.categoryID && String(data.categoryID).trim()) || "general",
+                categoryID: normalizedBackgroundBrowseCategoryID(data.categoryID) || "bg-ambient",
                 file: "",
                 audioURL: (data.audioURL && String(data.audioURL).trim()) || "",
                 accessTier: catalogAccessTierFromData(data),
