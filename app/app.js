@@ -116,6 +116,8 @@
   /** 0–1, applies to script / playlist / voice-adjust preview playback in this browser. */
   var PREF_PLAYBACK_VOLUME_KEY = "focusshiftWebPlaybackVolume";
   var adminModeEnabled = false;
+  /** Premade Content Manager modal tab: working | premade | backgrounds */
+  var premadeContentManagerTab = "working";
   /** Matches iOS `SubscriptionConfig.creatorOutgoingShareCap` (active outgoing share links). */
   var CREATOR_OUTGOING_SHARE_CAP = 50;
   /** Universal link base for share invites (`ShareLinkConstants` on iOS). */
@@ -3494,10 +3496,15 @@
     if (chk) {
       chk.checked = adminModeEnabled;
     }
+    var pcmNav = document.getElementById("account-open-premade-manager");
+    if (pcmNav) {
+      pcmNav.hidden = !adminModeEnabled;
+    }
     if (!adminModeEnabled) {
       closePublishPremadeModal();
       closeEditPremadeModal();
       closeBackgroundPublishModal();
+      closePremadeContentManager();
     }
     if (document.getElementById("premade-list")) {
       renderPremade();
@@ -4513,8 +4520,13 @@
       "      </section>" +
       '      <section id="account-admin-tools-section" class="account-ios-group">' +
       accountIosGroupHeader("Admin Tools", null, null) +
+      '        <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">Visible only for approved admin accounts. Turn on Admin mode to publish premades and cloud backgrounds.</p>' +
       '        <div class="account-ios-list">' +
       '          <label class="account-ios-row account-ios-row--toggle account-pref-row"><input type="checkbox" id="pref-admin-mode" /> Admin mode (catalog publish &amp; edit)</label>' +
+      '          <button type="button" class="account-ios-row account-ios-row--nav" id="account-open-premade-manager" hidden>' +
+      '            <span class="account-ios-row__label">Premade Content Manager</span>' +
+      '            <span class="account-ios-row__chev" aria-hidden="true">›</span>' +
+      "          </button>" +
       "        </div>" +
       "      </section>" +
       '      <section class="account-ios-group account-ios-group--signout">' +
@@ -4762,6 +4774,21 @@
       '      <button type="button" class="app-btn" id="bg-publish-cancel">Cancel</button>' +
       '      <button type="button" class="app-btn app-btn-primary" id="bg-publish-submit">Publish to Cloud</button>' +
       "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="premade-content-manager-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal app-modal--wide" role="dialog" aria-modal="true" aria-labelledby="pcm-title">' +
+      '    <div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.35rem;">' +
+      '      <h3 id="pcm-title" style="margin:0;">Premade Content Manager</h3>' +
+      '      <button type="button" class="app-btn" id="pcm-close">Close</button>' +
+      "    </div>" +
+      '    <p class="app-muted" style="margin:0 0 0.65rem;font-size:0.88rem;">Publish scripts to the App Library, manage cloud premades, and upload background tracks — same tools as iOS Admin.</p>' +
+      '    <div class="gen-pill-row" role="tablist" aria-label="Premade content manager" style="margin-bottom:0.75rem;">' +
+      '      <span class="gen-pill-item"><button type="button" class="gen-pill-label pcm-tab-btn" data-pcm-tab="working" role="tab">Working</button></span>' +
+      '      <span class="gen-pill-item"><button type="button" class="gen-pill-label pcm-tab-btn" data-pcm-tab="premade" role="tab">Premade</button></span>' +
+      '      <span class="gen-pill-item"><button type="button" class="gen-pill-label pcm-tab-btn" data-pcm-tab="backgrounds" role="tab">Backgrounds</button></span>' +
+      "    </div>" +
+      '    <div id="pcm-body"></div>' +
       "  </div>" +
       "</div>" +
       '<div id="premade-edit-backdrop" class="app-modal-backdrop" hidden>' +
@@ -5407,6 +5434,25 @@
         writeAdminModeEnabled(!!prefAdminMode.checked);
       });
     }
+    var pcmOpen = document.getElementById("account-open-premade-manager");
+    if (pcmOpen) {
+      pcmOpen.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        openPremadeContentManager("working");
+      });
+    }
+    var pcmClose = document.getElementById("pcm-close");
+    if (pcmClose) {
+      pcmClose.addEventListener("click", closePremadeContentManager);
+    }
+    document.querySelectorAll(".pcm-tab-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var tab = btn.getAttribute("data-pcm-tab");
+        if (!tab || !adminModeEnabled) return;
+        premadeContentManagerTab = tab;
+        renderPremadeContentManager();
+      });
+    });
     document.getElementById("btn-app-playlist-timer-clear").addEventListener("click", function () {
       clearPlaylistTimer();
       setPlaylistsMessage("Playlist timer cleared.", "success");
@@ -5742,11 +5788,18 @@
     postScreenMessage("publish-premade-message", text, kind);
   }
 
-  function openPublishPremadeModal() {
+  function openPublishPremadeModal(preselectedScriptId) {
     if (!adminModeEnabled) return;
     var backdrop = document.getElementById("premade-publish-backdrop");
     if (!backdrop) return;
     populatePublishScriptOptions();
+    var sel = document.getElementById("publish-script-id");
+    if (sel && preselectedScriptId) {
+      var hasOption = Array.prototype.some.call(sel.options, function (opt) {
+        return opt.value === preselectedScriptId;
+      });
+      if (hasOption) sel.value = preselectedScriptId;
+    }
     populatePublishCategoryOptions();
     syncPublishFormFromSelectedScript();
     publishTextDirty = false;
@@ -6028,6 +6081,186 @@
     }
   }
 
+  function premadeSourceScriptStatus(scriptId) {
+    var sid = (scriptId && String(scriptId).trim()) || "";
+    if (!sid) return "draft";
+    if (
+      currentHiddenPremade.some(function (p) {
+        return (p.sourceScriptID || "") === sid;
+      })
+    ) {
+      return "hidden";
+    }
+    if (
+      currentPremade.some(function (p) {
+        return (p.sourceScriptID || "") === sid && p.active !== false;
+      })
+    ) {
+      return "published";
+    }
+    return "draft";
+  }
+
+  function formatFirestoreDateLabel(ts) {
+    if (!ts) return "";
+    try {
+      var d = typeof ts.toDate === "function" ? ts.toDate() : ts.seconds ? new Date(ts.seconds * 1000) : null;
+      return d ? d.toLocaleString() : "";
+    } catch (_e) {
+      return "";
+    }
+  }
+
+  function renderPremadeContentManager() {
+    var body = document.getElementById("pcm-body");
+    if (!body) return;
+    document.querySelectorAll(".pcm-tab-btn").forEach(function (btn) {
+      var tab = btn.getAttribute("data-pcm-tab");
+      var active = tab === premadeContentManagerTab;
+      btn.setAttribute("aria-selected", active ? "true" : "false");
+      btn.classList.toggle("is-active", active);
+    });
+    if (premadeContentManagerTab === "working") {
+      var withAudio = currentScripts
+        .filter(function (s) {
+          return !!(s.audioURL && String(s.audioURL).trim());
+        })
+        .slice()
+        .sort(function (a, b) {
+          var at = a.createdAt && typeof a.createdAt.toMillis === "function" ? a.createdAt.toMillis() : 0;
+          var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
+          return bt - at;
+        });
+      if (!withAudio.length) {
+        body.innerHTML =
+          '<p class="app-muted">No scripts with generated audio yet. Create and generate audio in My Library, then publish here.</p>';
+      } else {
+        body.innerHTML =
+          '<p class="app-muted" style="margin:0 0 0.65rem;">Scripts with audio from your library. Publish to add them to the cloud App Library.</p>' +
+          withAudio
+            .map(function (s) {
+              var status = premadeSourceScriptStatus(s.id);
+              var statusHtml =
+                status === "published"
+                  ? '<span class="app-muted" style="color:#15803d;">Published</span>'
+                  : status === "hidden"
+                    ? '<span class="app-muted" style="color:#c2410c;">Hidden</span>'
+                    : "";
+              var publishBtn =
+                status === "draft"
+                  ? '<button type="button" class="app-btn app-btn-primary" data-pcm-publish-script="' +
+                    escapeHtml(s.id) +
+                    '">Publish</button>'
+                  : "";
+              return (
+                '<div class="pcm-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.55rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
+                '<div style="flex:1;min-width:0;"><strong>' +
+                escapeHtml(s.title || "Untitled") +
+                '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
+                escapeHtml(formatFirestoreDateLabel(s.createdAt)) +
+                "</span></div>" +
+                statusHtml +
+                publishBtn +
+                "</div>"
+              );
+            })
+            .join("");
+      }
+    } else if (premadeContentManagerTab === "premade") {
+      var live = sortPremadeByCreatedAtDesc(currentPremade);
+      var hiddenBlock = renderHiddenPremadesAdminSection();
+      if (!live.length) {
+        body.innerHTML =
+          '<p class="app-muted" style="margin:0 0 0.65rem;">Live cloud premades in App Library.</p>' +
+          '<p class="app-muted">No published premades yet.</p>' +
+          hiddenBlock;
+      } else {
+        body.innerHTML =
+          '<p class="app-muted" style="margin:0 0 0.65rem;">Hide removes from App Library; restore from Hidden below.</p>' +
+          live
+            .map(function (p) {
+              return (
+                '<div class="pcm-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.55rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
+                '<div style="flex:1;min-width:0;"><strong>' +
+                escapeHtml(p.title || "Untitled") +
+                '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
+                escapeHtml(premadeLibraryCategoryDisplayName((p.categoryID || "").trim())) +
+                " · " +
+                escapeHtml((p.accessTier || "paid") === "free" ? "Free" : "Paid") +
+                "</span></div>" +
+                '<button type="button" class="app-btn app-btn-secondary" data-pcm-hide-premade="' +
+                escapeHtml(p.id) +
+                '">Hide</button>' +
+                "</div>"
+              );
+            })
+            .join("") +
+          hiddenBlock;
+      }
+      bindHiddenPremadeAdminActions();
+    } else {
+      body.innerHTML = renderAdminCloudBackgroundsSection();
+      bindAdminCloudBackgroundActions(body);
+    }
+    bindPremadeContentManagerBodyActions();
+  }
+
+  function bindPremadeContentManagerBodyActions() {
+    var body = document.getElementById("pcm-body");
+    if (!body) return;
+    body.querySelectorAll("[data-pcm-publish-script]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        openPublishPremadeModal(btn.getAttribute("data-pcm-publish-script"));
+      });
+    });
+    body.querySelectorAll("[data-pcm-hide-premade]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        var pid = btn.getAttribute("data-pcm-hide-premade");
+        var premade = currentPremade.find(function (x) {
+          return x.id === pid;
+        });
+        var title = (premade && premade.title) || "this premade";
+        if (
+          !window.confirm(
+            'Hide "' + title + '" from the App Library?\n\nYou can restore it later from Hidden premades.'
+          )
+        ) {
+          return;
+        }
+        btn.disabled = true;
+        hidePremadeById(pid)
+          .then(function () {
+            showAppBanner("Premade hidden", '"' + title + '" removed from App Library.', "success", { duration: 5000 });
+            renderPremadeContentManager();
+            if (activeAdminTab === "library") renderPremade();
+          })
+          .catch(function (e) {
+            showAppBanner("Hide failed", e.message || "Could not hide premade.", "error", { duration: 7000 });
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+    });
+  }
+
+  function openPremadeContentManager(tab) {
+    if (!adminModeEnabled) return;
+    premadeContentManagerTab = tab || premadeContentManagerTab || "working";
+    var backdrop = document.getElementById("premade-content-manager-backdrop");
+    if (!backdrop) return;
+    closeAccountModal();
+    backdrop.hidden = false;
+    renderPremadeContentManager();
+  }
+
+  function closePremadeContentManager() {
+    var backdrop = document.getElementById("premade-content-manager-backdrop");
+    if (backdrop) backdrop.hidden = true;
+  }
+
   function publishPremadeFromModal() {
     if (!adminModeEnabled) return;
     if (!currentUser) return;
@@ -6089,6 +6322,10 @@
       .then(function () {
         setPublishPremadeMessage("Published to App Library.", "success");
         setPremadeMessage('Published "' + title + '" to App Library.', "success");
+        var pcmOpen =
+          document.getElementById("premade-content-manager-backdrop") &&
+          !document.getElementById("premade-content-manager-backdrop").hidden;
+        if (pcmOpen) renderPremadeContentManager();
         setTimeout(function () {
           closePublishPremadeModal();
         }, 600);
@@ -17114,6 +17351,9 @@
           applyUserProfileDefaults({ onlyIfNewer: true });
           if (activeAdminTab === "audio") renderAudioPage();
           if (activeAdminTab === "library") renderPremade();
+          if (document.getElementById("premade-content-manager-backdrop") && !document.getElementById("premade-content-manager-backdrop").hidden) {
+            renderPremadeContentManager();
+          }
           rerenderMyLibraryCardsIfNeeded();
         },
         function () {

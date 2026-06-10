@@ -4506,6 +4506,16 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
   border-color: rgba(96, 165, 250, 0.75);
   color: #f8fafc;
 }
+.pcm-tab-btn.is-active {
+  background: rgba(37, 99, 235, 0.35);
+  border-color: rgba(96, 165, 250, 0.75);
+  color: #f8fafc;
+}
+.app-modal.app-modal--wide {
+  max-width: min(640px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
 .gen-pill-hint {
   font-size: 0.8rem;
   line-height: 1.45;
