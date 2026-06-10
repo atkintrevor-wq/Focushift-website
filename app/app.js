@@ -1131,6 +1131,17 @@
     "This is what makes the script feel alive when you listen.\n\n" +
     "Imagine your goals and what you deeply want are already done—you've arrived. What rises in you? Pride, relief, warmth, strength, quiet joy, something in your chest or gut?\n\n" +
     "Name a few feelings or sensations. You don't need perfect words—honest fragments are enough. The script will lean on this so the listening experience matches that inner win.";
+  var SLEEP_REST_SURVEY_HELP_Q1 =
+    "When and why you listen shapes the whole script.\n\n" +
+    "• In bed trying to fall asleep — say so clearly (e.g. mind replaying the day, can't switch off)\n" +
+    "• Relaxing before bed — mention where (sofa, bath) and how long you have\n" +
+    "• Rest or a nap during the day — note if busyness or guilt makes it hard to stop\n" +
+    "• Morning renewal — describe how you want to feel when you wake\n\n" +
+    "The more specific your situation, the more personal your audio.";
+  var SLEEP_REST_SURVEY_HELP_Q2 =
+    "Sensory detail is what makes this feel tailored—not goals for tomorrow.\n\n" +
+    "Name what you want in your body and mind: heavy eyelids, unclenched jaw, slow exhale, limbs sinking into the mattress, mind quiet like still water, safe and drowsy, cool dark room, or waking light and unhurried.\n\n" +
+    "Short honest fragments are enough. The script will build from how rest actually feels for you.";
   /** Mirrors iOS `SurveyCategories.swift` + default placeholder from `SurveyQuestionCard`. */
   var surveyCategories = [
     {
@@ -1185,8 +1196,8 @@
       id: "sleep-rest",
       name: "Sleep & Rest",
       questions: [
-        "What gets in the way of good sleep or rest for you right now? (e.g., racing thoughts, irregular schedule, trouble winding down)",
-        "How do you want to feel when falling asleep, waking up fully rested, or both? Describe the ideal sleep experience or morning feeling for you.",
+        "When will you listen, and what should this audio help with? Be specific. (e.g., in bed tonight but my mind won't switch off; need to relax 20 minutes before sleep; allow myself a nap without guilt; mornings I wake tired and want a gentler start)",
+        "Describe the body and mind feeling you want by the end — use sensory detail. (e.g., eyelids heavy, jaw unclenched, breath slow and deep, limbs sinking into the mattress, mind quiet like still water, or waking light and unhurried instead of groggy)",
       ],
     },
     {
@@ -1211,6 +1222,36 @@
     "What's the main obstacle, inner critic, or habit that gets in the way? (e.g., self-doubt before meetings, racing thoughts at night)";
   var surveyIntakeContextQuestion =
     "When or where does this matter most? (e.g., morning routine, before a game, bedtime, at work)";
+  var sleepRestIntakeObstacleQuestion =
+    "What usually gets between you and the rest you want? (e.g., mind replaying the day, body stays tense, hard to switch off after work, guilt about stopping)";
+  var sleepRestIntakeContextQuestion =
+    "What's your listening setup when you'll use this audio? (e.g., already in bed in a dark room, on the couch 15 minutes before sleep, phone on do-not-disturb, fan or white noise)";
+
+  function surveyIntakeSectionSubtitle(catId) {
+    return catId === "sleep-rest" ? "Rest & sleep details (optional)" : "Deeper intake (optional)";
+  }
+
+  function surveyIntakeObstacleForCategory(catId) {
+    return catId === "sleep-rest" ? sleepRestIntakeObstacleQuestion : surveyIntakeObstacleQuestion;
+  }
+
+  function surveyIntakeContextForCategory(catId) {
+    return catId === "sleep-rest" ? sleepRestIntakeContextQuestion : surveyIntakeContextQuestion;
+  }
+
+  function surveyIntakeObstaclePlaceholder(catId) {
+    if (catId === "sleep-rest") {
+      return "Optional — e.g. Thoughts keep looping, shoulders tight, can't let the day go";
+    }
+    return "Optional — helps the script address what gets in your way";
+  }
+
+  function surveyIntakeContextPlaceholder(catId) {
+    if (catId === "sleep-rest") {
+      return "Optional — e.g. In bed, lights off, fan on, eyes closed";
+    }
+    return "Optional — morning, bedtime, before a game, at work…";
+  }
 
   var CLARIFY_TURN_GOALS = [
     "First we'll explore what gets in the way — your inner critic, habit, or fear.",
@@ -1342,13 +1383,29 @@
     return rec;
   }
 
-  function surveyAnswerPlaceholder() {
+  function surveyAnswerPlaceholder(catId, questionIndex) {
+    if (catId === "sleep-rest") {
+      if (questionIndex === 0) {
+        return "e.g. In bed around 11pm, mind replaying work — I need help feeling heavy and ready for sleep";
+      }
+      if (questionIndex === 1) {
+        return "e.g. Slow breath, shoulders dropped, legs heavy, mind finally quiet and safe";
+      }
+    }
+    if (catId === "i-am") {
+      return "Share as much as you like—the more specific, the better your script.";
+    }
     return "Share as much as you like—the more specific, the better your script.";
   }
 
   function surveyIamHelpDetailsHtml(catId, questionIndex) {
-    if (catId !== "i-am") return "";
-    var body = questionIndex === 0 ? IAM_SURVEY_HELP_Q1 : IAM_SURVEY_HELP_Q2;
+    var body = null;
+    if (catId === "i-am") {
+      body = questionIndex === 0 ? IAM_SURVEY_HELP_Q1 : IAM_SURVEY_HELP_Q2;
+    } else if (catId === "sleep-rest") {
+      body = questionIndex === 0 ? SLEEP_REST_SURVEY_HELP_Q1 : SLEEP_REST_SURVEY_HELP_Q2;
+    }
+    if (!body) return "";
     return (
       '<details class="gen-iam-help">' +
       '<summary>Tips for this question</summary>' +
@@ -11468,8 +11525,8 @@
           maxClar +
           " follow-up questions (same idea as the iOS app), then your script is generated."
         : "Clarifying questions are available on Starter and Creator. You can still generate from your answers below.";
-    var ph0 = surveyAnswerPlaceholder();
-    var ph1 = surveyAnswerPlaceholder();
+    var ph0 = surveyAnswerPlaceholder(cat.id, 0);
+    var ph1 = surveyAnswerPlaceholder(cat.id, 1);
     var defaultTone = defaultToneForCategory(cat.id);
     var mediaRec = recommendedMediaForCategory(cat.id, defaultTone);
     el.innerHTML =
@@ -11498,14 +11555,22 @@
       '  <textarea id="gen-q2" class="gen-survey-textarea" required rows="6" placeholder="' +
       escapeHtml(ph1) +
       '"></textarea>' +
-      '  <label for="gen-intake-obstacle" style="margin-top:0.85rem;">' +
-      escapeHtml(surveyIntakeObstacleQuestion) +
+      '  <p class="gen-field-label" style="margin-top:0.95rem;margin-bottom:0.15rem;">Personalization</p>' +
+      '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
+      escapeHtml(surveyIntakeSectionSubtitle(cat.id)) +
+      "</p>" +
+      '  <label for="gen-intake-obstacle" style="margin-top:0.2rem;">' +
+      escapeHtml(surveyIntakeObstacleForCategory(cat.id)) +
       "</label>" +
-      '  <textarea id="gen-intake-obstacle" class="gen-survey-textarea" rows="3" placeholder="Optional — helps the script address what gets in your way"></textarea>' +
+      '  <textarea id="gen-intake-obstacle" class="gen-survey-textarea" rows="3" placeholder="' +
+      escapeHtml(surveyIntakeObstaclePlaceholder(cat.id)) +
+      '"></textarea>' +
       '  <label for="gen-intake-context" style="margin-top:0.75rem;">' +
-      escapeHtml(surveyIntakeContextQuestion) +
+      escapeHtml(surveyIntakeContextForCategory(cat.id)) +
       "</label>" +
-      '  <textarea id="gen-intake-context" class="gen-survey-textarea" rows="3" placeholder="Optional — morning, bedtime, before a game, at work…"></textarea>' +
+      '  <textarea id="gen-intake-context" class="gen-survey-textarea" rows="3" placeholder="' +
+      escapeHtml(surveyIntakeContextPlaceholder(cat.id)) +
+      '"></textarea>' +
       '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
       '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
       '    <option value="Calming">Calming</option>' +
