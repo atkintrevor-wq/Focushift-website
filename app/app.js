@@ -1261,13 +1261,17 @@
       title: "Background Audio",
       content:
         "Choose background audio that plays behind your affirmations when you generate audio.\n\n" +
+        "Overview\n" +
+        "• Set a default background for new scripts and generation.\n" +
+        "• Custom imports in this browser stay local until you use them in a script.\n\n" +
         "My Audio\n" +
         "• Your saved tracks: uploaded files and app audio you've pinned (Starter/Creator for uploads).\n" +
-        "• Import adds files in this browser; they stay on this device until you use them in a script.\n\n" +
+        "• Imports sync across devices on Starter and Creator; this browser also keeps a local copy for faster mixing.\n\n" +
         "App Audio\n" +
-        "• Built-in background tracks. Free accounts can preview any track here.\n" +
-        "• Setting a default background, pinning to My Audio, or using backgrounds when generating requires Starter or Creator.\n" +
-        "• Expand/collapse categories with the chevron on each section.",
+        "• Built-in and cloud background tracks — same catalog as App Audio on iOS.\n" +
+        "• Preview any track here. Pin to My Audio with Starter or Creator.\n" +
+        "• Expand/collapse categories with the chevron on each section.\n" +
+        "• Cards with a blue edge are from the extended cloud catalog.",
     },
   };
 
@@ -4511,7 +4515,6 @@
       "  </div>" +
       sectionSearchWrapHtml("audio", "Search background audio…") +
       '  <input id="audio-import-input" type="file" accept="audio/*" style="display:none" />' +
-      '  <p class="app-muted" style="margin-top:0.05rem;margin-bottom:0.5rem;">Set default background audio for new scripts and generation. Custom imports stay only in this browser.</p>' +
       '  <div id="audio-sub-my">' +
       '    <div id="audio-my-list"></div>' +
       "  </div>" +
@@ -9569,12 +9572,6 @@
       if (!grouped[cid]) grouped[cid] = [];
       grouped[cid].push(b);
     });
-    var none = availableBackgrounds.find(function (b) {
-      return b.id === "bg-none";
-    });
-    if (none && audioSearchQuery && !textMatchesSectionSearch(none.name, audioSearchQuery)) {
-      none = null;
-    }
     var sections = mergedBackgroundCategoryOrder()
       .map(function (cid) {
         var items = grouped[cid] || [];
@@ -9607,19 +9604,12 @@
         );
       })
       .join("");
-    if (audioSearchQuery && !none && !sections.replace(/\s/g, "")) {
+    if (audioSearchQuery && !sections.replace(/\s/g, "")) {
       list.innerHTML =
         '<p class="app-muted audio-app-lede">No background audio matches your search.</p>';
       return;
     }
-    list.innerHTML =
-      renderAdminCloudBackgroundsSection() +
-      '<p class="app-muted audio-app-lede">' +
-      "Background tracks for generation and mixing — same catalog as App Audio on iOS. Preview any track here; pin to My Audio with Starter or Creator." +
-      "</p>" +
-      '<p class="app-muted catalog-legend">Cards with a blue edge are from the extended catalog.</p>' +
-      (none ? '<div class="app-bg-none-row">' + audioBuiltinRowMarkup(none, { showPinToMy: false }) + "</div>" : "") +
-      sections;
+    list.innerHTML = renderAdminCloudBackgroundsSection() + sections;
     bindAdminCloudBackgroundActions(list);
     bindAudioTrackRowHandlers(list);
   }
