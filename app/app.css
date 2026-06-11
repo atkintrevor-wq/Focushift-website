@@ -365,7 +365,32 @@ html.fs-app[data-app-theme="light"] .screen-help-section-head h4 {
 html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   border-bottom-color: rgba(15, 23, 42, 0.1);
 }
-.app-modal-account { max-width: 560px; max-height: calc(100vh - 2rem); overflow-y: auto; }
+.app-modal-account {
+  max-width: 560px;
+  max-height: calc(100vh - 2rem);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-top: 0;
+}
+.account-modal-chrome {
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  margin: -1.1rem -1.1rem 0;
+  padding: 1.1rem 1.1rem 0.85rem;
+  background: var(--app-surface-elevated);
+  border-bottom: 1px solid var(--app-surface-card-border, rgba(255, 255, 255, 0.1));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+.account-modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-top: 0.15rem;
+}
 .account-modal-head {
   display: flex;
   align-items: center;
@@ -375,7 +400,7 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
 }
 .account-modal-head h3 { margin: 0; }
 .account-modal-close-x { min-width: 40px; padding: 0.35rem 0.5rem; font-size: 1.35rem; line-height: 1; }
-.account-modal-tabs { margin: 0 0 0.85rem; flex-wrap: wrap; }
+.account-modal-tabs { margin: 0; flex-wrap: wrap; }
 .account-tab-panel { margin-top: 0.25rem; }
 .account-tab-stack,
 .account-ios-stack {
@@ -453,6 +478,10 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
 }
 .account-ios-row:last-child {
   border-bottom: none;
+}
+/* `display: flex` above wins over the default `[hidden]` rule. */
+.account-ios-row[hidden] {
+  display: none !important;
 }
 .account-ios-row--nav {
   cursor: pointer;

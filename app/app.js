@@ -4567,15 +4567,18 @@
       "</div>" +
       '<div id="account-modal-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal app-modal-account" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">' +
-      '    <div class="account-modal-head">' +
-      '      <h3 id="account-modal-title">Account & Settings</h3>' +
-      '      <button type="button" class="app-btn app-btn-ghost account-modal-close-x" id="account-modal-close" aria-label="Close">×</button>' +
+      '    <div class="account-modal-chrome">' +
+      '      <div class="account-modal-head">' +
+      '        <h3 id="account-modal-title">Account & Settings</h3>' +
+      '        <button type="button" class="app-btn app-btn-ghost account-modal-close-x" id="account-modal-close" aria-label="Close">×</button>' +
+      "      </div>" +
+      '      <nav class="app-tabs account-modal-tabs" aria-label="Account sections">' +
+      '        <button type="button" class="app-tab-btn is-active" data-account-tab="settings">Account</button>' +
+      '        <button type="button" class="app-tab-btn" data-account-tab="preferences">Preferences</button>' +
+      '        <button type="button" class="app-tab-btn" data-account-tab="privacy">Privacy & Support</button>' +
+      "      </nav>" +
       "    </div>" +
-      '    <nav class="app-tabs account-modal-tabs" aria-label="Account sections">' +
-      '      <button type="button" class="app-tab-btn is-active" data-account-tab="settings">Account</button>' +
-      '      <button type="button" class="app-tab-btn" data-account-tab="preferences">Preferences</button>' +
-      '      <button type="button" class="app-tab-btn" data-account-tab="privacy">Privacy & Support</button>' +
-      "    </nav>" +
+      '    <div class="account-modal-body">' +
       '    <div id="account-tab-settings" class="account-tab-panel account-ios-stack">' +
       '      <section class="account-ios-group" aria-labelledby="account-card-heading-identity">' +
       accountIosGroupHeader("Account", null, null) +
@@ -4792,6 +4795,7 @@
       '          <a class="app-btn app-btn-secondary" href="mailto:support@focusshift.app">Contact support</a>' +
       "        </div>" +
       "      </section>" +
+      "    </div>" +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -6971,6 +6975,7 @@
     if (!bd) return;
     resetAccountPlansPanel();
     syncAccountPreferencesForm();
+    applyAdminModeUi();
     syncAccountAppleLinkUI();
     renderAccountInsights();
     renderUsageAddOnSection();
