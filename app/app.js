@@ -9,6 +9,7 @@
   var playlistsUnsubscribe = null;
   var premadeUnsubscribe = null;
   var backgroundCatalogUnsubscribe = null;
+  var catalogCategoriesUnsubscribe = null;
   var clonedVoicesUnsubscribe = null;
   var listeningUnsubscribe = null;
   var userProfileUnsubscribe = null;
@@ -28,6 +29,8 @@
   var userBackgroundsUnsubscribe = null;
   /** Active rows from Firestore `backgroundCatalog` (stream URLs). */
   var currentBackgroundCatalog = [];
+  /** Active browse categories from Firestore `catalogCategories`. */
+  var currentCatalogCategories = [];
   var currentClonedVoices = [];
   var currentUserProfile = null;
   var isEditing = false;
@@ -116,7 +119,7 @@
   /** 0–1, applies to script / playlist / voice-adjust preview playback in this browser. */
   var PREF_PLAYBACK_VOLUME_KEY = "focusshiftWebPlaybackVolume";
   var adminModeEnabled = false;
-  /** Premade Content Manager modal tab: working | premade | backgrounds */
+  /** Premade Content Manager modal tab: working | premade | backgrounds | categories */
   var premadeContentManagerTab = "working";
   /** Matches iOS `SubscriptionConfig.creatorOutgoingShareCap` (active outgoing share links). */
   var CREATOR_OUTGOING_SHARE_CAP = 50;
@@ -401,7 +404,154 @@
     "bg-upbeat",
   ];
   var backgroundCategoryOpenById = {};
+  function catalogCategoriesCollection() {
+    return db.collection("catalogCategories");
+  }
+
+  function parseCatalogCategoryDoc(doc) {
+    var data = doc.data() || {};
+    var kind = String(data.kind || "")
+      .trim()
+      .toLowerCase();
+    if (kind !== "premade" && kind !== "background") return null;
+    var name = String(data.name || "").trim();
+    if (!name) return null;
+    return {
+      id: doc.id,
+      kind: kind,
+      name: name,
+      subtitle: String(data.subtitle || "").trim(),
+      sortOrder: typeof data.sortOrder === "number" ? data.sortOrder : 1000,
+      accessTier: data.accessTier === "paid" ? "paid" : "free",
+      active: data.active !== false,
+    };
+  }
+
+  function allPremadeLibraryCategoriesForAdmin() {
+    var out = [];
+    var seen = {};
+    PREMADE_LIBRARY_CATEGORY_ORDER.forEach(function (c) {
+      out.push({ id: c.id, name: c.name });
+      seen[c.id] = true;
+    });
+    currentCatalogCategories
+      .filter(function (x) {
+        return x.kind === "premade" && x.active !== false && !seen[x.id];
+      })
+      .sort(function (a, b) {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
+      })
+      .forEach(function (x) {
+        out.push({ id: x.id, name: x.name, subtitle: x.subtitle || "" });
+        seen[x.id] = true;
+      });
+    return out;
+  }
+
+  function mergedPremadeLibraryCategories() {
+    var out = [];
+    var seen = {};
+    PREMADE_LIBRARY_CATEGORY_ORDER.forEach(function (c) {
+      var cloud = currentCatalogCategories.find(function (x) {
+        return x.kind === "premade" && x.id === c.id;
+      });
+      if (cloud && cloud.accessTier === "paid" && !canAccessCatalogTier("paid")) return;
+      out.push({ id: c.id, name: c.name });
+      seen[c.id] = true;
+    });
+    currentCatalogCategories
+      .filter(function (x) {
+        return x.kind === "premade" && x.active !== false && !seen[x.id] && canAccessCatalogTier(x.accessTier);
+      })
+      .sort(function (a, b) {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
+      })
+      .forEach(function (x) {
+        out.push({ id: x.id, name: x.name, subtitle: x.subtitle || "" });
+        seen[x.id] = true;
+      });
+    return out;
+  }
+
+  function allBackgroundCategoriesForAdmin() {
+    var out = [];
+    var seen = {};
+    backgroundCategoryOrder.forEach(function (id) {
+      out.push(id);
+      seen[id] = true;
+    });
+    currentCatalogCategories
+      .filter(function (x) {
+        return x.kind === "background" && x.active !== false && !seen[x.id];
+      })
+      .sort(function (a, b) {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
+      })
+      .forEach(function (x) {
+        out.push(x.id);
+        seen[x.id] = true;
+      });
+    return out;
+  }
+
+  function mergedBackgroundCategoryOrder() {
+    var out = [];
+    var seen = {};
+    backgroundCategoryOrder.forEach(function (id) {
+      var cloud = currentCatalogCategories.find(function (x) {
+        return x.kind === "background" && x.id === id;
+      });
+      if (cloud && !canAccessCatalogTier(cloud.accessTier)) return;
+      out.push(id);
+      seen[id] = true;
+    });
+    currentCatalogCategories
+      .filter(function (x) {
+        return x.kind === "background" && x.active !== false && !seen[x.id] && canAccessCatalogTier(x.accessTier);
+      })
+      .sort(function (a, b) {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
+      })
+      .forEach(function (x) {
+        out.push(x.id);
+        seen[x.id] = true;
+      });
+    return out;
+  }
+
+  function isKnownBackgroundBrowseCategoryID(id) {
+    var trimmed = String(id || "")
+      .trim()
+      .toLowerCase();
+    if (!trimmed) return false;
+    if (backgroundCategoryOrder.indexOf(trimmed) >= 0) return true;
+    return currentCatalogCategories.some(function (x) {
+      return x.kind === "background" && x.id === trimmed && x.active !== false;
+    });
+  }
+
+  function slugifyCatalogCategoryID(name, kind) {
+    var cleaned = String(name || "")
+      .toLowerCase()
+      .replace(/&/g, " and ")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-");
+    if (!cleaned) cleaned = "category";
+    if (kind === "background" && cleaned.indexOf("bg-") !== 0) cleaned = "bg-" + cleaned;
+    return cleaned;
+  }
+
   function backgroundCategoryDisplayName(id) {
+    var cloud = currentCatalogCategories.find(function (x) {
+      return x.kind === "background" && x.id === id;
+    });
+    if (cloud && cloud.name) return cloud.name;
     switch (id) {
       case "bg-nature":
         return "Nature & Rain";
@@ -435,7 +585,7 @@
     var id = String(raw || "")
       .trim()
       .toLowerCase();
-    if (backgroundCategoryOrder.indexOf(id) >= 0) return id;
+    if (isKnownBackgroundBrowseCategoryID(id)) return id;
     switch (id) {
       case "general":
       case "mental-wellbeing":
@@ -1765,6 +1915,14 @@
       backgroundCatalogUnsubscribe = null;
     }
     currentBackgroundCatalog = [];
+  }
+
+  function teardownCatalogCategoriesListener() {
+    if (typeof catalogCategoriesUnsubscribe === "function") {
+      catalogCategoriesUnsubscribe();
+      catalogCategoriesUnsubscribe = null;
+    }
+    currentCatalogCategories = [];
   }
 
   function teardownClonedVoicesListener() {
@@ -3530,6 +3688,7 @@
     teardownPlaylistsListener();
     teardownPremadeListener();
     teardownBackgroundCatalogListener();
+    teardownCatalogCategoriesListener();
     teardownClonedVoicesListener();
     teardownListeningListener();
     teardownUserProfileListener();
@@ -3554,6 +3713,7 @@
     teardownPlaylistsListener();
     teardownPremadeListener();
     teardownBackgroundCatalogListener();
+    teardownCatalogCategoriesListener();
     teardownClonedVoicesListener();
     teardownListeningListener();
     teardownUserProfileListener();
@@ -4787,6 +4947,7 @@
       '      <span class="gen-pill-item"><button type="button" class="gen-pill-label pcm-tab-btn" data-pcm-tab="working" role="tab">Working</button></span>' +
       '      <span class="gen-pill-item"><button type="button" class="gen-pill-label pcm-tab-btn" data-pcm-tab="premade" role="tab">Premade</button></span>' +
       '      <span class="gen-pill-item"><button type="button" class="gen-pill-label pcm-tab-btn" data-pcm-tab="backgrounds" role="tab">Backgrounds</button></span>' +
+      '      <span class="gen-pill-item"><button type="button" class="gen-pill-label pcm-tab-btn" data-pcm-tab="categories" role="tab">Categories</button></span>' +
       "    </div>" +
       '    <div id="pcm-body"></div>' +
       "  </div>" +
@@ -5848,7 +6009,7 @@
   function populatePublishCategoryOptions() {
     var sel = document.getElementById("publish-category");
     if (!sel) return;
-    sel.innerHTML = surveyCategories
+    sel.innerHTML = allPremadeLibraryCategoriesForAdmin()
       .map(function (c) {
         var selected = c.id === publishCategoryId ? " selected" : "";
         return '<option value="' + escapeHtml(c.id) + '"' + selected + ">" + escapeHtml(c.name) + "</option>";
@@ -5926,7 +6087,7 @@
   function populateBgPublishCategorySelect() {
     var select = document.getElementById("bg-publish-category");
     if (!select) return;
-    select.innerHTML = backgroundCategoryOrder
+    select.innerHTML = allBackgroundCategoriesForAdmin()
       .map(function (cid) {
         return (
           '<option value="' +
@@ -6223,15 +6384,195 @@
           hiddenBlock;
       }
       bindHiddenPremadeAdminActions();
-    } else {
+    } else if (premadeContentManagerTab === "backgrounds") {
       body.innerHTML =
         '<div class="pcm-bg-publish-row" style="margin:0 0 0.75rem;">' +
         '<button type="button" class="app-btn app-btn-primary" data-pcm-open-bg-publish>Publish Background</button>' +
         "</div>" +
         renderAdminCloudBackgroundsSection();
       bindAdminCloudBackgroundActions(body);
+    } else {
+      body.innerHTML = renderCatalogCategoriesAdminSection();
+      bindCatalogCategoriesAdminActions(body);
     }
     bindPremadeContentManagerBodyActions();
+  }
+
+  function renderCatalogCategoriesAdminSection() {
+    var builtInPremade = PREMADE_LIBRARY_CATEGORY_ORDER.map(function (c) {
+      return (
+        '<li class="app-muted" style="margin:0.25rem 0;">' +
+        escapeHtml(c.name) +
+        ' <code style="font-size:0.78rem;">' +
+        escapeHtml(c.id) +
+        "</code> (built-in)</li>"
+      );
+    }).join("");
+    var builtInBg = backgroundCategoryOrder
+      .map(function (id) {
+        return (
+          '<li class="app-muted" style="margin:0.25rem 0;">' +
+          escapeHtml(backgroundCategoryDisplayName(id)) +
+          ' <code style="font-size:0.78rem;">' +
+          escapeHtml(id) +
+          "</code> (built-in)</li>"
+        );
+      })
+      .join("");
+    var cloudRows = currentCatalogCategories
+      .map(function (c) {
+        return (
+          '<div class="pcm-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.55rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
+          '<div style="flex:1;min-width:0;"><strong>' +
+          escapeHtml(c.name) +
+          '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
+          escapeHtml(c.kind === "background" ? "App Audio" : "App Library") +
+          " · " +
+          escapeHtml(c.id) +
+          " · " +
+          escapeHtml(c.accessTier === "paid" ? "Paid" : "Free") +
+          "</span></div>" +
+          '<button type="button" class="app-btn app-btn-secondary" data-pcm-deactivate-category="' +
+          escapeHtml(c.id) +
+          '">Deactivate</button>' +
+          "</div>"
+        );
+      })
+      .join("");
+    return (
+      '<p class="app-muted" style="margin:0 0 0.65rem;">Create browse categories in Firestore <code>catalogCategories</code> — no app update required. Paid categories are visible only to Starter &amp; Creator subscribers.</p>' +
+      '<div class="app-empty-hint" style="margin:0 0 0.85rem;padding:0.75rem;">' +
+      '<div style="font-weight:700;margin-bottom:0.35rem;">New category</div>' +
+      '<label for="pcm-cat-kind">Type</label>' +
+      '<select id="pcm-cat-kind"><option value="premade">Premade (App Library)</option><option value="background">Background (App Audio)</option></select>' +
+      '<label for="pcm-cat-name">Display name</label>' +
+      '<input id="pcm-cat-name" type="text" maxlength="80" placeholder="e.g. Sleep Sounds">' +
+      '<label for="pcm-cat-id">Category ID</label>' +
+      '<input id="pcm-cat-id" type="text" maxlength="64" placeholder="auto-generated from name">' +
+      '<label for="pcm-cat-access">Who can browse</label>' +
+      '<select id="pcm-cat-access"><option value="paid" selected>Paid (Starter &amp; Creator)</option><option value="free">Free (all users)</option></select>' +
+      '<label for="pcm-cat-sort">Sort order</label>' +
+      '<input id="pcm-cat-sort" type="number" min="0" max="9999" value="1000" style="max-width:8rem;">' +
+      '<div id="pcm-cat-message" class="app-inline-msg" role="status" aria-live="polite" style="margin-top:0.45rem;"></div>' +
+      '<button type="button" class="app-btn app-btn-primary" id="pcm-cat-create" style="margin-top:0.45rem;">Create Category</button>' +
+      "</div>" +
+      '<details style="margin:0 0 0.75rem;"><summary class="app-muted" style="cursor:pointer;">Built-in categories (read-only)</summary>' +
+      '<div style="margin-top:0.45rem;"><div style="font-weight:600;margin-bottom:0.2rem;">Premade</div><ul style="margin:0 0 0.55rem 1.1rem;padding:0;">' +
+      builtInPremade +
+      '</ul><div style="font-weight:600;margin-bottom:0.2rem;">Backgrounds</div><ul style="margin:0 0 0 1.1rem;padding:0;">' +
+      builtInBg +
+      "</ul></div></details>" +
+      (cloudRows
+        ? '<div style="font-weight:600;margin:0.35rem 0 0.25rem;">Cloud categories</div>' + cloudRows
+        : '<p class="app-muted">No cloud categories yet.</p>')
+    );
+  }
+
+  function bindCatalogCategoriesAdminActions(body) {
+    if (!body) return;
+    var nameInput = document.getElementById("pcm-cat-name");
+    var idInput = document.getElementById("pcm-cat-id");
+    var idTouched = false;
+    if (nameInput && idInput) {
+      nameInput.addEventListener("input", function () {
+        if (idTouched) return;
+        var kindEl = document.getElementById("pcm-cat-kind");
+        var kind = kindEl && kindEl.value === "background" ? "background" : "premade";
+        idInput.value = slugifyCatalogCategoryID(nameInput.value, kind);
+      });
+      idInput.addEventListener("input", function () {
+        idTouched = true;
+      });
+      var kindEl = document.getElementById("pcm-cat-kind");
+      if (kindEl) {
+        kindEl.addEventListener("change", function () {
+          if (!idTouched) {
+            idInput.value = slugifyCatalogCategoryID(nameInput.value, kindEl.value === "background" ? "background" : "premade");
+          }
+        });
+      }
+    }
+    var createBtn = document.getElementById("pcm-cat-create");
+    if (createBtn) {
+      createBtn.addEventListener("click", function () {
+        if (!adminModeEnabled || !currentUser) return;
+        var kindEl = document.getElementById("pcm-cat-kind");
+        var accessEl = document.getElementById("pcm-cat-access");
+        var sortEl = document.getElementById("pcm-cat-sort");
+        var kind = kindEl && kindEl.value === "background" ? "background" : "premade";
+        var name = nameInput ? String(nameInput.value || "").trim() : "";
+        var id = idInput ? String(idInput.value || "").trim().toLowerCase() : "";
+        if (!name) {
+          postScreenMessage("pcm-cat-message", "Enter a display name.", "error");
+          return;
+        }
+        if (!id || id.length < 2) {
+          postScreenMessage("pcm-cat-message", "Category ID is too short.", "error");
+          return;
+        }
+        if (kind === "premade" && PREMADE_LIBRARY_CATEGORY_ORDER.some(function (c) { return c.id === id; })) {
+          postScreenMessage("pcm-cat-message", "That ID matches a built-in premade category.", "error");
+          return;
+        }
+        if (kind === "background" && backgroundCategoryOrder.indexOf(id) >= 0) {
+          postScreenMessage("pcm-cat-message", "That ID matches a built-in background category.", "error");
+          return;
+        }
+        createBtn.disabled = true;
+        var payload = {
+          kind: kind,
+          name: name,
+          sortOrder: sortEl ? Number(sortEl.value) || 1000 : 1000,
+          accessTier: accessEl && accessEl.value === "free" ? "free" : "paid",
+          active: true,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          createdBy: currentUser.uid,
+        };
+        catalogCategoriesCollection()
+          .doc(id)
+          .set(payload, { merge: true })
+          .then(function () {
+            postScreenMessage("pcm-cat-message", "Category created.", "success");
+            showAppBanner("Category created", '"' + name + '" is live in the catalog.', "success", { duration: 5000 });
+            if (nameInput) nameInput.value = "";
+            if (idInput) {
+              idInput.value = "";
+              idTouched = false;
+            }
+            renderPremadeContentManager();
+          })
+          .catch(function (e) {
+            postScreenMessage("pcm-cat-message", e.message || "Could not create category.", "error");
+          })
+          .finally(function () {
+            createBtn.disabled = false;
+          });
+      });
+    }
+    body.querySelectorAll("[data-pcm-deactivate-category]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        var cid = btn.getAttribute("data-pcm-deactivate-category");
+        if (!cid) return;
+        if (!window.confirm('Deactivate category "' + cid + '"?\n\nIt will disappear from browse lists. Existing published items keep their category ID.')) {
+          return;
+        }
+        btn.disabled = true;
+        catalogCategoriesCollection()
+          .doc(cid)
+          .set({ active: false }, { merge: true })
+          .then(function () {
+            showAppBanner("Category deactivated", cid + " hidden from browse.", "success", { duration: 5000 });
+            renderPremadeContentManager();
+          })
+          .catch(function (e) {
+            showAppBanner("Deactivate failed", e.message || "Could not deactivate.", "error", { duration: 7000 });
+          })
+          .finally(function () {
+            btn.disabled = false;
+          });
+      });
+    });
   }
 
   function bindPremadeContentManagerBodyActions() {
@@ -6388,7 +6729,7 @@
     var sourceScriptEl = document.getElementById("premade-edit-source-script-id");
     var publisherEl = document.getElementById("premade-edit-publisher");
     if (!backdrop || !title || !category || !desc || !text) return;
-    category.innerHTML = surveyCategories
+    category.innerHTML = allPremadeLibraryCategoriesForAdmin()
       .map(function (c) {
         var selected = c.id === (premade.categoryID || "") ? " selected" : "";
         return '<option value="' + escapeHtml(c.id) + '"' + selected + ">" + escapeHtml(c.name) + "</option>";
@@ -9218,7 +9559,7 @@
     if (!list) return;
     var audioSearchQuery = normalizeSectionSearchQuery(sectionSearchQuery.audio);
     var grouped = {};
-    backgroundCategoryOrder.forEach(function (cid) {
+    mergedBackgroundCategoryOrder().forEach(function (cid) {
       grouped[cid] = [];
     });
     allAppBackgroundTracksIncludingCloud().forEach(function (b) {
@@ -9234,7 +9575,7 @@
     if (none && audioSearchQuery && !textMatchesSectionSearch(none.name, audioSearchQuery)) {
       none = null;
     }
-    var sections = backgroundCategoryOrder
+    var sections = mergedBackgroundCategoryOrder()
       .map(function (cid) {
         var items = grouped[cid] || [];
         if (!items.length) return "";
@@ -12385,7 +12726,7 @@
 
   function groupPremadesByLibraryCategory(premades) {
     var byId = {};
-    PREMADE_LIBRARY_CATEGORY_ORDER.forEach(function (c) {
+    mergedPremadeLibraryCategories().forEach(function (c) {
       byId[c.id] = [];
     });
     var other = [];
@@ -12399,7 +12740,7 @@
       var bt = b.createdAt && typeof b.createdAt.toMillis === "function" ? b.createdAt.toMillis() : 0;
       return bt - at;
     }
-    PREMADE_LIBRARY_CATEGORY_ORDER.forEach(function (c) {
+    mergedPremadeLibraryCategories().forEach(function (c) {
       byId[c.id].sort(sortByCreated);
     });
     other.sort(sortByCreated);
@@ -12408,6 +12749,10 @@
 
   function premadeLibraryCategoryDisplayName(categoryID) {
     if (categoryID === "__other__") return "Other";
+    var cloud = currentCatalogCategories.find(function (x) {
+      return x.kind === "premade" && x.id === categoryID;
+    });
+    if (cloud && cloud.name) return cloud.name;
     var row = PREMADE_LIBRARY_CATEGORY_ORDER.find(function (c) {
       return c.id === categoryID;
     });
@@ -12442,7 +12787,7 @@
 
   function premadeCategoryRowsForList(grouped) {
     var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
-    var rows = PREMADE_LIBRARY_CATEGORY_ORDER.map(function (c) {
+    var rows = mergedPremadeLibraryCategories().map(function (c) {
       return {
         id: c.id,
         name: c.name,
@@ -17361,6 +17706,30 @@
     finishListHtml(premadeCategoryListHtml(grouped));
   }
 
+  function subscribeCatalogCategories() {
+    teardownCatalogCategoriesListener();
+    catalogCategoriesUnsubscribe = catalogCategoriesCollection()
+      .where("active", "==", true)
+      .onSnapshot(
+        function (snap) {
+          currentCatalogCategories = snap.docs
+            .map(parseCatalogCategoryDoc)
+            .filter(Boolean)
+            .sort(function (a, b) {
+              if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+              return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
+            });
+          if (activeAdminTab === "library") renderPremade();
+          if (activeAdminTab === "audio") renderAudioPage();
+          var pcmOpen = document.getElementById("premade-content-manager-backdrop");
+          if (pcmOpen && !pcmOpen.hidden) renderPremadeContentManager();
+        },
+        function () {
+          currentCatalogCategories = [];
+        }
+      );
+  }
+
   function subscribeBackgroundCatalog() {
     teardownBackgroundCatalogListener();
     backgroundCatalogUnsubscribe = backgroundCatalogCollection()
@@ -17727,6 +18096,7 @@
           subscribeScripts(user.uid);
           subscribePlaylists(user.uid);
           subscribePremade();
+          subscribeCatalogCategories();
           subscribeBackgroundCatalog();
           subscribeClonedVoices(user.uid);
           subscribeUserBackgrounds(user.uid);
