@@ -5806,12 +5806,16 @@
     publishTitleDirty = false;
     updatePublishDirtyUI();
     setPublishPremadeMessage("", "");
+    setStackedAdminModal(backdrop, isPremadeContentManagerOpen());
     backdrop.hidden = false;
   }
 
   function closePublishPremadeModal() {
     var backdrop = document.getElementById("premade-publish-backdrop");
-    if (backdrop) backdrop.hidden = true;
+    if (backdrop) {
+      backdrop.hidden = true;
+      setStackedAdminModal(backdrop, false);
+    }
     publishTextDirty = false;
     publishTitleDirty = false;
     updatePublishDirtyUI();
@@ -5936,6 +5940,20 @@
     if (!select.value) select.value = "general";
   }
 
+  function isPremadeContentManagerOpen() {
+    var pcm = document.getElementById("premade-content-manager-backdrop");
+    return !!(pcm && !pcm.hidden);
+  }
+
+  function setStackedAdminModal(backdrop, stacked) {
+    if (!backdrop) return;
+    if (stacked) {
+      backdrop.classList.add("app-modal-backdrop--stacked");
+    } else {
+      backdrop.classList.remove("app-modal-backdrop--stacked");
+    }
+  }
+
   function openBackgroundPublishModal() {
     if (!adminModeEnabled) return;
     var backdrop = document.getElementById("background-publish-backdrop");
@@ -5948,12 +5966,16 @@
     if (file) file.value = "";
     if (tier) tier.value = "paid";
     setBackgroundPublishMessage("", "");
+    setStackedAdminModal(backdrop, isPremadeContentManagerOpen());
     backdrop.hidden = false;
   }
 
   function closeBackgroundPublishModal() {
     var backdrop = document.getElementById("background-publish-backdrop");
-    if (backdrop) backdrop.hidden = true;
+    if (backdrop) {
+      backdrop.hidden = true;
+      setStackedAdminModal(backdrop, false);
+    }
     setBackgroundPublishMessage("", "");
   }
 
@@ -6014,6 +6036,9 @@
       .then(function () {
         setBackgroundPublishMessage("Published to cloud catalog.", "success");
         setBackgroundsMessage('Published "' + displayName + '" to App Audio cloud catalog.', "success");
+        if (document.getElementById("premade-content-manager-backdrop") && !document.getElementById("premade-content-manager-backdrop").hidden) {
+          renderPremadeContentManager();
+        }
         setTimeout(function () {
           closeBackgroundPublishModal();
         }, 600);
@@ -6199,7 +6224,11 @@
       }
       bindHiddenPremadeAdminActions();
     } else {
-      body.innerHTML = renderAdminCloudBackgroundsSection();
+      body.innerHTML =
+        '<div class="pcm-bg-publish-row" style="margin:0 0 0.75rem;">' +
+        '<button type="button" class="app-btn app-btn-primary" data-pcm-open-bg-publish>Publish Background</button>' +
+        "</div>" +
+        renderAdminCloudBackgroundsSection();
       bindAdminCloudBackgroundActions(body);
     }
     bindPremadeContentManagerBodyActions();
@@ -6208,6 +6237,12 @@
   function bindPremadeContentManagerBodyActions() {
     var body = document.getElementById("pcm-body");
     if (!body) return;
+    body.querySelectorAll("[data-pcm-open-bg-publish]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        openBackgroundPublishModal();
+      });
+    });
     body.querySelectorAll("[data-pcm-publish-script]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         if (!adminModeEnabled) return;

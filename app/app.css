@@ -3572,6 +3572,10 @@ body.fs-app-body.fs-modal-scroll-lock {
   overscroll-behavior: contain;
 }
 .app-modal-backdrop[hidden] { display: none !important; }
+/* Nested admin modals (publish premade/background opened from Premade Content Manager) */
+.app-modal-backdrop.app-modal-backdrop--stacked {
+  z-index: 10170;
+}
 /* Voice/background picker opened from script workshop (workshop backdrop is 13000) */
 #media-picker-backdrop {
   z-index: 13100;
