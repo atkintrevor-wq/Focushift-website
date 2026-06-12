@@ -1197,6 +1197,30 @@
     return /^https?:/i.test(url);
   }
 
+  function ensureBackgroundCachedForMixing(backgroundId) {
+    var bgId = (backgroundId && String(backgroundId).trim()) || "";
+    if (!bgId || bgId === "bg-none") {
+      return Promise.reject(new Error("No background selected for mixing."));
+    }
+    var entry = backgroundEntryById(bgId);
+    if (!entry && !isKnownUserBackgroundId(bgId)) {
+      return Promise.reject(new Error("Unknown background for mixing."));
+    }
+    if (entry && (entry.userUpload || isKnownUserBackgroundId(bgId))) {
+      return Promise.resolve();
+    }
+    if (backgroundOfflineObjectUrlCache[bgId]) {
+      return Promise.resolve();
+    }
+    if (entry && isStreamableCloudBackground(entry)) {
+      return downloadBackgroundForOffline(entry).then(function () {});
+    }
+    return getBackgroundOfflineBlob(bgId).then(function (blob) {
+      if (!blob || !entry || !isStreamableCloudBackground(entry)) return;
+      backgroundOfflineObjectUrlCache[bgId] = URL.createObjectURL(blob);
+    });
+  }
+
   function downloadBackgroundForOffline(bg) {
     if (!bg || !isStreamableCloudBackground(bg)) {
       return Promise.reject(new Error("This background is not available for offline download."));
@@ -1400,7 +1424,7 @@
         "• Preview any track here. Pin to My Audio with Starter or Creator.\n" +
         "• Expand/collapse categories with the chevron on each section.\n" +
         "• Cards with a blue edge are from the extended cloud catalog.\n" +
-        "• Cloud tracks show a Cloud badge; tap the download icon to save for offline (Starter/Creator).",
+        "• Cloud tracks download automatically when you generate audio; tap ↓ to save early for offline listening.",
     },
   };
 
@@ -2817,7 +2841,10 @@
         dailySparkState.objectUrl = URL.createObjectURL(new Blob([ttsAb], { type: "audio/mpeg" }));
         return dailySparkState.objectUrl;
       }
-      return mixTtsWithBackgroundToWavBlob(ttsAb, bg)
+      return ensureBackgroundCachedForMixing(bg)
+        .then(function () {
+          return mixTtsWithBackgroundToWavBlob(ttsAb, bg);
+        })
         .then(function (wavBlob) {
           dailySparkState.objectUrl = URL.createObjectURL(wavBlob);
           return dailySparkState.objectUrl;
@@ -8092,7 +8119,9 @@
   function finalizeAwaitingClientMix(uid, scriptId, jobId, backgroundId, token) {
     return fetchAudioJobStagingTts(jobId, token)
       .then(function (ttsAb) {
-        return mixTtsWithBackgroundToWavBlob(ttsAb, backgroundId);
+        return ensureBackgroundCachedForMixing(backgroundId).then(function () {
+          return mixTtsWithBackgroundToWavBlob(ttsAb, backgroundId);
+        });
       })
       .then(function (wavBlob) {
         return uploadFinalMixedWav(uid, scriptId, wavBlob);
