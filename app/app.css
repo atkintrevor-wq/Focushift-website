@@ -1754,6 +1754,11 @@ html.fs-app[data-app-theme="light"] .listen-today-script-actions-row {
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+.app-chip-success {
+  color: #22c55e;
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.1);
+}
 .app-card-text { white-space: pre-wrap; margin: 0; line-height: 1.52; }
 .app-card-actions { margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
 .library-script-share-btn {
