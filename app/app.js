@@ -6864,17 +6864,18 @@
     setPublishPremadeMessage("Publishing (uploading to catalog storage)...", "");
     var docRef = premadeCollection().doc();
     var docId = docRef.id;
-    fetch(audioURL)
-      .then(function (r) {
-        if (!r.ok) throw new Error("Could not download script audio for publishing.");
-        return r.blob();
-      })
-      .then(function (blob) {
-        var ext = /\.wav(\?|$)/i.test(audioURL) ? "wav" : "mp3";
+    fetchArrayBufferFromUrl(audioURL, "script audio")
+      .then(function (ab) {
+        if (!ab || !ab.byteLength) {
+          throw new Error("Script audio download was empty.");
+        }
+        var ext = /\.wav(\?|$)/i.test(audioURL) ? "wav" : /\.m4a(\?|$)/i.test(audioURL) ? "m4a" : "mp3";
+        var mime = ext === "wav" ? "audio/wav" : ext === "m4a" ? "audio/mp4" : "audio/mpeg";
+        var blob = new Blob([ab], { type: mime });
         var filename = makeSafePremadeFilename(title) + "-" + docId.slice(0, 8) + "." + ext;
         var storagePath = "premadeAudio/" + filename;
         var ref = firebase.storage().ref(storagePath);
-        return ref.put(blob, { contentType: blob.type || (ext === "wav" ? "audio/wav" : "audio/mpeg") }).then(function (snap) {
+        return ref.put(blob, { contentType: mime }).then(function (snap) {
           return snap.ref.getDownloadURL().then(function (downloadURL) {
             return docRef.set({
               title: title,
@@ -6908,7 +6909,11 @@
         }, 600);
       })
       .catch(function (e) {
-        setPublishPremadeMessage(e.message || "Could not publish premade.", "error");
+        var msg = e && e.message ? e.message : "Could not publish premade.";
+        if (isNetworkFetchFailure(e)) {
+          msg = networkFetchErrorMessage("script audio for publishing");
+        }
+        setPublishPremadeMessage(msg, "error");
       });
   }
 
