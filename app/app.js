@@ -22,6 +22,8 @@
   /** Script IDs while the playlist edit modal is open (reorder draft). */
   var playlistEditOrderIds = [];
   var currentPremade = [];
+  /** Raw cloud rows from Firestore `premadeAudio` before tier-split browse merge. */
+  var currentPremadeCloud = [];
   /** Cloud premades with `active: false` — admin-only, not shown in App Library. */
   var currentHiddenPremade = [];
   /** User-imported backgrounds synced via `users/{uid}/userBackgrounds`. */
@@ -2242,8 +2244,10 @@
           currentUserProfile = snap.exists ? snap.data() || {} : {};
           hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
           applyUserProfileDefaults({ onlyIfNewer: true });
+          refreshAppLibraryPremadesFromCloud();
           renderAccountInsights();
           syncAccountSubscriptionHeadline();
+          if (activeAdminTab === "library") renderPremade();
         },
         function () {}
       );
@@ -7589,6 +7593,18 @@
       cloud.push(p);
     });
     return cloud;
+  }
+
+  /** App Library browse: Free = built-in static premades; Paid = cloud `premadeAudio` only. */
+  function premadesForAppLibraryBrowse(cloudPremade) {
+    if (isWebFreeTier()) {
+      return buildStaticPremadeFallbackList();
+    }
+    return filterPremadesByCatalogAccess(cloudPremade || []);
+  }
+
+  function refreshAppLibraryPremadesFromCloud() {
+    currentPremade = premadesForAppLibraryBrowse(currentPremadeCloud);
   }
 
   var backgroundPreviewAudio = null;
@@ -18188,17 +18204,17 @@
     premadeUnsubscribe = premadeCollection().onSnapshot(
       function (snap) {
         var parsed = snap.docs.map(parsePremadeFirestoreDoc);
-        var cloudPremade = sortPremadeByCreatedAtDesc(
-          parsed.filter(function (p) {
-            return p.active !== false;
-          })
-        );
         currentHiddenPremade = sortPremadeByCreatedAtDesc(
           parsed.filter(function (p) {
             return p.active === false;
           })
         );
-        currentPremade = mergeCloudAndStaticPremades(cloudPremade);
+        currentPremadeCloud = sortPremadeByCreatedAtDesc(
+          parsed.filter(function (p) {
+            return p.active !== false;
+          })
+        );
+        refreshAppLibraryPremadesFromCloud();
         var nextExpanded = {};
         currentPremade.forEach(function (p) {
           if (expandedPremadeTextById[p.id] === true) nextExpanded[p.id] = true;
