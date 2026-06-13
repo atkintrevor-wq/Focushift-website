@@ -498,6 +498,9 @@
   }
 
   function mergedBackgroundCategoryOrder() {
+    if (!isWebFreeTier()) {
+      return mergedPaidCloudBackgroundCategoryOrder();
+    }
     var out = [];
     var seen = {};
     backgroundCategoryOrder.forEach(function (id) {
@@ -520,6 +523,37 @@
         out.push(x.id);
         seen[x.id] = true;
       });
+    return out;
+  }
+
+  function mergedPaidCloudBackgroundCategoryOrder() {
+    var tracks = filterBackgroundsByCatalogAccess(currentBackgroundCatalog);
+    var out = [];
+    var seen = {};
+    currentCatalogCategories
+      .filter(function (x) {
+        return x.kind === "background" && x.active !== false && canAccessCatalogTier(x.accessTier);
+      })
+      .sort(function (a, b) {
+        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+        return String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" });
+      })
+      .forEach(function (cat) {
+        var hasTracks = tracks.some(function (t) {
+          return normalizedBackgroundBrowseCategoryID(t.categoryID) === cat.id;
+        });
+        if (hasTracks && !seen[cat.id]) {
+          out.push(cat.id);
+          seen[cat.id] = true;
+        }
+      });
+    tracks.forEach(function (t) {
+      var cid = normalizedBackgroundBrowseCategoryID(t.categoryID);
+      if (!seen[cid]) {
+        out.push(cid);
+        seen[cid] = true;
+      }
+    });
     return out;
   }
 
@@ -14463,16 +14497,25 @@
       });
   }
 
+  function appBackgroundTracksForSubscriptionTier() {
+    if (isWebFreeTier()) {
+      return bundledAppBackgroundTracks();
+    }
+    return filterBackgroundsByCatalogAccess(currentBackgroundCatalog).map(function (b) {
+      return {
+        id: b.id,
+        name: b.name,
+        categoryID: b.categoryID,
+        file: "",
+        audioURL: b.audioURL || "",
+        accessTier: b.accessTier || "paid",
+        isCloudCatalog: true,
+      };
+    });
+  }
+
   function allAppBackgroundTracksIncludingCloud() {
-    var bundled = bundledAppBackgroundTracks();
-    var bundledIds = {};
-    bundled.forEach(function (b) {
-      bundledIds[b.id] = true;
-    });
-    var cloud = filterBackgroundsByCatalogAccess(currentBackgroundCatalog).filter(function (b) {
-      return !bundledIds[b.id];
-    });
-    return bundled.concat(cloud);
+    return appBackgroundTracksForSubscriptionTier();
   }
 
   var WEB_FREE_TIER_VOICE_IDS = {
