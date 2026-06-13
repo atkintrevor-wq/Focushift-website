@@ -6864,14 +6864,14 @@
     setPublishPremadeMessage("Publishing (uploading to catalog storage)...", "");
     var docRef = premadeCollection().doc();
     var docId = docRef.id;
-    fetchArrayBufferFromUrl(audioURL, "script audio")
-      .then(function (ab) {
-        if (!ab || !ab.byteLength) {
+    fetchPremadePublishAudio(audioURL, s)
+      .then(function (payload) {
+        if (!payload || !payload.bytes || !payload.bytes.byteLength) {
           throw new Error("Script audio download was empty.");
         }
-        var ext = /\.wav(\?|$)/i.test(audioURL) ? "wav" : /\.m4a(\?|$)/i.test(audioURL) ? "m4a" : "mp3";
-        var mime = ext === "wav" ? "audio/wav" : ext === "m4a" ? "audio/mp4" : "audio/mpeg";
-        var blob = new Blob([ab], { type: mime });
+        var ext = payload.ext || extensionFromStoragePath("", audioURL);
+        var mime = mimeTypeForAudioExtension(ext);
+        var blob = new Blob([payload.bytes], { type: mime });
         var filename = makeSafePremadeFilename(title) + "-" + docId.slice(0, 8) + "." + ext;
         var storagePath = "premadeAudio/" + filename;
         var ref = firebase.storage().ref(storagePath);
@@ -8103,6 +8103,70 @@
     } catch (_e) {
       return "";
     }
+  }
+
+  function scriptAudioStoragePathCandidates(audioURL, script) {
+    var paths = [];
+    var fromUrl = storagePathFromFirebaseDownloadUrl(audioURL);
+    if (fromUrl) paths.push(fromUrl);
+    if (currentUser && script && script.id) {
+      ["m4a", "mp3", "wav"].forEach(function (ext) {
+        var candidate = "users/" + currentUser.uid + "/audios/" + script.id + "_audio." + ext;
+        if (paths.indexOf(candidate) < 0) paths.push(candidate);
+      });
+    }
+    return paths;
+  }
+
+  function extensionFromStoragePath(path, fallbackURL) {
+    var p = String(path || "").toLowerCase();
+    if (/\.wav$/.test(p) || /\.wav(\?|$)/i.test(fallbackURL || "")) return "wav";
+    if (/\.m4a$/.test(p) || /\.m4a(\?|$)/i.test(fallbackURL || "")) return "m4a";
+    if (/\.mp3$/.test(p) || /\.mp3(\?|$)/i.test(fallbackURL || "")) return "mp3";
+    return "mp3";
+  }
+
+  function mimeTypeForAudioExtension(ext) {
+    if (ext === "wav") return "audio/wav";
+    if (ext === "m4a") return "audio/mp4";
+    return "audio/mpeg";
+  }
+
+  function fetchPremadePublishAudio(audioURL, script) {
+    var paths = scriptAudioStoragePathCandidates(audioURL, script);
+    function tryStoragePath(index) {
+      if (index >= paths.length) {
+        return fetchArrayBufferFromUrl(audioURL, "script audio").then(function (ab) {
+          return {
+            bytes: new Uint8Array(ab),
+            ext: extensionFromStoragePath("", audioURL),
+          };
+        });
+      }
+      var path = paths[index];
+      if (!path || typeof firebase.storage !== "function" || !currentUser) {
+        return tryStoragePath(index + 1);
+      }
+      var ref = firebase.storage().ref(path);
+      if (!ref || typeof ref.getBytes !== "function") {
+        return tryStoragePath(index + 1);
+      }
+      return ref
+        .getBytes(100 * 1024 * 1024)
+        .then(function (bytes) {
+          if (!bytes || !bytes.byteLength) {
+            throw new Error("Script audio download was empty.");
+          }
+          return {
+            bytes: bytes,
+            ext: extensionFromStoragePath(path, audioURL),
+          };
+        })
+        .catch(function () {
+          return tryStoragePath(index + 1);
+        });
+    }
+    return tryStoragePath(0);
   }
 
   function fetchArrayBufferFromUrl(url, contextLabel) {
