@@ -6861,43 +6861,27 @@
       setPublishPremadeMessage("Selected script has no audio URL.", "error");
       return;
     }
-    setPublishPremadeMessage("Publishing (uploading to catalog storage)...", "");
-    var docRef = premadeCollection().doc();
-    var docId = docRef.id;
-    fetchPremadePublishAudio(audioURL, s)
-      .then(function (payload) {
-        if (!payload || !payload.bytes || !payload.bytes.byteLength) {
-          throw new Error("Script audio download was empty.");
-        }
-        var ext = payload.ext || extensionFromStoragePath("", audioURL);
-        var mime = mimeTypeForAudioExtension(ext);
-        var blob = new Blob([payload.bytes], { type: mime });
-        var filename = makeSafePremadeFilename(title) + "-" + docId.slice(0, 8) + "." + ext;
-        var storagePath = "premadeAudio/" + filename;
-        var ref = firebase.storage().ref(storagePath);
-        return ref.put(blob, { contentType: mime }).then(function (snap) {
-          return snap.ref.getDownloadURL().then(function (downloadURL) {
-            return docRef.set({
-              title: title,
-              categoryID: categoryID,
-              description: description,
-              scriptText: scriptText,
-              audioURL: downloadURL,
-              storagePath: storagePath,
-              accessTier: accessTier,
-              active: true,
-              sourceScriptID: s.id,
-              voiceID: (s.voiceID && String(s.voiceID).trim()) || "",
-              backgroundID: (s.backgroundID && String(s.backgroundID).trim()) || "",
-              createdByUID: currentUser.uid,
-              createdByEmail: currentUser.email || "",
-              createdByName: currentUser.displayName || "",
-              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-          });
+    setPublishPremadeMessage("Publishing to App Library (server copy)…", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return backendRequest("/admin/publish-premade", token, {
+          sourceScriptID: s.id,
+          title: title,
+          categoryID: categoryID,
+          description: description,
+          scriptText: scriptText,
+          accessTier: accessTier,
+          includeScriptText: true,
+          voiceID: (s.voiceID && String(s.voiceID).trim()) || "",
+          backgroundID: (s.backgroundID && String(s.backgroundID).trim()) || "",
+          audioURL: audioURL,
         });
       })
-      .then(function () {
+      .then(function (result) {
+        if (!result || result.ok !== true) {
+          throw new Error((result && result.error) || "Could not publish premade.");
+        }
         setPublishPremadeMessage("Published to App Library.", "success");
         setPremadeMessage('Published "' + title + '" to App Library.', "success");
         var pcmOpen =
@@ -6911,7 +6895,7 @@
       .catch(function (e) {
         var msg = e && e.message ? e.message : "Could not publish premade.";
         if (isNetworkFetchFailure(e)) {
-          msg = networkFetchErrorMessage("script audio for publishing");
+          msg = networkFetchErrorMessage("publish request");
         }
         setPublishPremadeMessage(msg, "error");
       });
