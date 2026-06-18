@@ -99,6 +99,8 @@
     freeStepUpEnabled: null,
     stepUpStripeConfigured: false,
     stepUpStripePriceDisplay: null,
+    /** From POST /usage/refresh — mirrors backend unlimitedUsage for admin / manual complimentary. */
+    unlimitedUsage: false,
   };
   /** Pending share invite token from ?share= or /s/ redirect. */
   var pendingShareClaimToken = null;
@@ -4294,6 +4296,9 @@
     if (tier === "free") {
       return "On Free, paid features like creating new AI scripts, cloud sync, and voice cloning are not available. If you came from a paid plan, your library was removed from our servers; copies already on this device can stay until you remove them.";
     }
+    if (profileUsesComplimentaryBilling()) {
+      return "Complimentary access (not tied to App Store or Stripe billing). Your plan tier and features are set in Firebase. Unlimited AI words and TTS apply while you are on a complimentary or admin account.";
+    }
     if (profileUsesStripeBilling()) {
       return "Your plan is billed on the web (Stripe). Use Manage billing to cancel, update your card, or view invoices. Use View plans & upgrade to change tier. Changes sync to the iOS app when you sign in with the same account.";
     }
@@ -4320,6 +4325,9 @@
   }
 
   function aiScriptUsageInfoBodyWeb() {
+    if (hasUnlimitedUsage()) {
+      return "Unlimited AI words and voice (TTS) for this complimentary or admin account. Usage is still tracked for cost visibility. Paying customers can buy usage add-ons when they need more.";
+    }
     return "Monthly AI words, scripts, and voice (TTS) usage. For paid plans, usage resets each billing period. When you need more, use the usage add-on above (complimentary during beta when enabled, or via in-app purchase).";
   }
 
@@ -4355,7 +4363,7 @@
         '<div class="account-ios-meter">' +
         head +
         '<span class="account-ios-meter__ratio">' +
-        escapeHtml(formatInsightsInt(used) + " (unlimited)") +
+        escapeHtml(formatInsightsInt(used) + " / Unlimited") +
         "</span></div></div>"
       );
     }
@@ -10669,6 +10677,11 @@
     var host = document.getElementById("account-ai-usage-addon-host");
     if (!host) return;
 
+    if (hasUnlimitedUsage()) {
+      host.innerHTML = "";
+      return;
+    }
+
     var tier = resolvedSubscriptionTier();
     if (tier !== "starter" && tier !== "creator") {
       host.innerHTML = "";
@@ -10818,6 +10831,9 @@
             });
           })
           .then(function (json) {
+            if (json && typeof json.unlimitedUsage === "boolean") {
+              accountInsightsSnapshot.unlimitedUsage = json.unlimitedUsage;
+            }
             if (json && typeof json.freeStepUpEnabled === "boolean") {
               accountInsightsSnapshot.freeStepUpEnabled = json.freeStepUpEnabled;
             }
@@ -10885,8 +10901,35 @@
     el.hidden = false;
     var interval = formatBillingIntervalLabel(currentUserProfile) || "—";
     var billedVia = formatSubscriptionTierSourceLabel(currentUserProfile);
-    el.innerHTML =
+    var rows =
       accountIosKvRow("Billing period", interval) + accountIosKvRow("Billed via", billedVia);
+    if (profileUsesComplimentaryBilling()) {
+      rows +=
+        '<p class="app-muted account-subscription-desc" style="margin:0.35rem 0 0;">Complimentary access (not tied to App Store or Stripe billing).</p>';
+    }
+    el.innerHTML = rows;
+  }
+
+  function profileIsComplimentaryManual() {
+    if (!currentUserProfile) return false;
+    var tier = resolvedSubscriptionTier();
+    if (tier !== "starter" && tier !== "creator") return false;
+    var src = String(
+      currentUserProfile.subscriptionTierSource || currentUserProfile.subscriptionSource || ""
+    )
+      .trim()
+      .toLowerCase();
+    return src === "manual";
+  }
+
+  function hasUnlimitedUsage() {
+    if (currentUserProfile && currentUserProfile.isAdmin === true) return true;
+    if (accountInsightsSnapshot.unlimitedUsage === true) return true;
+    return profileIsComplimentaryManual();
+  }
+
+  function profileUsesComplimentaryBilling() {
+    return resolveSubscriptionBillingChannel() === "manual";
   }
 
   function renderAccountAiUsagePanel() {
@@ -10928,11 +10971,19 @@
     var scriptsUsed = usageDocInt(usage, "scriptsThisMonth");
     var wordsUsed = usageDocInt(usage, "wordsThisMonth");
     var ttsUsed = usageDocInt(usage, "ttsCharactersThisMonth");
+    var unlimited = hasUnlimitedUsage();
     var stepUpWords = usageDocInt(usage, "stepUpWordsThisMonth");
     var stepUpTts = usageDocInt(usage, "stepUpTtsCharactersThisMonth");
-    var effectiveWordsLimit =
-      limits.wordsLimit > 0 ? limits.wordsLimit + stepUpWords : limits.wordsLimit;
-    var effectiveTtsLimit = limits.ttsLimit > 0 ? limits.ttsLimit + stepUpTts : limits.ttsLimit;
+    var effectiveWordsLimit = unlimited
+      ? null
+      : limits.wordsLimit > 0
+        ? limits.wordsLimit + stepUpWords
+        : limits.wordsLimit;
+    var effectiveTtsLimit = unlimited
+      ? null
+      : limits.ttsLimit > 0
+        ? limits.ttsLimit + stepUpTts
+        : limits.ttsLimit;
 
     var usageResetLabel = "";
     if (usage.usagePeriodEnd) {
@@ -10942,14 +10993,18 @@
     }
 
     var meters =
-      accountUsageMeterHtml("Scripts", scriptsUsed, limits.scriptsLimit) +
-      accountUsageMeterHtml("Words", wordsUsed, effectiveWordsLimit || limits.wordsLimit) +
+      accountUsageMeterHtml("Scripts", scriptsUsed, unlimited ? null : limits.scriptsLimit) +
+      accountUsageMeterHtml("Words", wordsUsed, effectiveWordsLimit) +
       accountUsageMeterHtml(
         "Voice audio (TTS)",
         ttsUsed,
-        effectiveTtsLimit || limits.ttsLimit,
-        "characters remaining"
+        effectiveTtsLimit,
+        unlimited ? "tracked for visibility" : "characters remaining"
       );
+
+    var unlimitedNote = unlimited
+      ? '<p class="app-muted account-ios-unlimited-note" style="margin:0 0 0.5rem;">Unlimited AI words and voice (TTS) on this account.</p>'
+      : "";
 
     var resetRow = usageResetLabel
       ? '<p class="account-ios-reset-line"><span aria-hidden="true">↻</span> Resets: ' +
@@ -10958,6 +11013,7 @@
       : "";
 
     el.innerHTML =
+      unlimitedNote +
       '<div class="account-ios-usage-meters">' +
       meters +
       "</div>" +
@@ -11045,6 +11101,9 @@
 
   function subscriptionTierDescriptionWeb() {
     var t = resolvedSubscriptionTier();
+    if (profileUsesComplimentaryBilling()) {
+      return "Complimentary access with paid-tier features.";
+    }
     if (t === "starter") return "Perfect for getting started.";
     if (t === "creator") return "For creators who need more.";
     return "Limited features on the Free tier. Upgrade for more scripts, voices, and cloud sync.";
@@ -11054,6 +11113,9 @@
     var name = subscriptionTierDisplayName();
     var tier = resolvedSubscriptionTier();
     if (tier === "free") return "Your plan: " + name;
+    if (profileUsesComplimentaryBilling()) {
+      return "Your plan: " + name + " (Complimentary)";
+    }
     var interval = formatBillingIntervalLabel(currentUserProfile);
     if (interval) return "Your plan: " + name + " (" + interval + ")";
     return "Your plan: " + name;
@@ -11068,8 +11130,10 @@
     )
       .trim()
       .toLowerCase();
+    if (src === "manual") return "manual";
     if (src === "store") return "store";
     if (src === "stripe") return "stripe";
+    if (currentUserProfile.stripeSubscriptionId) return "stripe";
     if (currentUserProfile.stripeCustomerId) return "stripe";
     return "store";
   }
@@ -11097,16 +11161,19 @@
 
   function syncAccountBillingButtons() {
     var stripe = profileUsesStripeBilling();
+    var complimentary = profileUsesComplimentaryBilling();
     var tier = resolvedSubscriptionTier();
     var manageBillingRow = document.getElementById("account-manage-billing-row");
     var manageSubsRow = document.getElementById("account-manage-subscriptions-row");
     var manageRow = document.getElementById("account-ios-manage-row");
     var syncCloudBtn = document.getElementById("account-sync-cloud");
-    var hideBilling = !stripe;
-    var hideSubs = tier === "free" || stripe;
+    var viewPlansBtn = document.getElementById("account-btn-view-plans");
+    var hideBilling = !stripe || complimentary;
+    var hideSubs = tier === "free" || stripe || complimentary;
     if (manageBillingRow) manageBillingRow.hidden = hideBilling;
     if (manageSubsRow) manageSubsRow.hidden = hideSubs;
     if (manageRow) manageRow.hidden = hideBilling && hideSubs;
+    if (viewPlansBtn) viewPlansBtn.hidden = complimentary;
     if (syncCloudBtn) syncCloudBtn.hidden = tier !== "starter" && tier !== "creator";
   }
 
@@ -11120,9 +11187,10 @@
   function syncAccountPlansPanelForBilling() {
     var stripeWrap = document.getElementById("account-plans-stripe-wrap");
     var appStoreWrap = document.getElementById("account-plans-appstore-wrap");
-    var storePaid = profileUsesAppStoreBilling() && resolvedSubscriptionTier() !== "free";
-    if (stripeWrap) stripeWrap.hidden = storePaid;
-    if (appStoreWrap) appStoreWrap.hidden = !storePaid;
+    var manualPaid = profileUsesComplimentaryBilling();
+    var storePaid = !manualPaid && profileUsesAppStoreBilling() && resolvedSubscriptionTier() !== "free";
+    if (stripeWrap) stripeWrap.hidden = manualPaid || storePaid;
+    if (appStoreWrap) appStoreWrap.hidden = manualPaid || !storePaid;
     var btn = document.getElementById("account-btn-view-plans");
     if (btn && btn.getAttribute("aria-expanded") !== "true") {
       btn.textContent = viewPlansButtonLabelCollapsed();
