@@ -10,11 +10,23 @@
   <link rel="icon" href="../images/logo.png?v=8" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="../styles.css?v=8" />
-  <link rel="stylesheet" href="auth.css?v=5" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;0,9..40,800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css?v=12" />
+  <link rel="stylesheet" href="auth.css?v=6" />
 </head>
 <body>
+  <nav class="site-top" aria-label="Site">
+    <a class="site-top-skip" href="#auth-card">Skip to sign in</a>
+    <div class="site-top-inner site-top-inner--wide">
+      <a class="site-top-home" href="/">
+        <img class="site-top-app-brand" src="../images/focus-shift-app-brand.png?v=8" alt="Focus Shift" width="1174" height="417" decoding="async" />
+      </a>
+      <div class="site-top-links">
+        <a href="/#plans">Plans</a>
+        <a href="/">Home</a>
+      </div>
+    </div>
+  </nav>
   <main class="auth-page">
     <div class="auth-card" id="auth-card">
       <img class="auth-brand" src="../images/focus-shift-app-brand.png?v=8" alt="Focus Shift" width="1174" height="417" decoding="async" />
@@ -59,7 +71,7 @@
         <span class="auth-btn-text">Continue with Google</span>
       </button>
 
-      <p style="text-align:center;margin:0.75rem 0;color:var(--muted,#8b9bb4);font-size:0.85rem;">or</p>
+      <p class="auth-divider">or</p>
 
       <form id="email-form" autocomplete="on">
         <div class="auth-field sign-up-only">

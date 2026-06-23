@@ -1,33 +1,41 @@
-/* Login / sign-up — uses marketing tokens from ../styles.css */
+/* Login / sign-up — uses shared brand tokens from ../styles.css */
 .auth-page {
-  min-height: 100vh;
+  position: relative;
+  min-height: calc(100vh - 3.5rem);
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 1.5rem 1rem 3rem;
+  justify-content: center;
+  padding: 2rem 1rem 3rem;
 }
 
 .auth-card {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 420px;
-  background: var(--card, rgba(255, 255, 255, 0.06));
-  border: 1px solid var(--stroke, rgba(255, 255, 255, 0.12));
-  border-radius: 16px;
-  padding: 1.5rem 1.25rem 1.75rem;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
+  background: var(--bg-card);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 18px;
+  padding: 1.65rem 1.35rem 1.85rem;
+  box-shadow: var(--shadow-glow), 0 24px 48px rgba(0, 0, 0, 0.35);
 }
 
 .auth-card h1 {
-  font-size: 1.5rem;
+  font-size: 1.55rem;
+  font-weight: 800;
   margin: 0 0 0.25rem;
   text-align: center;
+  letter-spacing: -0.02em;
 }
 
 .auth-tagline {
   text-align: center;
-  color: var(--muted, #8b9bb4);
-  font-size: 0.95rem;
-  margin-bottom: 1.25rem;
+  color: var(--accent-vivid);
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-bottom: 1.35rem;
 }
 
 .auth-brand {
@@ -35,6 +43,7 @@
   margin: 0 auto 1rem;
   max-width: 220px;
   height: auto;
+  filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.25));
 }
 
 .auth-field {
@@ -43,10 +52,11 @@
 
 .auth-field label {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted, #8b9bb4);
+  letter-spacing: 0.08em;
+  font-weight: 700;
+  color: var(--accent-vivid);
   margin-bottom: 0.35rem;
 }
 
@@ -55,10 +65,17 @@
   box-sizing: border-box;
   padding: 0.75rem 0.85rem;
   border-radius: 10px;
-  border: 1px solid var(--stroke, rgba(255, 255, 255, 0.15));
-  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
   color: inherit;
   font-size: 1rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth-field input:focus {
+  outline: none;
+  border-color: rgba(56, 189, 248, 0.65);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
 }
 
 .auth-input-wrap {
@@ -84,14 +101,14 @@
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--muted, #8b9bb4);
+  color: var(--muted);
   cursor: pointer;
   flex-shrink: 0;
 }
 
 .auth-input-clear:hover,
 .auth-input-toggle:hover {
-  color: var(--text, #e8edf7);
+  color: var(--text);
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -118,7 +135,7 @@
 
 .auth-input-toggle:focus-visible,
 .auth-input-clear:focus-visible {
-  outline: 2px solid rgba(79, 140, 255, 0.85);
+  outline: 2px solid rgba(56, 189, 248, 0.85);
   outline-offset: 2px;
 }
 
@@ -134,7 +151,7 @@
 
 .auth-row-actions a {
   font-size: 0.875rem;
-  color: var(--accent, #4f8cff);
+  color: var(--accent-vivid);
 }
 
 .auth-btn {
@@ -151,6 +168,11 @@
   cursor: pointer;
   margin-bottom: 0.65rem;
   position: relative;
+  transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+.auth-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .auth-btn-text {
@@ -193,6 +215,9 @@
   .auth-spinner {
     animation-duration: 1.4s;
   }
+  .auth-btn:hover:not(:disabled) {
+    transform: none;
+  }
 }
 
 .auth-remember-field {
@@ -205,7 +230,7 @@
   gap: 0.55rem;
   font-size: 0.92rem;
   font-weight: 500;
-  color: var(--text, #e8edf7);
+  color: var(--text);
   cursor: pointer;
   margin: 0;
 }
@@ -214,7 +239,7 @@
   width: 1.05rem;
   height: 1.05rem;
   margin-top: 0.12rem;
-  accent-color: #2563eb;
+  accent-color: var(--accent);
   flex-shrink: 0;
 }
 
@@ -223,7 +248,7 @@
   padding-left: 1.6rem;
   font-size: 0.78rem;
   line-height: 1.45;
-  color: var(--muted, #8b9bb4);
+  color: var(--muted);
 }
 
 body.auth-is-busy #email-form {
@@ -236,13 +261,19 @@ body.auth-is-busy #btn-forgot {
 }
 
 .auth-btn-primary {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: var(--gradient-hero);
   color: #fff;
+  box-shadow: var(--shadow-glow), 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+
+.auth-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.07);
 }
 
 .auth-btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
 .auth-btn-primary.is-busy:disabled {
@@ -253,6 +284,7 @@ body.auth-is-busy #btn-forgot {
 .auth-btn-google {
   background: #fff;
   color: #1f2937;
+  border: 1px solid rgba(148, 163, 184, 0.25);
 }
 
 .auth-btn-apple {
@@ -295,17 +327,24 @@ body.auth-is-busy #btn-forgot {
   border: 1px solid rgba(234, 179, 8, 0.4);
 }
 
+.auth-divider {
+  text-align: center;
+  margin: 0.75rem 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
 .auth-toggle {
   text-align: center;
   margin-top: 1rem;
   font-size: 0.9rem;
-  color: var(--muted, #8b9bb4);
+  color: var(--muted);
 }
 
 .auth-toggle button {
   background: none;
   border: none;
-  color: var(--accent, #4f8cff);
+  color: var(--accent-vivid);
   cursor: pointer;
   font-weight: 600;
   padding: 0;
@@ -314,10 +353,15 @@ body.auth-is-busy #btn-forgot {
 .auth-back {
   margin-top: 1.5rem;
   font-size: 0.875rem;
+  text-align: center;
 }
 
 .auth-back a {
-  color: var(--muted, #8b9bb4);
+  color: var(--muted);
+}
+
+.auth-back a:hover {
+  color: var(--accent-vivid);
 }
 
 body.is-sign-up .sign-up-only {
@@ -335,7 +379,7 @@ body.is-sign-up .sign-in-only {
 .auth-link-btn {
   background: none;
   border: none;
-  color: var(--accent, #4f8cff);
+  color: var(--accent-vivid);
   cursor: pointer;
   font-size: 0.875rem;
   padding: 0;
@@ -345,7 +389,7 @@ body.is-sign-up .sign-in-only {
   margin: 0.35rem 0 0.85rem;
   font-size: 0.78rem;
   line-height: 1.45;
-  color: var(--muted, #8b9bb4);
+  color: var(--muted);
   text-align: center;
 }
 
@@ -353,15 +397,15 @@ body.is-sign-up .sign-in-only {
   margin: 0 0 0.85rem;
   padding: 0.85rem 0.95rem;
   border-radius: 12px;
-  border: 1px solid rgba(79, 140, 255, 0.35);
-  background: rgba(79, 140, 255, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .auth-link-panel__lede {
   margin: 0 0 0.75rem;
   font-size: 0.88rem;
   line-height: 1.45;
-  color: var(--text, #e8edf7);
+  color: var(--text);
 }
 
 .auth-link-panel__cancel {

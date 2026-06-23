@@ -28,8 +28,8 @@
   --app-mini-player-bottom: rgba(9, 15, 30, 0.98);
   --app-shadow-card: 0 4px 18px rgba(0, 0, 0, 0.22);
   --app-shadow-dock: 0 -10px 36px rgba(0, 0, 0, 0.42);
-  --app-tab-active-bg: rgba(37, 99, 235, 0.32);
-  --app-tab-active-border: rgba(96, 165, 250, 0.85);
+  --app-tab-active-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.52) 0%, rgba(6, 182, 212, 0.38) 55%, rgba(129, 140, 248, 0.45) 100%);
+  --app-tab-active-border: rgba(56, 189, 248, 0.75);
   --app-tab-active-fg: #f8fafc;
   --app-empty-hint-bg: rgba(37, 99, 235, 0.12);
   --app-empty-hint-border: rgba(148, 163, 184, 0.22);
@@ -115,9 +115,10 @@
   z-index: 960;
   margin: 0 0 0.35rem;
   padding: 0;
-  background: linear-gradient(180deg, rgba(11, 18, 32, 0.98) 0%, rgba(11, 18, 32, 0.9) 90%, rgba(11, 18, 32, 0) 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(11, 18, 32, 0.98) 0%, rgba(11, 18, 32, 0.88) 88%, rgba(11, 18, 32, 0) 100%);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.15);
   backdrop-filter: blur(10px);
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.08);
 }
 .admin-mode-banner {
   padding: 0.45rem 0.65rem 0.5rem;
@@ -1188,13 +1189,24 @@ html.fs-app[data-app-theme="light"] .library-dropdown-item.is-tier-locked:hover 
 }
 .app-btn-danger { border-color: rgba(220,38,38,0.5); }
 .app-btn-primary {
-  background: linear-gradient(180deg, rgba(37,99,235,0.38), rgba(37,99,235,0.24));
-  border-color: rgba(96,165,250,0.8);
+  background: var(--gradient-hero);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.35);
+}
+.app-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.07);
+  background: var(--gradient-hero);
+  border-color: transparent;
 }
 .app-btn-secondary {
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(148, 163, 184, 0.35);
   color: inherit;
+}
+.app-btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent-vivid, #38bdf8);
+  background: rgba(255, 255, 255, 0.1);
 }
 .app-btn-ghost {
   background: transparent;
@@ -3398,8 +3410,8 @@ body.fs-app-body.fs-modal-scroll-lock {
   height: calc(100% - 0.44rem);
   transform: translateX(var(--voice-pill-x));
   border-radius: 10px;
-  background: rgba(59,130,246,0.2);
-  border: 1px solid rgba(147,197,253,0.65);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.38), rgba(6, 182, 212, 0.28));
+  border: 1px solid rgba(56, 189, 248, 0.55);
   box-shadow: inset 0 0 0 1px rgba(147,197,253,0.3);
   opacity: 0;
   transition: transform 220ms ease, width 220ms ease, opacity 150ms ease;
@@ -4694,16 +4706,17 @@ textarea.gen-survey-textarea:focus {
 body.fs-app-body {
   background-color: var(--bg, #0b1220);
   background-image:
-    radial-gradient(ellipse 120% 70% at 50% -25%, rgba(59, 130, 246, 0.16), transparent 52%),
-    radial-gradient(ellipse 90% 55% at 100% 5%, rgba(99, 102, 241, 0.11), transparent 48%),
-    radial-gradient(ellipse 70% 50% at 0% 35%, rgba(14, 165, 233, 0.07), transparent 42%);
+    radial-gradient(ellipse 900px 500px at 15% -5%, rgba(59, 130, 246, 0.22), transparent),
+    radial-gradient(ellipse 700px 400px at 95% 5%, rgba(6, 182, 212, 0.15), transparent),
+    radial-gradient(ellipse 500px 300px at 50% 100%, rgba(129, 140, 248, 0.08), transparent);
   background-attachment: fixed;
 }
 
 .fs-app-body .site-top {
-  background: rgba(11, 18, 32, 0.82);
-  border-bottom-color: rgba(148, 163, 184, 0.2);
+  background: rgba(11, 18, 32, 0.85);
+  border-bottom-color: rgba(96, 165, 250, 0.2);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
 }
 
 #library-segmented-tabs.voice-segmented-tabs,
@@ -4757,6 +4770,8 @@ html.fs-app[data-app-theme="light"] {
   --app-shadow-card: 0 4px 20px rgba(15, 23, 42, 0.08);
   --app-shadow-dock: 0 -8px 28px rgba(15, 23, 42, 0.1);
   --app-tab-active-fg: #0f172a;
+  --app-tab-active-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(6, 182, 212, 0.14) 55%, rgba(129, 140, 248, 0.16) 100%);
+  --app-tab-active-border: rgba(59, 130, 246, 0.45);
   --app-empty-hint-bg: rgba(37, 99, 235, 0.07);
   --app-empty-hint-border: rgba(15, 23, 42, 0.12);
   --app-empty-hint-fg: #334155;
@@ -4786,6 +4801,17 @@ html.fs-app[data-app-theme="light"] #voices-segmented-tabs.voice-segmented-tabs,
 html.fs-app[data-app-theme="light"] #audio-segmented-tabs.voice-segmented-tabs {
   background: rgba(255, 255, 255, 0.75);
   border-color: rgba(15, 23, 42, 0.12);
+}
+
+html.fs-app[data-app-theme="light"] .app-btn-primary {
+  background: var(--gradient-hero);
+  color: #fff;
+  border-color: transparent;
+}
+
+html.fs-app[data-app-theme="light"] .app-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  background: var(--gradient-hero);
 }
 
 html.fs-app[data-app-theme="light"] textarea.gen-survey-textarea,
@@ -4840,6 +4866,8 @@ html.fs-app[data-app-theme="light"] .gen-clarify-progress {
     --app-shadow-card: 0 4px 20px rgba(15, 23, 42, 0.08);
     --app-shadow-dock: 0 -8px 28px rgba(15, 23, 42, 0.1);
     --app-tab-active-fg: #0f172a;
+    --app-tab-active-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(6, 182, 212, 0.14) 55%, rgba(129, 140, 248, 0.16) 100%);
+    --app-tab-active-border: rgba(59, 130, 246, 0.45);
     --app-empty-hint-bg: rgba(37, 99, 235, 0.07);
     --app-empty-hint-border: rgba(15, 23, 42, 0.12);
     --app-empty-hint-fg: #334155;
@@ -4869,6 +4897,12 @@ html.fs-app[data-app-theme="light"] .gen-clarify-progress {
   html.fs-app[data-app-theme="system"] #audio-segmented-tabs.voice-segmented-tabs {
     background: rgba(255, 255, 255, 0.75);
     border-color: rgba(15, 23, 42, 0.12);
+  }
+
+  html.fs-app[data-app-theme="system"] .app-btn-primary {
+    background: var(--gradient-hero);
+    color: #fff;
+    border-color: transparent;
   }
 
   html.fs-app[data-app-theme="system"] textarea.gen-survey-textarea,
