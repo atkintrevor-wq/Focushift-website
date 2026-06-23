@@ -249,6 +249,7 @@
   var activeVoiceRecordingTimer = null;
   var activeVoiceRecordingStartedAt = 0;
   var hasVoiceCloneConsent = false;
+  var pendingVoiceCloneConsentAction = null;
   var voiceProcessingStatusTimer = null;
   var activeVoiceScriptParagraphIndex = -1;
   var recordedSampleFile = null;
@@ -1441,7 +1442,8 @@
         "Choose the voice that speaks your affirmations when you generate audio.\n\n" +
         "My Voices\n" +
         "• Your saved voices: cloned voices (Creator), added app voices, and uploaded custom voices (Starter/Creator).\n" +
-        "• Clone (Starter/Creator) records or uploads your voice to create a personalized clone.\n\n" +
+        "• Clone (Starter/Creator) opens a guided recording window—same flow as iOS.\n" +
+        "• Upload Voice Audio adds a file from your computer (MP3, WAV, M4A).\n\n" +
         "App Voices\n" +
         "• Built-in voices included with the app. Tap Preview to hear any voice.\n" +
         "• Adding voices to My Voices and setting a default voice require Starter or Creator.\n" +
@@ -4657,60 +4659,23 @@
       "</section>" +
       '<section id="section-voices" class="app-section">' +
       '<section class="app-card" aria-label="Voice settings">' +
-      '  <div class="voices-toolbar-row">' +
-      '    <div class="voices-toolbar-inner">' +
+      '  <div class="voices-toolbar-row library-toolbar-row">' +
       '    <div class="app-tabs voice-segmented-tabs" id="voices-segmented-tabs">' +
       '      <button type="button" class="app-tab-btn" id="voices-tab-my" data-voices-tab="my-voices">My Voices</button>' +
       '      <button type="button" class="app-tab-btn" id="voices-tab-app" data-voices-tab="app-voices">App Voices</button>' +
       "    </div>" +
-      '    <div class="library-toolbar-actions">' +
+      '    <div class="library-toolbar-actions voices-toolbar-actions">' +
+      '      <button type="button" class="app-btn app-btn-secondary voices-toolbar-btn" id="btn-voice-clone">Upload Voice Audio</button>' +
+      '      <button type="button" class="app-btn app-btn-primary voices-toolbar-btn" id="btn-voice-record">Clone Voice</button>' +
+      "    </div>" +
+      '    <div class="library-toolbar-actions library-search-toolbar">' +
       '      <button type="button" class="library-chevron-btn section-search-toggle" id="section-search-toggle-voices" aria-label="Show search" title="Search">' +
       sectionSearchMagnifierSvg() +
       "</button>" +
       "    </div>" +
-      "    </div>" +
       "  </div>" +
       sectionSearchWrapHtml("voices", "Search voices…") +
       '  <div id="voice-gender-filter-wrap" hidden style="margin:0.35rem 0 0.55rem;"></div>' +
-      '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.5rem;">' +
-      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-clone">Upload Voice Audio</button>' +
-      '    <button type="button" class="app-btn app-btn-secondary" id="btn-voice-record">Clone Voice</button>' +
-      "  </div>" +
-      '  <p class="app-muted" style="margin-top:-0.2rem;margin-bottom:0.35rem;">Use <strong>Upload Voice Audio</strong> for an existing file, or <strong>Clone Voice</strong> to record a guided sample in-browser.</p>' +
-      '  <div id="voice-recording-status" class="app-inline-msg" style="margin-top:0;margin-bottom:0.6rem;"></div>' +
-      '  <div id="voice-recording-guide" class="app-empty-hint voice-recording-guide" style="display:none;margin-top:0;margin-bottom:0.7rem;">' +
-      '    <div class="voice-recording-guide-head">' +
-      '      <strong>Read this script while recording</strong>' +
-      '      <div class="voice-recording-guide-controls">' +
-      '        <span id="voice-recording-guide-time" class="voice-recording-guide-time">0:00</span>' +
-      '        <button type="button" class="app-btn app-btn-secondary" id="voice-recording-toggle">Start Recording</button>' +
-      '        <button type="button" class="app-btn app-btn-ghost" id="voice-recording-cancel">Cancel</button>' +
-      "      </div>" +
-      "    </div>" +
-      '    <div class="voice-recording-guide-sub">Speak clearly in a quiet place. Aim for 30s minimum, 1-2 minutes best.</div>' +
-      '    <div class="app-empty-hint" style="border-style:solid;padding:0.65rem;margin:0 0 0.55rem;">' +
-      '      <div style="display:flex;flex-direction:column;gap:0.2rem;">' +
-      '        <div class="app-muted"><strong>Recording tips</strong></div>' +
-      '        <div class="app-muted">- Record 1-2 minutes of clear speech</div>' +
-      '        <div class="app-muted">- Speak naturally at a consistent volume</div>' +
-      '        <div class="app-muted">- Minimize background noise</div>' +
-      '        <div class="app-muted">- Supported formats: MP3, WAV, M4A (upload)</div>' +
-      "      </div>" +
-      "    </div>" +
-      '    <div id="voice-recording-script" class="voice-recording-script"></div>' +
-      '    <div id="voice-recording-review" style="display:none;margin-top:0.6rem;">' +
-      '      <div class="app-empty-hint" style="border-style:solid;padding:0.62rem;">' +
-      '        <div style="display:flex;justify-content:space-between;gap:0.6rem;align-items:center;">' +
-      '          <div><strong>Review your recording</strong><div id="voice-recording-review-duration" class="app-muted">0:00</div></div>' +
-      '          <div style="display:flex;gap:0.4rem;flex-wrap:wrap;justify-content:flex-end;">' +
-      '            <button type="button" class="app-btn app-btn-secondary" id="voice-recording-play">Play</button>' +
-      '            <button type="button" class="app-btn app-btn-ghost" id="voice-recording-again">Record Again</button>' +
-      '            <button type="button" class="app-btn" id="voice-recording-use">Use Recording</button>' +
-      "          </div>" +
-      "        </div>" +
-      "      </div>" +
-      "    </div>" +
-      "  </div>" +
       '  <div id="voices-list"></div>' +
       '  <div id="voices-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '  <input id="voice-upload-input" type="file" accept="audio/*" style="display:none;" />' +
@@ -5282,6 +5247,51 @@
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="voice-consent-cancel">Cancel</button>' +
       '      <button type="button" class="app-btn" id="voice-consent-continue" disabled>Continue</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
+      '<div id="voice-clone-recording-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal voice-clone-recording-modal app-modal--wide" role="dialog" aria-modal="true" aria-labelledby="voice-clone-recording-title">' +
+      '    <div class="voice-clone-recording-head">' +
+      "      <div>" +
+      '        <h3 id="voice-clone-recording-title">Clone your voice</h3>' +
+      '        <p class="app-muted voice-clone-recording-lede">Read the script while recording. Aim for 1–2 minutes of clear speech.</p>' +
+      "      </div>" +
+      '      <button type="button" class="app-btn app-btn-ghost voice-clone-recording-close" id="voice-clone-recording-close" aria-label="Close clone voice">×</button>' +
+      "    </div>" +
+      '    <div id="voice-recording-status" class="app-inline-msg voice-recording-status" role="status" aria-live="polite"></div>' +
+      '    <div id="voice-recording-guide" class="voice-recording-guide">' +
+      '      <div class="voice-recording-guide-head">' +
+      '        <strong>Read this script while recording</strong>' +
+      '        <div class="voice-recording-guide-controls">' +
+      '          <span id="voice-recording-guide-time" class="voice-recording-guide-time">0:00</span>' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="voice-recording-toggle">Start Recording</button>' +
+      '          <button type="button" class="app-btn app-btn-ghost" id="voice-recording-cancel">Cancel</button>' +
+      "        </div>" +
+      "      </div>" +
+      '      <div class="voice-recording-guide-sub">Speak clearly in a quiet place. Aim for 30s minimum, 1-2 minutes best.</div>' +
+      '      <div class="app-empty-hint voice-recording-tips">' +
+      '        <div class="voice-recording-tips-title"><strong>Recording tips</strong></div>' +
+      '        <ul class="voice-recording-tips-list">' +
+      "          <li>Record 1-2 minutes of clear speech</li>" +
+      "          <li>Speak naturally at a consistent volume</li>" +
+      "          <li>Minimize background noise</li>" +
+      "          <li>Supported upload formats: MP3, WAV, M4A</li>" +
+      "        </ul>" +
+      "      </div>" +
+      '      <div id="voice-recording-script" class="voice-recording-script"></div>' +
+      '      <div id="voice-recording-review" class="voice-recording-review" hidden>' +
+      '        <div class="app-empty-hint voice-recording-review-card">' +
+      '          <div class="voice-recording-review-row">' +
+      '            <div><strong>Review your recording</strong><div id="voice-recording-review-duration" class="app-muted">0:00</div></div>' +
+      '            <div class="voice-recording-review-actions">' +
+      '              <button type="button" class="app-btn app-btn-secondary" id="voice-recording-play">Play</button>' +
+      '              <button type="button" class="app-btn app-btn-ghost" id="voice-recording-again">Record Again</button>' +
+      '              <button type="button" class="app-btn app-btn-primary" id="voice-recording-use">Use Recording</button>' +
+      "            </div>" +
+      "          </div>" +
+      "        </div>" +
+      "      </div>" +
       "    </div>" +
       "  </div>" +
       "</div>" +
@@ -6028,8 +6038,10 @@
     });
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
       if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceUpload)) return;
-      setVoicesMessage("Choose a clear voice audio file to upload.", "");
-      beginVoiceUploadFlow("clone");
+      ensureVoiceCloneConsentThen(function () {
+        setVoicesMessage("Choose a clear voice audio file to upload.", "");
+        beginVoiceUploadFlow("clone");
+      });
     });
     document.getElementById("btn-voice-record").addEventListener("click", function () {
       if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return;
@@ -6044,6 +6056,14 @@
     document.getElementById("voice-recording-cancel").addEventListener("click", function () {
       cancelCloneVoiceGuide();
     });
+    document.getElementById("voice-clone-recording-close").addEventListener("click", function () {
+      cancelCloneVoiceGuide();
+    });
+    document.getElementById("voice-clone-recording-backdrop").addEventListener("click", function (ev) {
+      if (ev.target && ev.target.id === "voice-clone-recording-backdrop") {
+        cancelCloneVoiceGuide();
+      }
+    });
     document.getElementById("voice-recording-play").addEventListener("click", function () {
       togglePlayRecordedSample();
     });
@@ -6056,10 +6076,12 @@
     });
     renderVoiceRecordingScript(-1);
     document.getElementById("voice-consent-cancel").addEventListener("click", function () {
+      pendingVoiceCloneConsentAction = null;
       closeVoiceConsentModal();
     });
     document.getElementById("voice-consent-backdrop").addEventListener("click", function (ev) {
       if (ev.target && ev.target.id === "voice-consent-backdrop") {
+        pendingVoiceCloneConsentAction = null;
         closeVoiceConsentModal();
       }
     });
@@ -8617,7 +8639,7 @@
     recordedSampleFile = null;
     recordedSampleDurationSec = 0;
     var review = document.getElementById("voice-recording-review");
-    if (review) review.style.display = "none";
+    if (review) review.hidden = true;
     var play = document.getElementById("voice-recording-play");
     if (play) play.textContent = "Play";
     var dur = document.getElementById("voice-recording-review-duration");
@@ -8626,7 +8648,7 @@
 
   function showRecordedSampleReview() {
     var review = document.getElementById("voice-recording-review");
-    if (review) review.style.display = "block";
+    if (review) review.hidden = false;
     var dur = document.getElementById("voice-recording-review-duration");
     if (dur) dur.textContent = formatDurationShort(recordedSampleDurationSec);
     var play = document.getElementById("voice-recording-play");
@@ -8970,14 +8992,13 @@
       if (typeof action === "function") action();
       return;
     }
+    pendingVoiceCloneConsentAction = typeof action === "function" ? action : null;
     openVoiceConsentModal();
   }
 
   function openCloneVoiceGuide() {
     if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return;
-    ensureVoiceCloneConsentThen(function () {
-      openCloneVoiceGuideInternal();
-    });
+    ensureVoiceCloneConsentThen(openCloneVoiceGuideInternal);
   }
 
   function acceptVoiceCloneConsentAndContinue() {
@@ -9003,8 +9024,14 @@
         currentUserProfile = Object.assign({}, currentUserProfile || {}, {
           voiceCloneConsentAcceptedAt: new Date().toISOString(),
         });
+        var nextAction = pendingVoiceCloneConsentAction;
+        pendingVoiceCloneConsentAction = null;
         closeVoiceConsentModal();
-        openCloneVoiceGuideInternal();
+        if (typeof nextAction === "function") {
+          nextAction();
+        } else {
+          openCloneVoiceGuideInternal();
+        }
       })
       .catch(function (e) {
         setVoiceConsentMessage(e.message || "Could not save consent.", "error");
@@ -9071,10 +9098,16 @@
   }
 
   function setVoiceRecordingGuideVisible(visible) {
+    var backdrop = document.getElementById("voice-clone-recording-backdrop");
     var box = document.getElementById("voice-recording-guide");
-    if (!box) return;
-    box.style.display = visible ? "block" : "none";
-    box.classList.toggle("is-recording", !!visible);
+    if (visible) {
+      if (backdrop) backdrop.hidden = false;
+      lockAppBodyScroll();
+    } else {
+      if (backdrop) backdrop.hidden = true;
+      unlockAppBodyScroll();
+    }
+    if (box) box.classList.toggle("is-recording", !!visible);
     if (!visible) {
       var timeEl = document.getElementById("voice-recording-guide-time");
       if (timeEl) timeEl.textContent = "0:00";
@@ -9082,6 +9115,7 @@
       renderVoiceRecordingScript(-1);
       setVoiceRecordButtonState(false);
       clearRecordedSample();
+      setVoiceRecordingStatus("", "");
     }
   }
 

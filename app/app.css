@@ -2965,7 +2965,27 @@ html.fs-app[data-app-theme="light"] .script-card-sync-warn {
   flex-wrap: wrap;
 }
 .voices-toolbar-row {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+#voices-segmented-tabs.voice-segmented-tabs {
+  flex: 1 1 200px;
+  min-width: 0;
+  margin-bottom: 0;
+}
+.voices-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.voices-toolbar-btn {
+  padding: 0.45rem 0.72rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
 }
 html.fs-app[data-app-theme="light"] .library-toolbar-row,
 html.fs-app[data-app-theme="light"] .voices-toolbar-row {
@@ -3103,6 +3123,89 @@ html.fs-app[data-app-theme="light"] .voices-toolbar-row {
   flex: 1 1 200px;
   min-width: 0;
 }
+
+/* Clone voice — full-screen modal (iOS-style sheet) */
+.voice-clone-recording-modal {
+  max-width: min(640px, calc(100vw - 2rem));
+  max-height: min(92dvh, calc(100vh - 2rem));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 1.15rem 1.1rem 1.25rem;
+}
+.voice-clone-recording-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.55rem;
+  flex-shrink: 0;
+}
+.voice-clone-recording-head h3 {
+  margin: 0 0 0.25rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.voice-clone-recording-lede {
+  margin: 0;
+  font-size: 0.88rem;
+}
+.voice-clone-recording-close {
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+  font-size: 1.35rem;
+  line-height: 1;
+  border-radius: 999px;
+}
+.voice-recording-status {
+  margin: 0 0 0.55rem;
+  flex-shrink: 0;
+}
+.voice-clone-recording-modal .voice-recording-guide {
+  border: none;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.voice-recording-tips {
+  padding: 0.65rem 0.75rem;
+  margin: 0 0 0.55rem;
+}
+.voice-recording-tips-title {
+  margin-bottom: 0.35rem;
+}
+.voice-recording-tips-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.voice-recording-review {
+  margin-top: 0.6rem;
+}
+.voice-recording-review-card {
+  padding: 0.62rem 0.75rem;
+}
+.voice-recording-review-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.voice-recording-review-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .section-search-wrap {
   margin: -0.35rem 0 0.75rem;
 }
@@ -4470,6 +4573,7 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
     display: flex;
     flex-wrap: nowrap;
     width: 100%;
+    flex: 1 1 100%;
   }
   #voices-segmented-tabs.voice-segmented-tabs .app-tab-btn {
     flex: 1 1 0;
@@ -4477,6 +4581,14 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
     white-space: nowrap;
     padding: 0.36rem 0.48rem;
     font-size: 0.8rem;
+  }
+  .voices-toolbar-actions {
+    width: auto;
+    margin-left: auto;
+  }
+  .voices-toolbar-btn {
+    padding: 0.4rem 0.55rem;
+    font-size: 0.76rem;
   }
   .voice-adjust-modal .app-modal-actions {
     gap: 0.4rem;
