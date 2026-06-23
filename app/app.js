@@ -1516,6 +1516,13 @@
     );
   }
 
+  function voiceRowCanPreview(voice) {
+    if (!voice || !voice.id) return false;
+    if (!isWebVoiceAvailableForGeneration(voice.id)) return false;
+    if ((voice.file && String(voice.file).trim()) || voiceSampleAssetUrl(voice.file)) return true;
+    return !!currentUser;
+  }
+
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
   var homeDashboardBadgesExpanded = false;
@@ -7919,6 +7926,21 @@
     );
   }
 
+  function pickerVoicePreviewBtnHtml(voiceId, isPlaying) {
+    var label = isPlaying ? "Pause voice sample" : "Play voice sample";
+    return (
+      '<button type="button" class="script-card-play-btn app-picker-preview-btn" data-preview-voice="' +
+      escapeHtml(voiceId) +
+      '" title="' +
+      escapeHtml(label) +
+      '" aria-label="' +
+      escapeHtml(label) +
+      '">' +
+      libraryTransportPlayPauseIconSvg(isPlaying) +
+      "</button>"
+    );
+  }
+
   function mediaCardIconActionBtnHtml(dataAttr, dataValue, title, iconSvg, isActive, extraClass) {
     return (
       '<button type="button" class="app-btn app-btn-secondary library-script-share-btn media-card-icon-btn' +
@@ -7980,6 +8002,9 @@
   function previewBackgroundById(backgroundId, onError) {
     var entry = backgroundEntryById(backgroundId);
     if (!entry || entry.id === "bg-none") return Promise.resolve(false);
+    if (activeVoicePreviewId && activeAudio && !activeAudioScriptId) {
+      stopActiveAudio(false);
+    }
     var canPrev =
       !!(entry.file && String(entry.file).trim()) ||
       !!(entry.audioURL && String(entry.audioURL).trim()) ||
@@ -9545,6 +9570,7 @@
       try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
       activePreviewBlobURL = null;
     }
+    stopBackgroundPreview();
     stopActiveAudio(false);
     activeAudio = new Audio(audioUrl);
     if (isBlobURL) activePreviewBlobURL = audioUrl;
@@ -15694,8 +15720,8 @@
       activeCategoryID = categoryPremade && categoryPremade.categoryID ? categoryPremade.categoryID : null;
     }
 
-    function optionRowHtml(opt, selected, includeBgPreview, showCategoryHint) {
-      var isBgPreview = includeBgPreview && isBackgroundPreviewing(opt.id);
+    function optionRowHtml(opt, selected, previewKind, showCategoryHint) {
+      var isBgPreview = previewKind === "background" && isBackgroundPreviewing(opt.id);
       var categoryHint = showCategoryHint ? pickerBackgroundCategoryHint(opt) : "";
       var labelInner = categoryHint
         ? '<span class="app-picker-option-label"><span class="app-picker-option-name">' +
@@ -15715,7 +15741,7 @@
         (selected ? "✓" : "") +
         "</span>" +
         "</button>";
-      if (includeBgPreview && backgroundRowCanPreview(opt)) {
+      if (previewKind === "background" && backgroundRowCanPreview(opt)) {
         return (
           '<div class="app-picker-option-row">' +
           mainBtn +
@@ -15723,10 +15749,18 @@
           "</div>"
         );
       }
+      if (previewKind === "voice" && voiceRowCanPreview(opt)) {
+        return (
+          '<div class="app-picker-option-row">' +
+          mainBtn +
+          pickerVoicePreviewBtnHtml(opt.id, isVoicePreviewing(opt.id)) +
+          "</div>"
+        );
+      }
       return mainBtn;
     }
 
-    function sectionHtml(titleText, items, selectedID, showCategoryHint) {
+    function sectionHtml(titleText, items, selectedID, showCategoryHint, previewKind) {
       if (!items.length) return "";
       return (
         '<div class="app-picker-group">' +
@@ -15735,7 +15769,7 @@
         "</p>" +
         items
           .map(function (opt) {
-            return optionRowHtml(opt, opt.id === selectedID, !isVoice, !!showCategoryHint);
+            return optionRowHtml(opt, opt.id === selectedID, previewKind, !!showCategoryHint);
           })
           .join("") +
         "</div>"
@@ -15752,26 +15786,6 @@
         var catName = !isVoice ? pickerBackgroundCategoryHint(opt).toLowerCase() : "";
         return name.indexOf(q) >= 0 || id.indexOf(q) >= 0 || cat.indexOf(q) >= 0 || catName.indexOf(q) >= 0;
       });
-      var defaultItem = filtered.find(function (opt) {
-        return opt.id === (isVoice ? selectedVoiceId : selectedBackgroundId);
-      });
-      var recommendedIDs = recommendedOptionIDs(
-        isVoice ? "voice" : "background",
-        activeCategoryID,
-        isVoice ? options : []
-      );
-      var recommended = filtered.filter(function (opt) {
-        return recommendedIDs.indexOf(opt.id) >= 0;
-      });
-      var groupedIDs = {};
-      if (defaultItem) groupedIDs[defaultItem.id] = true;
-      recommended.forEach(function (opt) {
-        groupedIDs[opt.id] = true;
-      });
-      var allRemaining = filtered.filter(function (opt) {
-        return !groupedIDs[opt.id];
-      });
-
       if (!filtered.length) {
         list.innerHTML = '<p class="app-muted">No results found.</p>';
         bindPickerOptionClicks();
@@ -15781,12 +15795,13 @@
 
       var html = "";
       if (isVoice) {
-        html =
-          sectionHtml("Default", defaultItem ? [defaultItem] : [], currentValue, false) +
-          sectionHtml("Recommended", recommended, currentValue, false) +
-          sectionHtml("All", allRemaining, currentValue, false);
+        html = filtered
+          .map(function (opt) {
+            return optionRowHtml(opt, opt.id === currentValue, "voice", false);
+          })
+          .join("");
       } else if (q) {
-        html = sectionHtml("Results", filtered, currentValue, true);
+        html = sectionHtml("Results", filtered, currentValue, true, "background");
       } else {
         var suggestedIds = recommendedOptionIDs("background", activeCategoryID, []);
         var suggested = options.filter(function (opt) {
@@ -15803,7 +15818,7 @@
           html += '<div class="app-picker-group media-picker-suggested-group">';
           html += '<p class="app-picker-group-title">Suggested for this script</p>';
           suggested.slice(0, 3).forEach(function (opt) {
-            html += optionRowHtml(opt, opt.id === currentValue, true, false);
+            html += optionRowHtml(opt, opt.id === currentValue, "background", false);
           });
           html += "</div>";
         }
@@ -15812,14 +15827,14 @@
         });
         if (noneItem) {
           html += '<div class="media-picker-quick-row">';
-          html += optionRowHtml(noneItem, noneItem.id === currentValue, true, false);
+          html += optionRowHtml(noneItem, noneItem.id === currentValue, "background", false);
           html += "</div>";
         }
         var categorizedItems = options.filter(function (opt) {
           return !pinnedIds[opt.id];
         });
         html += backgroundPickerCategorySectionsHtml(categorizedItems, currentValue, function (opt, selected) {
-          return optionRowHtml(opt, selected, true, false);
+          return optionRowHtml(opt, selected, "background", false);
         });
       }
       list.innerHTML = html;
@@ -15843,6 +15858,18 @@
           ev.stopPropagation();
           var bid = pv.getAttribute("data-preview-background");
           previewBackgroundById(bid, function (msg) {
+            setMediaPickerMessage(msg, "error");
+          }).then(function () {
+            renderPickerOptions(searchInput.value || "");
+          });
+        });
+      });
+      list.querySelectorAll("[data-preview-voice]").forEach(function (pv) {
+        pv.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          ev.stopPropagation();
+          var voiceId = pv.getAttribute("data-preview-voice");
+          previewVoiceById(voiceId, function (msg) {
             setMediaPickerMessage(msg, "error");
           }).then(function () {
             renderPickerOptions(searchInput.value || "");
@@ -15923,8 +15950,12 @@
     mediaPickerBgCategoryOpen = {};
     syncMediaPickerSearchUi(false);
     backdrop.classList.toggle("is-background-picker", !isVoice);
-    if (modal) modal.classList.toggle("media-picker-modal--background", !isVoice);
+    if (modal) {
+      modal.classList.toggle("media-picker-modal--background", !isVoice);
+      modal.classList.toggle("media-picker-modal--voice", isVoice);
+    }
     list.classList.toggle("media-picker-list--backgrounds", !isVoice);
+    list.classList.toggle("media-picker-list--voices", isVoice);
     mediaPickerRerender = function () {
       renderPickerOptions(searchInput.value || "");
     };
@@ -15935,6 +15966,9 @@
 
   function closeMediaPicker() {
     stopBackgroundPreview();
+    if (activeVoicePreviewId && activeAudio && !activeAudioScriptId) {
+      stopActiveAudio(false);
+    }
     var backdrop = document.getElementById("media-picker-backdrop");
     var modal = document.getElementById("media-picker-modal");
     var list = document.getElementById("media-picker-list");
@@ -15942,8 +15976,14 @@
       backdrop.hidden = true;
       backdrop.classList.remove("is-background-picker");
     }
-    if (modal) modal.classList.remove("media-picker-modal--background");
-    if (list) list.classList.remove("media-picker-list--backgrounds");
+    if (modal) {
+      modal.classList.remove("media-picker-modal--background");
+      modal.classList.remove("media-picker-modal--voice");
+    }
+    if (list) {
+      list.classList.remove("media-picker-list--backgrounds");
+      list.classList.remove("media-picker-list--voices");
+    }
     mediaPickerTarget = null;
     mediaPickerRerender = null;
     mediaPickerSearchOpen = false;
