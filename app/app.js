@@ -7740,6 +7740,21 @@
     );
   }
 
+  function pickerBackgroundPreviewBtnHtml(backgroundId, isPlaying) {
+    var label = isPlaying ? "Pause background audio" : "Play background audio";
+    return (
+      '<button type="button" class="script-card-play-btn app-picker-preview-btn" data-preview-background="' +
+      escapeHtml(backgroundId) +
+      '" title="' +
+      escapeHtml(label) +
+      '" aria-label="' +
+      escapeHtml(label) +
+      '">' +
+      libraryTransportPlayPauseIconSvg(isPlaying) +
+      "</button>"
+    );
+  }
+
   function mediaCardIconActionBtnHtml(dataAttr, dataValue, title, iconSvg, isActive, extraClass) {
     return (
       '<button type="button" class="app-btn app-btn-secondary library-script-share-btn media-card-icon-btn' +
@@ -15533,13 +15548,7 @@
         return (
           '<div class="app-picker-option-row">' +
           mainBtn +
-          '<button type="button" class="app-btn app-btn-ghost app-picker-preview-btn" data-preview-background="' +
-          escapeHtml(opt.id) +
-          '" aria-label="' +
-          (isBgPreview ? "Pause background audio" : "Play background audio") +
-          '">' +
-          (isBgPreview ? "Pause" : "Play") +
-          "</button>" +
+          pickerBackgroundPreviewBtnHtml(opt.id, isBgPreview) +
           "</div>"
         );
       }
@@ -16030,7 +16039,7 @@
         activeAudio.pause();
       }
       updateMiniPlayer();
-      renderScripts(currentScripts);
+      rerenderMyLibraryCardsIfNeeded();
       refreshHomeDailySparkTransportIfVisible();
       return;
     }
@@ -16047,7 +16056,7 @@
       .play()
       .then(function () {
         updateMiniPlayer();
-        renderScripts(currentScripts);
+        rerenderMyLibraryCardsIfNeeded();
         refreshHomeDailySparkTransportIfVisible();
         recordWebListen(activeAudioTitle, audioURL);
       })
@@ -16057,7 +16066,7 @@
         });
         setMessage("Could not play audio in browser.", "error");
         stopActiveAudio();
-        renderScripts(currentScripts);
+        rerenderMyLibraryCardsIfNeeded();
         refreshHomeDailySparkTransportIfVisible();
       });
   }
@@ -16180,6 +16189,7 @@
     if (!activeAudio) return;
     function onTransportStateChange() {
       updateMiniPlayer();
+      rerenderMyLibraryCardsIfNeeded();
       refreshHomeDailySparkTransportIfVisible();
     }
     activeAudio.addEventListener("play", onTransportStateChange);
@@ -16195,7 +16205,7 @@
         activeAudio = null;
       }
       updateMiniPlayer();
-      renderScripts(currentScripts);
+      rerenderMyLibraryCardsIfNeeded();
       renderSelectedPlaylistDetail();
       refreshHomeDailySparkTransportIfVisible();
     });
@@ -17876,6 +17886,7 @@
     var isBusy = isPremadeBusy(p.id);
     var playlistIconSvg =
       '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>';
+    var playPauseIcon = libraryTransportPlayPauseIconSvg(playingThis);
     var showSyncRow = paid && hasAudio && isStreamableCloudPremade(p);
     var syncMessage = showSyncRow && !isBusy ? "Synced with cloud" : "";
     var syncColor = "#22c55e";
@@ -17910,13 +17921,6 @@
       '<button type="button" class="app-btn app-btn-primary script-card-edit-primary" data-premade-action="open-workshop" data-premade-id="' +
       escapeHtml(p.id) +
       '">Edit</button>' +
-      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
-      escapeHtml(p.id) +
-      '"' +
-      (!hasAudio || isBusy ? " disabled" : "") +
-      ">" +
-      (playingThis ? "Pause" : "Play") +
-      "</button>" +
       '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-premade-action="add-playlist" data-premade-id="' +
       escapeHtml(p.id) +
       '" title="Save and add to playlist"' +
@@ -17933,13 +17937,6 @@
       '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
       escapeHtml(p.id) +
       '">Save to My Library</button>' +
-      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="play" data-premade-id="' +
-      escapeHtml(p.id) +
-      '"' +
-      (!hasAudio || isBusy ? " disabled" : "") +
-      ">" +
-      (playingThis ? "Pause" : "Play") +
-      "</button>" +
       '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="add-playlist" data-premade-id="' +
       escapeHtml(p.id) +
       '"' +
@@ -17981,11 +17978,25 @@
       '" data-premade-id="' +
       escapeHtml(p.id) +
       '">' +
-      '<div class="app-card-header-row">' +
-      "<h3>" +
+      '<div class="script-card-title-row">' +
+      '  <div class="script-card-title-main">' +
+      "    <h3>" +
       escapeHtml(p.title || "Untitled Premade") +
       "</h3>" +
-      '  <button type="button" class="library-card-chevron" data-premade-action="toggle-controls" data-premade-id="' +
+      '    <button type="button" class="script-card-play-btn" data-premade-action="play" data-premade-id="' +
+      escapeHtml(p.id) +
+      '"' +
+      (!hasAudio || isBusy ? " disabled" : "") +
+      ' title="' +
+      (playingThis ? "Pause" : "Play") +
+      '" aria-label="' +
+      (playingThis ? "Pause" : "Play") +
+      '">' +
+      playPauseIcon +
+      "</button>" +
+      "  </div>" +
+      '  <div class="script-card-title-trail">' +
+      '    <button type="button" class="library-card-chevron" data-premade-action="toggle-controls" data-premade-id="' +
       escapeHtml(p.id) +
       '" aria-expanded="' +
       (audioControlsExpanded ? "true" : "false") +
@@ -17994,6 +18005,7 @@
       '">' +
       chevChar +
       "</button>" +
+      "  </div>" +
       "</div>" +
       '<div class="app-card-meta-row">' +
       '<div class="app-card-meta">' +

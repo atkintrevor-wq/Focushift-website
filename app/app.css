@@ -3916,10 +3916,14 @@ body.fs-app-body.fs-modal-scroll-lock {
   min-width: 0;
   width: auto;
 }
+.app-picker-preview-btn.script-card-play-btn {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 36px;
+  height: 32px;
+}
 .app-picker-preview-btn {
   flex: 0 0 auto;
-  padding: 0.35rem 0.55rem;
-  font-size: 0.85rem;
   align-self: center;
 }
 .app-picker-option {
