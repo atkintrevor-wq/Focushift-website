@@ -2246,6 +2246,10 @@
           currentUserProfile = snap.exists ? snap.data() || {} : {};
           hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
           applyUserProfileDefaults({ onlyIfNewer: true });
+          if (!userHasFirestoreAdmin() && adminModeEnabled) {
+            writeAdminModeEnabled(false);
+          }
+          applyAdminModeUi();
           refreshAppLibraryPremadesFromCloud();
           renderAccountInsights();
           syncAccountSubscriptionHeadline();
@@ -3821,6 +3825,10 @@
   }
   installClientErrorReporting();
 
+  function userHasFirestoreAdmin() {
+    return !!(currentUserProfile && currentUserProfile.isAdmin === true);
+  }
+
   function readAdminModeEnabled() {
     try {
       return localStorage.getItem(PREF_ADMIN_MODE_KEY) === "1";
@@ -3830,6 +3838,11 @@
   }
 
   function writeAdminModeEnabled(on) {
+    if (on && !userHasFirestoreAdmin()) {
+      adminModeEnabled = false;
+      applyAdminModeUi();
+      return;
+    }
     adminModeEnabled = !!on;
     try {
       if (adminModeEnabled) {
@@ -3842,6 +3855,10 @@
   }
 
   function applyAdminModeUi() {
+    var adminSection = document.getElementById("account-admin-tools-section");
+    if (adminSection) {
+      adminSection.hidden = !userHasFirestoreAdmin();
+    }
     var banner = document.getElementById("admin-mode-banner");
     if (banner) {
       banner.hidden = !adminModeEnabled;
@@ -18509,27 +18526,40 @@
         currentUserProfile = snap.exists ? snap.data() || {} : {};
         hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
         applyUserProfileDefaults({ forceVersion: true });
-        var isAdmin = snap.exists && snap.data().isAdmin === true;
-        if (isAdmin) {
-          adminModeEnabled = readAdminModeEnabled();
-          renderAdminShell(user.email, user.displayName);
-          handleStripeAndAccountQueryParams();
-          subscribeUserProfile(user.uid);
-          subscribeScripts(user.uid);
-          subscribePlaylists(user.uid);
-          subscribePremade();
-          subscribeCatalogCategories();
-          subscribeBackgroundCatalog();
-          subscribeClonedVoices(user.uid);
-          subscribeUserBackgrounds(user.uid);
-          subscribeListeningStats(user.uid);
-          maybePresentPendingShareClaim();
-        } else {
-          renderNonAdmin(user.email, user.displayName);
+        adminModeEnabled = userHasFirestoreAdmin() ? readAdminModeEnabled() : false;
+        if (!userHasFirestoreAdmin()) {
+          try {
+            localStorage.removeItem(PREF_ADMIN_MODE_KEY);
+          } catch (_eAdmin) {}
         }
+        renderAdminShell(user.email, user.displayName);
+        handleStripeAndAccountQueryParams();
+        subscribeUserProfile(user.uid);
+        subscribeScripts(user.uid);
+        subscribePlaylists(user.uid);
+        subscribePremade();
+        subscribeCatalogCategories();
+        subscribeBackgroundCatalog();
+        subscribeClonedVoices(user.uid);
+        subscribeUserBackgrounds(user.uid);
+        subscribeListeningStats(user.uid);
+        maybePresentPendingShareClaim();
       })
       .catch(function () {
-        renderNonAdmin(user.email, user.displayName);
+        currentUserProfile = {};
+        adminModeEnabled = false;
+        renderAdminShell(user.email, user.displayName);
+        handleStripeAndAccountQueryParams();
+        subscribeUserProfile(user.uid);
+        subscribeScripts(user.uid);
+        subscribePlaylists(user.uid);
+        subscribePremade();
+        subscribeCatalogCategories();
+        subscribeBackgroundCatalog();
+        subscribeClonedVoices(user.uid);
+        subscribeUserBackgrounds(user.uid);
+        subscribeListeningStats(user.uid);
+        maybePresentPendingShareClaim();
       });
   });
 })();
