@@ -643,6 +643,114 @@
     }
   }
 
+  function pickerBackgroundBrowseCategoryKey(opt) {
+    if (!opt) return "bg-ambient";
+    if (opt.id === "bg-none") return "__none__";
+    if (opt.userUpload || opt.categoryID === "my-upload") return "my-upload";
+    return normalizedBackgroundBrowseCategoryID(opt.categoryID);
+  }
+
+  function pickerBackgroundCategorySectionTitle(categoryKey) {
+    if (categoryKey === "__none__") return "No background";
+    if (categoryKey === "my-upload") return "Your imports";
+    return backgroundCategoryDisplayName(categoryKey);
+  }
+
+  function pickerBackgroundCategoryHint(opt) {
+    if (!opt || opt.id === "bg-none") return "";
+    return pickerBackgroundCategorySectionTitle(pickerBackgroundBrowseCategoryKey(opt));
+  }
+
+  function backgroundPickerCategorySectionsHtml(items, selectedID, renderOptionRow) {
+    var grouped = {};
+    (items || []).forEach(function (opt) {
+      var key = pickerBackgroundBrowseCategoryKey(opt);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(opt);
+    });
+    var sectionOrder = [];
+    mergedBackgroundCategoryOrder().forEach(function (cid) {
+      if (grouped[cid] && grouped[cid].length) sectionOrder.push(cid);
+    });
+    if (grouped["my-upload"] && grouped["my-upload"].length && sectionOrder.indexOf("my-upload") < 0) {
+      sectionOrder.push("my-upload");
+    }
+    Object.keys(grouped).forEach(function (key) {
+      if (key !== "__none__" && sectionOrder.indexOf(key) < 0) sectionOrder.push(key);
+    });
+    return sectionOrder
+      .map(function (categoryKey) {
+        var catItems = grouped[categoryKey];
+        if (!catItems || !catItems.length) return "";
+        var openAttr = catItems.some(function (o) {
+          return o.id === selectedID;
+        })
+          ? " open"
+          : "";
+        return (
+          '<details class="app-bg-category app-picker-category"' +
+          openAttr +
+          ">" +
+          '<summary class="app-bg-category-summary">' +
+          escapeHtml(pickerBackgroundCategorySectionTitle(categoryKey)) +
+          ' <span class="app-muted">(' +
+          String(catItems.length) +
+          ")</span></summary>" +
+          '<div class="app-bg-category-list">' +
+          catItems
+            .map(function (opt) {
+              return renderOptionRow(opt, opt.id === selectedID);
+            })
+            .join("") +
+          "</div></details>"
+        );
+      })
+      .join("");
+  }
+
+  function mediaPickerCategoryDetailsElements() {
+    var list = document.getElementById("media-picker-list");
+    if (!list) return [];
+    return Array.prototype.slice.call(list.querySelectorAll("details.app-picker-category"));
+  }
+
+  function updateMediaPickerCategoryExpandToggleUi(isVoiceMode, hasSearchQuery) {
+    var btn = document.getElementById("media-picker-category-expand-all");
+    if (!btn) return;
+    if (isVoiceMode) {
+      btn.hidden = true;
+      return;
+    }
+    var details = mediaPickerCategoryDetailsElements();
+    if (hasSearchQuery || !details.length) {
+      btn.hidden = true;
+      return;
+    }
+    btn.hidden = false;
+    var allExpanded = details.every(function (d) {
+      return d.open;
+    });
+    btn.textContent = allExpanded ? "▲" : "▼";
+    btn.setAttribute("aria-expanded", allExpanded ? "true" : "false");
+    btn.setAttribute(
+      "aria-label",
+      allExpanded ? "Collapse all background categories" : "Expand all background categories"
+    );
+    btn.title = allExpanded ? "Collapse all categories" : "Expand all categories";
+  }
+
+  function toggleMediaPickerCategorySectionsExpandCollapse() {
+    var details = mediaPickerCategoryDetailsElements();
+    if (!details.length) return;
+    var expand = !details.every(function (d) {
+      return d.open;
+    });
+    details.forEach(function (d) {
+      d.open = expand;
+    });
+    updateMediaPickerCategoryExpandToggleUi(false, false);
+  }
+
   /** User-imported background audio (this browser). iOS uses Documents/BackgroundSamples + UserDefaults. */
   var USER_BG_IDB_NAME = "focusshiftWebUserBackgroundBlobs";
   var USER_BG_IDB_STORE = "blobs";
@@ -5176,7 +5284,10 @@
       '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Media picker">' +
       '    <h3 id="media-picker-title">Select option</h3>' +
       '    <p id="media-picker-subtitle" class="app-muted" style="margin:0 0 0.45rem;"></p>' +
-      '    <input id="media-picker-search" type="text" placeholder="Search...">' +
+      '    <div class="media-picker-search-row">' +
+      '      <input id="media-picker-search" type="text" placeholder="Search...">' +
+      '      <button type="button" class="library-chevron-btn media-picker-expand-all" id="media-picker-category-expand-all" hidden aria-label="Expand all background categories" title="Expand all categories">▼</button>' +
+      "    </div>" +
       '    <div id="media-picker-list" class="app-modal-list"></div>' +
       '    <div id="media-picker-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '    <div class="app-modal-actions">' +
@@ -6138,6 +6249,9 @@
     });
     document.getElementById("media-picker-cancel").addEventListener("click", function () {
       closeMediaPicker();
+    });
+    document.getElementById("media-picker-category-expand-all").addEventListener("click", function () {
+      toggleMediaPickerCategorySectionsExpandCollapse();
     });
     document.getElementById("media-picker-backdrop").addEventListener("click", function (ev) {
       if (ev.target && ev.target.id === "media-picker-backdrop") {
@@ -15529,17 +15643,23 @@
       activeCategoryID = categoryPremade && categoryPremade.categoryID ? categoryPremade.categoryID : null;
     }
 
-    function optionRowHtml(opt, selected, includeBgPreview) {
+    function optionRowHtml(opt, selected, includeBgPreview, showCategoryHint) {
       var isBgPreview = includeBgPreview && isBackgroundPreviewing(opt.id);
+      var categoryHint = showCategoryHint ? pickerBackgroundCategoryHint(opt) : "";
+      var labelInner = categoryHint
+        ? '<span class="app-picker-option-label"><span class="app-picker-option-name">' +
+          escapeHtml(opt.name) +
+          '</span><span class="app-picker-option-meta">' +
+          escapeHtml(categoryHint) +
+          "</span></span>"
+        : "<span>" + escapeHtml(opt.name) + "</span>";
       var mainBtn =
         '<button type="button" class="app-picker-option' +
         (selected ? " is-selected" : "") +
         '" data-media-option="' +
         escapeHtml(opt.id) +
         '">' +
-        '<span>' +
-        escapeHtml(opt.name) +
-        "</span>" +
+        labelInner +
         '<span class="app-picker-check" aria-hidden="true">' +
         (selected ? "✓" : "") +
         "</span>" +
@@ -15555,7 +15675,7 @@
       return mainBtn;
     }
 
-    function sectionHtml(titleText, items, selectedID) {
+    function sectionHtml(titleText, items, selectedID, showCategoryHint) {
       if (!items.length) return "";
       return (
         '<div class="app-picker-group">' +
@@ -15564,7 +15684,7 @@
         "</p>" +
         items
           .map(function (opt) {
-            return optionRowHtml(opt, opt.id === selectedID, !isVoice);
+            return optionRowHtml(opt, opt.id === selectedID, !isVoice, !!showCategoryHint);
           })
           .join("") +
         "</div>"
@@ -15578,7 +15698,8 @@
         var name = (opt.name || "").toLowerCase();
         var id = (opt.id || "").toLowerCase();
         var cat = (opt.categoryID || "").toLowerCase();
-        return name.indexOf(q) >= 0 || id.indexOf(q) >= 0 || cat.indexOf(q) >= 0;
+        var catName = !isVoice ? pickerBackgroundCategoryHint(opt).toLowerCase() : "";
+        return name.indexOf(q) >= 0 || id.indexOf(q) >= 0 || cat.indexOf(q) >= 0 || catName.indexOf(q) >= 0;
       });
       var defaultItem = filtered.find(function (opt) {
         return opt.id === (isVoice ? selectedVoiceId : selectedBackgroundId);
@@ -15603,14 +15724,43 @@
       if (!filtered.length) {
         list.innerHTML = '<p class="app-muted">No results found.</p>';
         bindPickerOptionClicks();
+        updateMediaPickerCategoryExpandToggleUi(isVoice, !!q);
         return;
       }
 
-      list.innerHTML =
-        sectionHtml("Default", defaultItem ? [defaultItem] : [], currentValue) +
-        sectionHtml("Recommended", recommended, currentValue) +
-        sectionHtml("All", allRemaining, currentValue);
+      var html = "";
+      if (isVoice) {
+        html =
+          sectionHtml("Default", defaultItem ? [defaultItem] : [], currentValue, false) +
+          sectionHtml("Recommended", recommended, currentValue, false) +
+          sectionHtml("All", allRemaining, currentValue, false);
+      } else if (q) {
+        html = sectionHtml("Results", filtered, currentValue, true);
+      } else {
+        html =
+          sectionHtml("Default", defaultItem ? [defaultItem] : [], currentValue, false) +
+          sectionHtml("Recommended", recommended, currentValue, false);
+        var noneItem = allRemaining.find(function (opt) {
+          return opt.id === "bg-none";
+        });
+        var categorizedItems = allRemaining.filter(function (opt) {
+          return opt.id !== "bg-none";
+        });
+        if (noneItem) {
+          html += sectionHtml("No background", [noneItem], currentValue, false);
+        }
+        html += backgroundPickerCategorySectionsHtml(categorizedItems, currentValue, function (opt, selected) {
+          return optionRowHtml(opt, selected, true, false);
+        });
+      }
+      list.innerHTML = html;
       bindPickerOptionClicks();
+      list.querySelectorAll("details.app-picker-category").forEach(function (d) {
+        d.addEventListener("toggle", function () {
+          updateMediaPickerCategoryExpandToggleUi(isVoice, !!(searchInput.value || "").trim());
+        });
+      });
+      updateMediaPickerCategoryExpandToggleUi(isVoice, !!q);
     }
 
     function bindPickerOptionClicks() {
@@ -15692,6 +15842,7 @@
     }
 
     searchInput.value = "";
+    searchInput.placeholder = isVoice ? "Search voices…" : "Search backgrounds or categories…";
     searchInput.oninput = function () {
       renderPickerOptions(searchInput.value || "");
     };
