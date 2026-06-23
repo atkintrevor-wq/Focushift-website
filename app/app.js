@@ -196,6 +196,9 @@
   var sectionSearchQuery = { library: "", playlists: "", voices: "", audio: "" };
   var mediaPickerSearchOpen = false;
   var mediaPickerRerender = null;
+  /** Background picker accordion: categoryKey -> open (explicit overrides only). */
+  var mediaPickerBgCategoryOpen = {};
+  var mediaPickerBgCategoryKeys = [];
   var aiTextEditContext = null;
   var aiTextEditPreview = null;
   var aiTextEditProcessing = false;
@@ -663,7 +666,12 @@
     return pickerBackgroundCategorySectionTitle(pickerBackgroundBrowseCategoryKey(opt));
   }
 
+  function mediaPickerBgCategoryIsOpen(categoryKey) {
+    return mediaPickerBgCategoryOpen[categoryKey] === true;
+  }
+
   function backgroundPickerCategorySectionsHtml(items, selectedID, renderOptionRow) {
+    mediaPickerBgCategoryKeys = [];
     var grouped = {};
     (items || []).forEach(function (opt) {
       var key = pickerBackgroundBrowseCategoryKey(opt);
@@ -684,36 +692,46 @@
       .map(function (categoryKey) {
         var catItems = grouped[categoryKey];
         if (!catItems || !catItems.length) return "";
-        var openAttr = catItems.some(function (o) {
-          return o.id === selectedID;
-        })
-          ? " open"
-          : "";
+        mediaPickerBgCategoryKeys.push(categoryKey);
+        var isOpen = mediaPickerBgCategoryIsOpen(categoryKey);
         return (
-          '<details class="app-bg-category app-picker-category"' +
-          openAttr +
-          ">" +
-          '<summary class="app-bg-category-summary">' +
+          '<section class="media-picker-category-block' +
+          (isOpen ? " is-open" : "") +
+          '">' +
+          '<button type="button" class="media-picker-category-header" data-bg-picker-category-toggle="' +
+          escapeHtml(categoryKey) +
+          '" aria-expanded="' +
+          (isOpen ? "true" : "false") +
+          '">' +
+          '<span class="media-picker-category-title">' +
           escapeHtml(pickerBackgroundCategorySectionTitle(categoryKey)) +
           ' <span class="app-muted">(' +
           String(catItems.length) +
-          ")</span></summary>" +
-          '<div class="app-bg-category-list">' +
-          catItems
-            .map(function (opt) {
-              return renderOptionRow(opt, opt.id === selectedID);
-            })
-            .join("") +
-          "</div></details>"
+          ")</span></span>" +
+          '<span class="media-picker-category-chevron" aria-hidden="true">' +
+          (isOpen ? "▾" : "▸") +
+          "</span>" +
+          "</button>" +
+          (isOpen
+            ? '<div class="media-picker-category-items">' +
+              catItems
+                .map(function (opt) {
+                  return renderOptionRow(opt, opt.id === selectedID);
+                })
+                .join("") +
+              "</div>"
+            : "") +
+          "</section>"
         );
       })
       .join("");
   }
 
-  function mediaPickerCategoryDetailsElements() {
-    var list = document.getElementById("media-picker-list");
-    if (!list) return [];
-    return Array.prototype.slice.call(list.querySelectorAll("details.app-picker-category"));
+  function allMediaPickerBgCategoriesExpanded() {
+    if (!mediaPickerBgCategoryKeys.length) return false;
+    return mediaPickerBgCategoryKeys.every(function (k) {
+      return mediaPickerBgCategoryOpen[k] === true;
+    });
   }
 
   function updateMediaPickerCategoryExpandToggleUi(isVoiceMode, hasSearchQuery) {
@@ -723,15 +741,12 @@
       btn.hidden = true;
       return;
     }
-    var details = mediaPickerCategoryDetailsElements();
-    if (hasSearchQuery || !details.length) {
+    if (hasSearchQuery || !mediaPickerBgCategoryKeys.length) {
       btn.hidden = true;
       return;
     }
     btn.hidden = false;
-    var allExpanded = details.every(function (d) {
-      return d.open;
-    });
+    var allExpanded = allMediaPickerBgCategoriesExpanded();
     btn.textContent = allExpanded ? "▲" : "▼";
     btn.setAttribute("aria-expanded", allExpanded ? "true" : "false");
     btn.setAttribute(
@@ -742,15 +757,12 @@
   }
 
   function toggleMediaPickerCategorySectionsExpandCollapse() {
-    var details = mediaPickerCategoryDetailsElements();
-    if (!details.length) return;
-    var expand = !details.every(function (d) {
-      return d.open;
+    if (!mediaPickerBgCategoryKeys.length) return;
+    var expand = !allMediaPickerBgCategoriesExpanded();
+    mediaPickerBgCategoryKeys.forEach(function (k) {
+      mediaPickerBgCategoryOpen[k] = expand;
     });
-    details.forEach(function (d) {
-      d.open = expand;
-    });
-    updateMediaPickerCategoryExpandToggleUi(false, false);
+    if (typeof mediaPickerRerender === "function") mediaPickerRerender();
   }
 
   function syncMediaPickerSearchUi(focusInput) {
@@ -5305,7 +5317,7 @@
       "  </div>" +
       "</div>" +
       '<div id="media-picker-backdrop" class="app-modal-backdrop" hidden>' +
-      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Media picker">' +
+      '  <div class="app-modal media-picker-modal" id="media-picker-modal" role="dialog" aria-modal="true" aria-label="Media picker">' +
       '    <h3 id="media-picker-title">Select option</h3>' +
       '    <p id="media-picker-subtitle" class="app-muted" style="margin:0 0 0.45rem;"></p>' +
       '    <div class="media-picker-toolbar">' +
@@ -15597,6 +15609,7 @@
     var list = document.getElementById("media-picker-list");
     var searchInput = document.getElementById("media-picker-search");
     if (!backdrop || !title || !subtitle || !list || !searchInput || !mediaPickerTarget) return;
+    var modal = document.getElementById("media-picker-modal");
 
     var isVoice = mediaPickerTarget.field === "voice";
     var options = isVoice ? allVoiceOptionsForSelection() : allBackgroundTracksForPicker();
@@ -15811,15 +15824,19 @@
       }
       list.innerHTML = html;
       bindPickerOptionClicks();
-      list.querySelectorAll("details.app-picker-category").forEach(function (d) {
-        d.addEventListener("toggle", function () {
-          updateMediaPickerCategoryExpandToggleUi(isVoice, !!(searchInput.value || "").trim());
-        });
-      });
       updateMediaPickerCategoryExpandToggleUi(isVoice, !!q);
     }
 
     function bindPickerOptionClicks() {
+      list.querySelectorAll("[data-bg-picker-category-toggle]").forEach(function (toggleBtn) {
+        toggleBtn.addEventListener("click", function (ev) {
+          ev.preventDefault();
+          var categoryKey = toggleBtn.getAttribute("data-bg-picker-category-toggle");
+          if (!categoryKey) return;
+          mediaPickerBgCategoryOpen[categoryKey] = !mediaPickerBgCategoryIsOpen(categoryKey);
+          renderPickerOptions(searchInput.value || "");
+        });
+      });
       list.querySelectorAll("[data-preview-background]").forEach(function (pv) {
         pv.addEventListener("click", function (ev) {
           ev.preventDefault();
@@ -15903,7 +15920,10 @@
       renderPickerOptions(searchInput.value || "");
     };
     mediaPickerSearchOpen = false;
+    mediaPickerBgCategoryOpen = {};
     syncMediaPickerSearchUi(false);
+    backdrop.classList.toggle("is-background-picker", !isVoice);
+    if (modal) modal.classList.toggle("media-picker-modal--background", !isVoice);
     list.classList.toggle("media-picker-list--backgrounds", !isVoice);
     mediaPickerRerender = function () {
       renderPickerOptions(searchInput.value || "");
@@ -15916,10 +15936,19 @@
   function closeMediaPicker() {
     stopBackgroundPreview();
     var backdrop = document.getElementById("media-picker-backdrop");
-    if (backdrop) backdrop.hidden = true;
+    var modal = document.getElementById("media-picker-modal");
+    var list = document.getElementById("media-picker-list");
+    if (backdrop) {
+      backdrop.hidden = true;
+      backdrop.classList.remove("is-background-picker");
+    }
+    if (modal) modal.classList.remove("media-picker-modal--background");
+    if (list) list.classList.remove("media-picker-list--backgrounds");
     mediaPickerTarget = null;
     mediaPickerRerender = null;
     mediaPickerSearchOpen = false;
+    mediaPickerBgCategoryOpen = {};
+    mediaPickerBgCategoryKeys = [];
     syncMediaPickerSearchUi(false);
     setMediaPickerMessage("", "");
   }
