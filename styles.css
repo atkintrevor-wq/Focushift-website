@@ -984,6 +984,68 @@ body {
   color: #dbeafe;
 }
 
+/* Quote band — bold philosophy moment */
+.quote-band {
+  padding: clamp(2.5rem, 6vw, 4rem) 1.5rem;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.14) 0%, rgba(6, 182, 212, 0.08) 50%, rgba(129, 140, 248, 0.12) 100%);
+  border-top: 1px solid rgba(96, 165, 250, 0.2);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.2);
+}
+
+.quote-band__inner {
+  max-width: 44rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.quote-band__kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--accent-vivid);
+  margin: 0 0 1.25rem;
+}
+
+.quote-band__blockquote {
+  margin: 0 0 1.35rem;
+  padding: 0;
+  border: none;
+}
+
+.quote-band__blockquote p {
+  margin: 0 0 0.75rem;
+  font-size: clamp(1.35rem, 3.8vw, 2rem);
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.quote-band__blockquote footer {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-style: normal;
+}
+
+.quote-band__bridge {
+  margin: 0;
+  font-size: clamp(1rem, 2.2vw, 1.12rem);
+  line-height: 1.6;
+  color: #b8c5da;
+  max-width: 36rem;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.quote-band__bridge em {
+  font-style: normal;
+  color: var(--accent-vivid);
+  font-weight: 600;
+}
+
 .section-kicker {
   text-align: center;
   text-transform: uppercase;
@@ -1203,6 +1265,96 @@ body {
 
 .why-lede-compact {
   margin-bottom: 1.25rem !important;
+}
+
+.belief-flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0 0 1.5rem;
+  padding: 1.15rem 1rem;
+  border-radius: 14px;
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+}
+
+.belief-flow__step {
+  text-align: center;
+  padding: 0.5rem 0.85rem;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  min-width: 7rem;
+}
+
+.belief-flow__step--highlight {
+  border-color: rgba(129, 140, 248, 0.5);
+  background: linear-gradient(160deg, rgba(129, 140, 248, 0.2), rgba(0, 0, 0, 0.2));
+}
+
+.belief-flow__label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.belief-flow__desc {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.belief-flow__arrow {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--accent-vivid);
+  opacity: 0.85;
+}
+
+.quote-inline {
+  margin: 0 0 1.25rem;
+  padding: 1.15rem 1.25rem;
+  border-radius: 12px;
+  border-left: 4px solid var(--accent-purple);
+  background: rgba(129, 140, 248, 0.08);
+  border-top: 1px solid rgba(129, 140, 248, 0.2);
+  border-right: 1px solid rgba(129, 140, 248, 0.2);
+  border-bottom: 1px solid rgba(129, 140, 248, 0.2);
+}
+
+.quote-inline p {
+  margin: 0 0 0.45rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.quote-inline footer {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-style: normal;
+}
+
+.quote-inline em {
+  font-style: italic;
+}
+
+.why-research {
+  font-size: 0.92rem;
+  color: var(--muted);
+  line-height: 1.6;
+  margin: 0 0 1.25rem;
+}
+
+.why-research strong {
+  color: var(--text);
 }
 
 .why-bullets {
