@@ -10,29 +10,29 @@
   --app-subnav-sticky-top: 200px;
   /* Softer iOS-like surfaces (shared with account modal) */
   --app-surface-card: rgba(255, 255, 255, 0.045);
-  --app-surface-card-border: rgba(255, 255, 255, 0.09);
+  --app-surface-card-border: rgba(96, 165, 250, 0.18);
   --app-surface-card-shine: rgba(255, 255, 255, 0.05);
-  --app-surface-card-shadow: 0 1px 0 var(--app-surface-card-shine) inset, 0 4px 18px rgba(0, 0, 0, 0.18);
+  --app-surface-card-shadow: 0 1px 0 var(--app-surface-card-shine) inset, 0 4px 22px rgba(59, 130, 246, 0.08);
   --app-surface-elevated: #12151a;
   --app-surface-muted: rgba(0, 0, 0, 0.14);
   --app-surface-inset: rgba(0, 0, 0, 0.12);
-  --app-surface-glass-top: rgba(255, 255, 255, 0.07);
-  --app-surface-glass-bottom: rgba(255, 255, 255, 0.035);
-  --app-tab-box-bg: rgba(255, 255, 255, 0.05);
-  --app-tab-box-border: rgba(255, 255, 255, 0.1);
+  --app-surface-glass-top: rgba(255, 255, 255, 0.08);
+  --app-surface-glass-bottom: rgba(255, 255, 255, 0.03);
+  --app-tab-box-bg: linear-gradient(160deg, rgba(59, 130, 246, 0.12) 0%, rgba(15, 23, 42, 0.55) 100%);
+  --app-tab-box-border: rgba(96, 165, 250, 0.28);
   --app-modal-row-bg: rgba(255, 255, 255, 0.04);
   --app-modal-row-border: rgba(255, 255, 255, 0.1);
   --app-stat-tile-bg: rgba(255, 255, 255, 0.045);
-  --app-stat-tile-border: rgba(255, 255, 255, 0.12);
-  --app-mini-player-top: rgba(15, 23, 42, 0.92);
+  --app-stat-tile-border: rgba(96, 165, 250, 0.22);
+  --app-mini-player-top: rgba(15, 23, 42, 0.94);
   --app-mini-player-bottom: rgba(9, 15, 30, 0.98);
-  --app-shadow-card: 0 4px 18px rgba(0, 0, 0, 0.22);
-  --app-shadow-dock: 0 -10px 36px rgba(0, 0, 0, 0.42);
+  --app-shadow-card: 0 4px 22px rgba(59, 130, 246, 0.1);
+  --app-shadow-dock: 0 -10px 40px rgba(59, 130, 246, 0.12), 0 -4px 24px rgba(0, 0, 0, 0.42);
   --app-tab-active-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.52) 0%, rgba(6, 182, 212, 0.38) 55%, rgba(129, 140, 248, 0.45) 100%);
   --app-tab-active-border: rgba(56, 189, 248, 0.75);
   --app-tab-active-fg: #f8fafc;
-  --app-empty-hint-bg: rgba(37, 99, 235, 0.12);
-  --app-empty-hint-border: rgba(148, 163, 184, 0.22);
+  --app-empty-hint-bg: linear-gradient(135deg, rgba(59, 130, 246, 0.14) 0%, rgba(6, 182, 212, 0.08) 100%);
+  --app-empty-hint-border: rgba(56, 189, 248, 0.28);
   --app-empty-hint-fg: #c8d4e8;
   --app-empty-hint-strong: #e8eef8;
   --app-empty-hint-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 4px 20px rgba(0, 0, 0, 0.18);
@@ -68,7 +68,7 @@
 }
 .app-shell h1 {
   font-size: clamp(1.45rem, 2.8vw, 1.75rem);
-  font-weight: 700;
+  font-weight: 800;
   margin-top: 0;
   letter-spacing: -0.02em;
   color: var(--text, #e8edf7);
@@ -1371,15 +1371,15 @@ html.fs-app[data-app-theme="light"] .media-card-row.catalog-card--extended {
   border-radius: 8px;
   padding: 0.28rem 0.55rem;
   font-size: 0.75rem;
-  font-weight: 600;
-  color: #2563eb;
-  background: rgba(250, 204, 21, 0.16);
+  font-weight: 700;
+  color: #fff;
+  background: var(--gradient-hero);
+  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
   cursor: pointer;
-  transition: background 0.12s ease, filter 0.12s ease;
+  transition: filter 0.12s ease;
 }
 .home-dashboard-upgrade-btn:hover {
-  background: rgba(250, 204, 21, 0.24);
-  filter: brightness(1.05);
+  filter: brightness(1.08);
 }
 .home-dashboard-divider {
   height: 1px;
@@ -1612,13 +1612,19 @@ html.fs-app[data-app-theme="light"] .home-dashboard-divider {
 }
 .home-daily-spark-row:hover {
   border-color: rgba(251, 191, 36, 0.55);
-  box-shadow: var(--app-surface-card-shadow), 0 0 0 1px rgba(245, 158, 11, 0.22);
+  box-shadow: var(--app-surface-card-shadow), 0 0 20px rgba(245, 158, 11, 0.15);
   filter: brightness(1.06);
 }
 .home-listen-today-row:hover {
-  border-color: rgba(96, 165, 250, 0.55);
-  box-shadow: var(--app-surface-card-shadow), 0 0 0 1px rgba(59, 130, 246, 0.22);
+  border-color: rgba(56, 189, 248, 0.55);
+  box-shadow: var(--app-surface-card-shadow), 0 0 20px rgba(59, 130, 246, 0.18);
   filter: brightness(1.06);
+}
+.home-daily-spark-row {
+  border-left: 3px solid rgba(251, 191, 36, 0.55);
+}
+.home-listen-today-row {
+  border-left: 3px solid rgba(56, 189, 248, 0.65);
 }
 .home-daily-spark-icon,
 .home-listen-today-icon {
@@ -1907,9 +1913,10 @@ html.fs-app[data-app-theme="light"] .media-card-icon-btn-delete {
     color var(--app-transition);
 }
 .script-card-play-btn:hover:not(:disabled) {
-  border-color: rgba(96, 165, 250, 0.55);
-  background: rgba(255, 255, 255, 0.1);
-  color: #93c5fd;
+  border-color: transparent;
+  background: var(--gradient-hero);
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.35);
 }
 html.fs-app[data-app-theme="light"] .script-card-play-btn {
   border-color: rgba(100, 116, 139, 0.45);
@@ -3461,7 +3468,7 @@ body.fs-app-body.fs-modal-scroll-lock {
   z-index: 1000;
   padding: 0.65rem clamp(0.75rem, 2vw, 1.25rem) calc(0.65rem + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, var(--app-mini-player-top), var(--app-mini-player-bottom));
-  border-top: 1px solid var(--app-surface-card-border);
+  border-top: 1px solid rgba(96, 165, 250, 0.28);
   box-shadow: var(--app-shadow-dock);
   backdrop-filter: blur(14px) saturate(1.2);
 }
@@ -3511,8 +3518,19 @@ body.fs-app-body.fs-modal-scroll-lock {
   transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 .mini-player-icon-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(147, 197, 253, 0.55);
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(56, 189, 248, 0.55);
+}
+#mini-player-toggle.mini-player-icon-btn {
+  background: var(--gradient-hero);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 12px rgba(59, 130, 246, 0.35);
+}
+#mini-player-toggle.mini-player-icon-btn:hover:not(:disabled) {
+  filter: brightness(1.07);
+  background: var(--gradient-hero);
+  border-color: transparent;
 }
 .mini-player-icon-btn:disabled {
   opacity: 0.38;
@@ -4148,8 +4166,8 @@ body.fs-app-body.fs-modal-scroll-lock {
 }
 .premade-category-selector-card:hover {
   border-color: rgba(96, 165, 250, 0.45);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
-  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(59, 130, 246, 0.14);
+  transform: translateY(-2px);
 }
 .premade-category-selector-icon {
   width: 54px;
@@ -4255,7 +4273,7 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
 .app-section-title-row h2 {
   margin: 0;
   font-size: 1.12rem;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: -0.02em;
   color: var(--text, #e8edf7);
 }
@@ -4495,8 +4513,10 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
 }
 .home-section-title {
   font-size: 1.1rem;
+  font-weight: 800;
   margin: 0;
   line-height: 1.25;
+  letter-spacing: -0.01em;
 }
 .home-flow-back-btn {
   flex-shrink: 0;
@@ -4505,10 +4525,10 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
 /* Home — create script: segmented pills, clarify stepper, I am… tips */
 .gen-field-label {
   font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(226, 232, 240, 0.55);
+  color: var(--accent-vivid, #38bdf8);
   margin: 0 0 0.35rem;
 }
 .gen-pill-row {
@@ -4548,14 +4568,16 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
   outline-offset: 2px;
 }
 .gen-pill-input:checked + .gen-pill-label {
-  background: rgba(37, 99, 235, 0.35);
-  border-color: rgba(96, 165, 250, 0.75);
-  color: #f8fafc;
+  background: var(--gradient-hero);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
 }
 .pcm-tab-btn.is-active {
-  background: rgba(37, 99, 235, 0.35);
-  border-color: rgba(96, 165, 250, 0.75);
-  color: #f8fafc;
+  background: var(--gradient-hero);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(59, 130, 246, 0.3);
 }
 .app-modal.app-modal--wide {
   max-width: min(640px, calc(100vw - 2rem));
@@ -5214,7 +5236,7 @@ html.fs-app[data-app-theme="light"] .mini-player-time {
   background: rgba(220, 38, 38, 0.98);
 }
 .app-banner--info .app-banner-inner {
-  background: rgba(37, 99, 235, 0.98);
+  background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 55%, #6366f1 100%);
 }
 .app-banner-icon {
   width: 1.35rem;
@@ -5380,4 +5402,144 @@ html.fs-app[data-app-theme="light"] .mini-player-time {
 .premade-offline-icon-btn:disabled {
   opacity: 0.45;
   cursor: wait;
+}
+
+/* ===== Brand polish — all in-app pages (Home, Library, Playlists, Voices, Account) ===== */
+
+.app-glass-card {
+  border-color: rgba(96, 165, 250, 0.24);
+  box-shadow: var(--app-surface-card-shadow), 0 0 0 1px rgba(59, 130, 246, 0.06);
+}
+
+.app-card:hover,
+article.app-card[data-script-id]:hover,
+article.app-card[data-premade-id]:hover,
+article.app-card.playlist-card-tappable:hover {
+  border-color: rgba(96, 165, 250, 0.38);
+  box-shadow: var(--app-shadow-card), 0 0 24px rgba(59, 130, 246, 0.12);
+}
+
+.app-admin-tab-box {
+  border-color: rgba(96, 165, 250, 0.32);
+  box-shadow: var(--app-surface-card-shadow), 0 0 28px rgba(59, 130, 246, 0.1);
+}
+
+.app-stat-tile {
+  border-color: rgba(96, 165, 250, 0.2);
+}
+
+.app-stat-tile:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.home-dashboard-card.app-glass-card {
+  border-left: 3px solid rgba(56, 189, 248, 0.65);
+}
+
+.home-action-buttons-card.app-glass-card {
+  border-left: 3px solid rgba(129, 140, 248, 0.55);
+}
+
+.home-section-header {
+  padding-bottom: 0.15rem;
+  border-bottom: 1px solid rgba(96, 165, 250, 0.12);
+}
+
+.playlist-detail-heading {
+  font-weight: 800;
+}
+
+.playlist-back-arrow-btn {
+  color: var(--accent-vivid, #38bdf8);
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(56, 189, 248, 0.45);
+}
+
+.playlist-back-arrow-btn:hover {
+  background: rgba(59, 130, 246, 0.28);
+  border-color: rgba(56, 189, 248, 0.65);
+  color: #e0f2fe;
+}
+
+.playlist-track-row.is-current {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: linear-gradient(90deg, rgba(59, 130, 246, 0.18) 0%, rgba(59, 130, 246, 0.06) 100%);
+  border-left: 3px solid rgba(56, 189, 248, 0.75);
+}
+
+.library-toolbar-row,
+.voices-toolbar-row {
+  border-bottom-color: rgba(96, 165, 250, 0.18);
+}
+
+.library-card-chevron:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+  color: var(--accent-vivid, #38bdf8);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.media-card-icon-btn.is-active {
+  border-color: rgba(56, 189, 248, 0.7);
+  color: #e0f2fe;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.35), rgba(6, 182, 212, 0.25));
+}
+
+.catalog-card--extended {
+  border-left-color: rgba(56, 189, 248, 0.65);
+}
+
+.app-modal {
+  border-color: rgba(96, 165, 250, 0.28);
+  box-shadow: var(--shadow-glow, 0 0 40px rgba(59, 130, 246, 0.35)), 0 24px 56px rgba(0, 0, 0, 0.5);
+}
+
+.app-header-help-btn,
+.app-header-account-btn {
+  color: var(--accent-vivid, #38bdf8);
+  border-color: rgba(96, 165, 250, 0.28);
+}
+
+.app-header-help-btn:hover,
+.app-header-account-btn:hover {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(59, 130, 246, 0.15);
+  color: #fff;
+}
+
+.app-generation-badge-wrap {
+  border-color: rgba(56, 189, 248, 0.45);
+  background: rgba(59, 130, 246, 0.14);
+  color: #bae6fd;
+}
+
+.app-generation-badge-queue {
+  background: var(--gradient-hero);
+}
+
+.gen-clarify-field > label {
+  color: var(--accent-vivid, #38bdf8);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+textarea.gen-survey-textarea:focus,
+.gen-clarify-textarea:focus {
+  border-color: rgba(56, 189, 248, 0.65);
+  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.18);
+}
+
+.premade-category-block {
+  border-color: rgba(96, 165, 250, 0.18);
+  background: linear-gradient(160deg, rgba(59, 130, 246, 0.06), rgba(255, 255, 255, 0.02));
+}
+
+html.fs-app[data-app-theme="light"] .app-card:hover,
+html.fs-app[data-app-theme="light"] article.app-card[data-script-id]:hover,
+html.fs-app[data-app-theme="light"] article.app-card.playlist-card-tappable:hover {
+  box-shadow: var(--app-shadow-card), 0 0 16px rgba(59, 130, 246, 0.08);
+}
+
+html.fs-app[data-app-theme="light"] .home-dashboard-card.app-glass-card,
+html.fs-app[data-app-theme="light"] .home-action-buttons-card.app-glass-card {
+  border-left-width: 3px;
 }
