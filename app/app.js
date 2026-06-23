@@ -194,6 +194,8 @@
   var inlineScriptDraftById = {};
   var sectionSearchOpen = { library: false, playlists: false, voices: false, audio: false };
   var sectionSearchQuery = { library: "", playlists: "", voices: "", audio: "" };
+  var mediaPickerSearchOpen = false;
+  var mediaPickerRerender = null;
   var aiTextEditContext = null;
   var aiTextEditPreview = null;
   var aiTextEditProcessing = false;
@@ -749,6 +751,28 @@
       d.open = expand;
     });
     updateMediaPickerCategoryExpandToggleUi(false, false);
+  }
+
+  function syncMediaPickerSearchUi(focusInput) {
+    var wrap = document.getElementById("media-picker-search-wrap");
+    var btn = document.getElementById("media-picker-search-toggle");
+    var input = document.getElementById("media-picker-search");
+    if (!wrap || !btn) return;
+    wrap.hidden = !mediaPickerSearchOpen;
+    btn.classList.toggle("is-active", mediaPickerSearchOpen);
+    btn.innerHTML = mediaPickerSearchOpen ? sectionSearchCloseSvg() : sectionSearchMagnifierSvg();
+    btn.setAttribute("aria-label", mediaPickerSearchOpen ? "Hide search" : "Search");
+    btn.setAttribute("title", mediaPickerSearchOpen ? "Hide search" : "Search");
+    if (!mediaPickerSearchOpen && input) {
+      input.value = "";
+    }
+    if (focusInput && mediaPickerSearchOpen && input) {
+      setTimeout(function () {
+        try {
+          input.focus();
+        } catch (_e) {}
+      }, 0);
+    }
   }
 
   /** User-imported background audio (this browser). iOS uses Documents/BackgroundSamples + UserDefaults. */
@@ -5284,9 +5308,16 @@
       '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Media picker">' +
       '    <h3 id="media-picker-title">Select option</h3>' +
       '    <p id="media-picker-subtitle" class="app-muted" style="margin:0 0 0.45rem;"></p>' +
-      '    <div class="media-picker-search-row">' +
-      '      <input id="media-picker-search" type="text" placeholder="Search...">' +
-      '      <button type="button" class="library-chevron-btn media-picker-expand-all" id="media-picker-category-expand-all" hidden aria-label="Expand all background categories" title="Expand all categories">▼</button>' +
+      '    <div class="media-picker-toolbar">' +
+      '      <div id="media-picker-search-wrap" class="media-picker-search-wrap" hidden>' +
+      '        <input id="media-picker-search" type="search" placeholder="Search...">' +
+      "      </div>" +
+      '      <div class="media-picker-toolbar-actions">' +
+      '        <button type="button" class="library-chevron-btn section-search-toggle" id="media-picker-search-toggle" aria-label="Search" title="Search">' +
+      sectionSearchMagnifierSvg() +
+      "</button>" +
+      '        <button type="button" class="library-chevron-btn media-picker-expand-all" id="media-picker-category-expand-all" hidden aria-label="Expand all background categories" title="Expand all categories">▼</button>' +
+      "      </div>" +
       "    </div>" +
       '    <div id="media-picker-list" class="app-modal-list"></div>' +
       '    <div id="media-picker-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
@@ -6249,6 +6280,13 @@
     });
     document.getElementById("media-picker-cancel").addEventListener("click", function () {
       closeMediaPicker();
+    });
+    document.getElementById("media-picker-search-toggle").addEventListener("click", function () {
+      mediaPickerSearchOpen = !mediaPickerSearchOpen;
+      syncMediaPickerSearchUi(true);
+      if (typeof mediaPickerRerender === "function" && !mediaPickerSearchOpen) {
+        mediaPickerRerender();
+      }
     });
     document.getElementById("media-picker-category-expand-all").addEventListener("click", function () {
       toggleMediaPickerCategorySectionsExpandCollapse();
@@ -15737,18 +15775,36 @@
       } else if (q) {
         html = sectionHtml("Results", filtered, currentValue, true);
       } else {
-        html =
-          sectionHtml("Default", defaultItem ? [defaultItem] : [], currentValue, false) +
-          sectionHtml("Recommended", recommended, currentValue, false);
-        var noneItem = allRemaining.find(function (opt) {
+        var suggestedIds = recommendedOptionIDs("background", activeCategoryID, []);
+        var suggested = options.filter(function (opt) {
+          if (opt.id === "bg-none") return false;
+          if (opt.id === currentValue) return false;
+          return suggestedIds.indexOf(opt.id) >= 0;
+        });
+        var pinnedIds = {};
+        pinnedIds["bg-none"] = true;
+        suggested.forEach(function (opt) {
+          pinnedIds[opt.id] = true;
+        });
+        if (suggested.length) {
+          html += '<div class="app-picker-group media-picker-suggested-group">';
+          html += '<p class="app-picker-group-title">Suggested for this script</p>';
+          suggested.slice(0, 3).forEach(function (opt) {
+            html += optionRowHtml(opt, opt.id === currentValue, true, false);
+          });
+          html += "</div>";
+        }
+        var noneItem = options.find(function (opt) {
           return opt.id === "bg-none";
         });
-        var categorizedItems = allRemaining.filter(function (opt) {
-          return opt.id !== "bg-none";
-        });
         if (noneItem) {
-          html += sectionHtml("No background", [noneItem], currentValue, false);
+          html += '<div class="media-picker-quick-row">';
+          html += optionRowHtml(noneItem, noneItem.id === currentValue, true, false);
+          html += "</div>";
         }
+        var categorizedItems = options.filter(function (opt) {
+          return !pinnedIds[opt.id];
+        });
         html += backgroundPickerCategorySectionsHtml(categorizedItems, currentValue, function (opt, selected) {
           return optionRowHtml(opt, selected, true, false);
         });
@@ -15846,14 +15902,15 @@
     searchInput.oninput = function () {
       renderPickerOptions(searchInput.value || "");
     };
+    mediaPickerSearchOpen = false;
+    syncMediaPickerSearchUi(false);
+    list.classList.toggle("media-picker-list--backgrounds", !isVoice);
+    mediaPickerRerender = function () {
+      renderPickerOptions(searchInput.value || "");
+    };
     renderPickerOptions("");
     setMediaPickerMessage("", "");
     backdrop.hidden = false;
-    setTimeout(function () {
-      try {
-        searchInput.focus();
-      } catch (_e) {}
-    }, 0);
   }
 
   function closeMediaPicker() {
@@ -15861,6 +15918,9 @@
     var backdrop = document.getElementById("media-picker-backdrop");
     if (backdrop) backdrop.hidden = true;
     mediaPickerTarget = null;
+    mediaPickerRerender = null;
+    mediaPickerSearchOpen = false;
+    syncMediaPickerSearchUi(false);
     setMediaPickerMessage("", "");
   }
 
