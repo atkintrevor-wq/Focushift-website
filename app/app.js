@@ -190,6 +190,8 @@
   var publishTitleDirty = false;
   var editingPremadeId = null;
   var inlineScriptEditorOpenById = {};
+  /** Read-only script text expanded on listen-only library cards. */
+  var scriptTextViewOpenById = {};
   /** Unsaved title/text for open inline editors (survives list re-renders). */
   var inlineScriptDraftById = {};
   var sectionSearchOpen = { library: false, playlists: false, voices: false, audio: false };
@@ -7850,6 +7852,90 @@
     );
   }
 
+  function libraryPlaylistIconSvg() {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>'
+    );
+  }
+
+  function scriptCardEditIconSvg() {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>'
+    );
+  }
+
+  function scriptCardViewIconSvg() {
+    return (
+      '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>'
+    );
+  }
+
+  function scriptCardPlaylistOnlyBtnHtml(scriptId, disabled) {
+    return (
+      '<button type="button" class="script-card-dual-btn script-card-dual-btn--solo"' +
+      ' data-action="add-to-playlist" data-script-id="' +
+      escapeHtml(scriptId) +
+      '" title="Add to playlist" aria-label="Add to playlist"' +
+      (disabled ? " disabled" : "") +
+      ">" +
+      libraryPlaylistIconSvg() +
+      "</button>"
+    );
+  }
+
+  function scriptCardEditPlaylistDualHtml(scriptId, options) {
+    var opts = options || {};
+    var editAction = opts.editAction || "open-workshop";
+    var editLabel = opts.editLabel || (opts.viewOnly ? "View script" : "Edit script");
+    var editIcon = opts.viewOnly ? scriptCardViewIconSvg() : scriptCardEditIconSvg();
+    var playlistDisabled = !!opts.playlistDisabled || !currentPlaylists.length;
+    return (
+      '<div class="script-card-dual-btn" role="group" aria-label="Script actions">' +
+      '<button type="button" class="script-card-dual-btn-seg"' +
+      ' data-action="' +
+      escapeHtml(editAction) +
+      '" data-script-id="' +
+      escapeHtml(scriptId) +
+      '" title="' +
+      escapeHtml(editLabel) +
+      '" aria-label="' +
+      escapeHtml(editLabel) +
+      '"' +
+      (opts.editDisabled ? " disabled" : "") +
+      ">" +
+      editIcon +
+      "</button>" +
+      '<button type="button" class="script-card-dual-btn-seg"' +
+      ' data-action="add-to-playlist" data-script-id="' +
+      escapeHtml(scriptId) +
+      '" title="Add to playlist" aria-label="Add to playlist"' +
+      (playlistDisabled ? " disabled" : "") +
+      ">" +
+      libraryPlaylistIconSvg() +
+      "</button>" +
+      "</div>"
+    );
+  }
+
+  function premadeCardEditPlaylistDualHtml(premadeId) {
+    return (
+      '<div class="script-card-dual-btn" role="group" aria-label="Premade actions">' +
+      '<button type="button" class="script-card-dual-btn-seg" data-premade-action="open-workshop" data-premade-id="' +
+      escapeHtml(premadeId) +
+      '" title="Edit script" aria-label="Edit script">' +
+      scriptCardEditIconSvg() +
+      "</button>" +
+      '<button type="button" class="script-card-dual-btn-seg" data-premade-action="add-playlist" data-premade-id="' +
+      escapeHtml(premadeId) +
+      '" title="Save and add to playlist" aria-label="Save and add to playlist"' +
+      (!currentPlaylists.length ? " disabled" : "") +
+      ">" +
+      libraryPlaylistIconSvg() +
+      "</button>" +
+      "</div>"
+    );
+  }
+
   function mediaCardPlusIconSvg() {
     return (
       '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>'
@@ -14683,34 +14769,53 @@
       "</span>" +
       "</div>";
     var playPauseIcon = libraryTransportPlayPauseIconSvg(playingThis);
-    var playlistIconSvg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>';
+    var playBtnClass =
+      "script-card-play-btn" +
+      (hasAudio && !isBusy ? " script-card-play-btn--ready" : "") +
+      (playingThis ? " script-card-play-btn--playing" : "");
 
     var primaryActionsHtml = "";
-    if (!controlsReadOnly) {
-      if (showSplit) {
-        if (isBusy) {
-          primaryActionsHtml =
-            '<button type="button" class="app-btn app-btn-secondary script-card-edit-primary" disabled>Generating\u2026</button>';
-        } else {
-          primaryActionsHtml =
-            '<button type="button" class="app-btn app-btn-primary script-card-edit-primary" data-action="open-workshop" data-script-id="' +
-            escapeHtml(script.id) +
-            '">Edit</button>' +
-            '<button type="button" class="app-btn script-card-generate-split" data-action="generate-audio" data-script-id="' +
-            escapeHtml(script.id) +
-            '">Generate</button>';
-        }
+    var actionsBarClass = "app-card-actions script-card-actions-bar";
+    if (controlsReadOnly) {
+      actionsBarClass += " script-card-actions-bar--compact";
+      primaryActionsHtml = scriptCardEditPlaylistDualHtml(script.id, {
+        viewOnly: true,
+        editAction: "view-script-text",
+        editLabel: "View script",
+        playlistDisabled: !hasAudio,
+      });
+    } else if (showSplit) {
+      if (isBusy) {
+        primaryActionsHtml =
+          '<button type="button" class="app-btn app-btn-secondary script-card-edit-primary" disabled>Generating\u2026</button>';
       } else {
         primaryActionsHtml =
-          '<button type="button" class="app-btn app-btn-primary script-card-edit-primary' +
-          (isBusy ? " is-busy" : "") +
-          '" data-action="open-workshop" data-script-id="' +
+          '<button type="button" class="app-btn app-btn-primary script-card-edit-primary" data-action="open-workshop" data-script-id="' +
           escapeHtml(script.id) +
-          '"' +
-          (isBusy ? " disabled" : "") +
-          ">Edit</button>";
+          '">Edit</button>' +
+          '<button type="button" class="app-btn script-card-generate-split" data-action="generate-audio" data-script-id="' +
+          escapeHtml(script.id) +
+          '">Generate</button>' +
+          scriptCardPlaylistOnlyBtnHtml(script.id, !currentPlaylists.length);
       }
+    } else if (hasAudio) {
+      actionsBarClass += needsRegen && !isBusy ? "" : " script-card-actions-bar--compact";
+      if (isBusy) {
+        primaryActionsHtml =
+          '<button type="button" class="app-btn app-btn-secondary script-card-generate-prominent" disabled>Generating\u2026</button>' +
+          scriptCardEditPlaylistDualHtml(script.id, { editDisabled: true, playlistDisabled: !hasAudio });
+      } else if (needsRegen) {
+        primaryActionsHtml =
+          '<button type="button" class="app-btn script-card-generate-split script-card-generate-prominent" data-action="generate-audio" data-script-id="' +
+          escapeHtml(script.id) +
+          '">Regenerate</button>' +
+          scriptCardEditPlaylistDualHtml(script.id, {});
+      } else {
+        primaryActionsHtml = scriptCardEditPlaylistDualHtml(script.id, {});
+      }
+    } else {
+      actionsBarClass += " script-card-actions-bar--compact";
+      primaryActionsHtml = scriptCardEditPlaylistDualHtml(script.id, { playlistDisabled: true });
     }
 
     var audioSection = controlsExpanded
@@ -14730,15 +14835,15 @@
         escapeHtml(storedBackgroundDisplayNameForScript(script)) +
         "</span>" +
         "</div>" +
-        '<div class="app-card-actions script-card-actions-bar">' +
+        (scriptTextViewOpenById[script.id]
+          ? '<div class="script-card-readonly-text"><pre class="app-card-text">' +
+            escapeHtml((script.text && String(script.text)) || "") +
+            "</pre></div>"
+          : "") +
+        '<div class="' +
+        actionsBarClass +
+        '">' +
         primaryActionsHtml +
-        '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="add-to-playlist" data-script-id="' +
-        escapeHtml(script.id) +
-        '" title="Add to playlist"' +
-        (!currentPlaylists.length ? " disabled" : "") +
-        ' aria-label="Add to playlist">' +
-        playlistIconSvg +
-        "</button>" +
         (showShareLink
           ? '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="share-audio" data-script-id="' +
             escapeHtml(script.id) +
@@ -14780,7 +14885,9 @@
       "    <h3>" +
       escapeHtml(script.title || "Untitled Script") +
       "</h3>" +
-      '    <button type="button" class="script-card-play-btn"' +
+      '    <button type="button" class="' +
+      playBtnClass +
+      '"' +
       ' data-action="play-audio" data-script-id="' +
       escapeHtml(script.id) +
       '"' +
@@ -15544,6 +15651,9 @@
         if (!script) return;
         if (action === "open-workshop") {
           openScriptWorkshop(script.id, false);
+        } else if (action === "view-script-text") {
+          scriptTextViewOpenById[script.id] = !scriptTextViewOpenById[script.id];
+          renderScripts(currentScripts);
         } else if (action === "ai-edit-script") {
           openAITextEditModal(script.id);
         } else if (action === "toggle-controls") {
@@ -18164,9 +18274,11 @@
     var publishedVoiceID = premadePublishedVoiceId(p);
     var publishedBackgroundID = premadePublishedBackgroundId(p);
     var isBusy = isPremadeBusy(p.id);
-    var playlistIconSvg =
-      '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15V6"/><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z"/><path d="M12 12H3"/><path d="M16 6H3"/><path d="M12 18H3"/></svg>';
     var playPauseIcon = libraryTransportPlayPauseIconSvg(playingThis);
+    var playBtnClass =
+      "script-card-play-btn" +
+      (hasAudio && !isBusy ? " script-card-play-btn--ready" : "") +
+      (playingThis ? " script-card-play-btn--playing" : "");
     var showSyncRow = paid && hasAudio && isStreamableCloudPremade(p);
     var syncMessage = showSyncRow && !isBusy ? "Synced with cloud" : "";
     var syncColor = "#22c55e";
@@ -18197,17 +18309,7 @@
     var audioControlsExpanded = controlsExpandedForPremade(p.id);
     var chevChar = audioControlsExpanded ? "▲" : "▼";
     var chipLabel = premadeLibraryCategoryDisplayName((p.categoryID || "").trim());
-    var paidActionsHtml =
-      '<button type="button" class="app-btn app-btn-primary script-card-edit-primary" data-premade-action="open-workshop" data-premade-id="' +
-      escapeHtml(p.id) +
-      '">Edit</button>' +
-      '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-premade-action="add-playlist" data-premade-id="' +
-      escapeHtml(p.id) +
-      '" title="Save and add to playlist"' +
-      (!currentPlaylists.length ? " disabled" : "") +
-      ' aria-label="Save and add to playlist">' +
-      playlistIconSvg +
-      "</button>";
+    var paidActionsHtml = premadeCardEditPlaylistDualHtml(p.id);
     var freeActionsHtml =
       '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
       escapeHtml(p.id) +
@@ -18235,7 +18337,7 @@
         escapeHtml(backgroundNameById(publishedBackgroundID)) +
         "</span>" +
         "</div>" +
-        '<div class="app-card-actions script-card-actions-bar">' +
+        '<div class="app-card-actions script-card-actions-bar script-card-actions-bar--compact">' +
         (paid ? paidActionsHtml : freeActionsHtml) +
         (adminModeEnabled && isStreamableCloudPremade(p)
           ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="hide" data-premade-id="' +
@@ -18263,7 +18365,9 @@
       "    <h3>" +
       escapeHtml(p.title || "Untitled Premade") +
       "</h3>" +
-      '    <button type="button" class="script-card-play-btn" data-premade-action="play" data-premade-id="' +
+      '    <button type="button" class="' +
+      playBtnClass +
+      '" data-premade-action="play" data-premade-id="' +
       escapeHtml(p.id) +
       '"' +
       (!hasAudio || isBusy ? " disabled" : "") +
