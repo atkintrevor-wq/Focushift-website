@@ -3955,9 +3955,11 @@ body.fs-app-body.fs-modal-scroll-lock {
   max-height: none;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
   margin: 0.2rem 0 0.45rem;
   gap: 0;
-  padding-right: 0.1rem;
+  padding-right: 0.85rem;
+  box-sizing: border-box;
 }
 .media-picker-modal--background .media-picker-toolbar {
   flex-shrink: 0;
