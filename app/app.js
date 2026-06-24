@@ -4700,33 +4700,35 @@
       "</section>" +
       "</section>" +
       '<section id="section-library" class="app-section">' +
-      '  <div class="library-toolbar-row">' +
-      '    <div class="app-tabs voice-segmented-tabs" id="library-segmented-tabs" style="margin-top:0.1rem;">' +
-      '      <button type="button" class="app-tab-btn" id="library-tab-my" data-library-tab="my-library">My Library</button>' +
-      '      <button type="button" class="app-tab-btn" id="library-tab-app" data-library-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
-      "    </div>" +
-      '    <div class="library-toolbar-actions" id="library-my-only-toolbar">' +
-      '      <div class="library-dual-btn" role="group" aria-label="Create or import script">' +
-      '        <button type="button" class="library-dual-btn-main" id="btn-create-script" title="New script">+ New</button>' +
-      '        <button type="button" class="library-dual-btn-menu" id="btn-library-create-menu" aria-expanded="false" aria-haspopup="true" title="More options">▾</button>' +
+      '  <div class="library-toolbar-sticky">' +
+      '    <div class="library-toolbar-row">' +
+      '      <div class="app-tabs voice-segmented-tabs" id="library-segmented-tabs" style="margin-top:0.1rem;">' +
+      '        <button type="button" class="app-tab-btn" id="library-tab-my" data-library-tab="my-library">My Library</button>' +
+      '        <button type="button" class="app-tab-btn" id="library-tab-app" data-library-tab="app-library">App Library <span class="app-tab-count" id="count-premade">0</span></button>' +
       "      </div>" +
-      '      <div id="library-create-dropdown" class="library-create-dropdown" hidden>' +
-      '        <button type="button" class="library-dropdown-item" id="library-dropdown-create">Create Script</button>' +
-      '        <button type="button" class="library-dropdown-item" id="library-dropdown-import">Import Audio</button>' +
+      '      <div class="library-toolbar-actions" id="library-my-only-toolbar">' +
+      '        <div class="library-dual-btn" role="group" aria-label="Create or import script">' +
+      '          <button type="button" class="library-dual-btn-main" id="btn-create-script" title="New script">+ New</button>' +
+      '          <button type="button" class="library-dual-btn-menu" id="btn-library-create-menu" aria-expanded="false" aria-haspopup="true" title="More options">▾</button>' +
+      "        </div>" +
+      '        <div id="library-create-dropdown" class="library-create-dropdown" hidden>' +
+      '          <button type="button" class="library-dropdown-item" id="library-dropdown-create">Create Script</button>' +
+      '          <button type="button" class="library-dropdown-item" id="library-dropdown-import">Import Audio</button>' +
+      "        </div>" +
+      '        <button type="button" class="library-chevron-btn" id="library-expand-all-toggle" aria-label="Expand or collapse audio controls on all cards">▼</button>' +
       "      </div>" +
-      '      <button type="button" class="library-chevron-btn" id="library-expand-all-toggle" aria-label="Expand or collapse audio controls on all cards">▼</button>' +
-      "    </div>" +
-      '    <div class="library-toolbar-actions" id="library-app-only-toolbar" style="display:none">' +
-      '      <div id="premade-category-nav" class="premade-category-nav" hidden>' +
-      '        <button type="button" class="app-btn app-btn-ghost premade-category-back-btn" id="premade-category-back-toolbar" data-premade-category-back="1">← Categories</button>' +
-      '        <span id="premade-category-nav-title" class="premade-category-toolbar-title"></span>' +
+      '      <div class="library-toolbar-actions" id="library-app-only-toolbar" style="display:none">' +
+      '        <button type="button" class="library-chevron-btn" id="premade-expand-all-audio" aria-label="Expand or collapse audio controls on all premade cards">▼</button>' +
       "      </div>" +
-      '      <button type="button" class="library-chevron-btn" id="premade-expand-all-audio" aria-label="Expand or collapse audio controls on all premade cards">▼</button>' +
-      "    </div>" +
-      '    <div class="library-toolbar-actions library-search-toolbar">' +
-      '      <button type="button" class="library-chevron-btn section-search-toggle" id="section-search-toggle-library" aria-label="Show search" title="Search">' +
+      '      <div class="library-toolbar-actions library-search-toolbar">' +
+      '        <button type="button" class="library-chevron-btn section-search-toggle" id="section-search-toggle-library" aria-label="Show search" title="Search">' +
       sectionSearchMagnifierSvg() +
-      "</button>" +
+      "        </button>" +
+      "      </div>" +
+      "    </div>" +
+      '    <div id="premade-category-nav" class="premade-category-nav" hidden>' +
+      '      <button type="button" class="app-btn app-btn-ghost premade-category-back-btn" id="premade-category-back-toolbar" data-premade-category-back="1">← Categories</button>' +
+      '      <span id="premade-category-nav-title" class="premade-category-toolbar-title"></span>' +
       "    </div>" +
       "  </div>" +
       sectionSearchWrapHtml("library", "Search my library…") +
