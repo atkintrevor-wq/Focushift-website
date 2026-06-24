@@ -2134,6 +2134,7 @@
     }
     ownedScripts = [];
     incomingSharedScripts = [];
+    scriptsSnapshotReceived = false;
     inlineScriptEditorOpenById = {};
     inlineScriptDraftById = {};
   }
@@ -2195,6 +2196,8 @@
     updateTabCounts();
     renderScripts(currentScripts);
     renderSelectedPlaylistDetail();
+    renderPlaylists(currentPlaylists);
+    pruneOrphanedPlaylistReferencesIfReady();
     if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
   }
 
@@ -17196,6 +17199,49 @@
       });
   }
 
+  function playlistDisplayItemCount(playlist) {
+    return resolvePlaylistScripts(playlist).length;
+  }
+
+  var scriptsSnapshotReceived = false;
+  var playlistPruneInFlight = {};
+
+  function pruneOrphanedPlaylistReferencesIfReady() {
+    if (!scriptsSnapshotReceived || !currentUser || !currentPlaylists.length) return;
+    var knownIds = {};
+    currentScripts.forEach(function (s) {
+      knownIds[s.id] = true;
+    });
+    var changed = false;
+    currentPlaylists.forEach(function (p) {
+      var ids = p.scriptIDs || [];
+      var pruned = ids.filter(function (id) {
+        return knownIds[id];
+      });
+      if (pruned.length === ids.length) return;
+      changed = true;
+      p.scriptIDs = pruned;
+      if (playlistPruneInFlight[p.id]) return;
+      playlistPruneInFlight[p.id] = true;
+      var items = pruned.map(function (id) {
+        return { type: "script", id: id };
+      });
+      playlistCollection(currentUser.uid)
+        .doc(p.id)
+        .set({ scriptIDs: pruned, items: items }, { merge: true })
+        .then(function () {
+          delete playlistPruneInFlight[p.id];
+        })
+        .catch(function () {
+          delete playlistPruneInFlight[p.id];
+        });
+    });
+    if (changed) {
+      renderPlaylists(currentPlaylists);
+      renderSelectedPlaylistDetail();
+    }
+  }
+
   function shuffleInPlace(arr) {
     for (var i = arr.length - 1; i > 0; i--) {
       var j = Math.floor(Math.random() * (i + 1));
@@ -17587,7 +17633,7 @@
           "</div>" +
           "</div>" +
           '<div class="app-card-meta">' +
-          (p.scriptIDs ? p.scriptIDs.length : 0) +
+          playlistDisplayItemCount(p) +
           " item(s)</div>" +
           "</article>"
         );
@@ -18083,6 +18129,7 @@
           renderScripts(currentScripts);
           updateTabCounts();
           renderPlaylistPickerOptions();
+          pruneOrphanedPlaylistReferencesIfReady();
           if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
         },
         function (e) {
@@ -18907,8 +18954,10 @@
       scriptsUnsubscribe = null;
     }
     ownedScripts = [];
+    scriptsSnapshotReceived = false;
     if (isWebFreeTier()) {
       ownedScripts = loadFreeLocalScripts(uid);
+      scriptsSnapshotReceived = true;
       rebuildCurrentScriptsFromSources();
       subscribeIncomingSharedScripts(uid);
       return;
@@ -18917,6 +18966,7 @@
       .orderBy("createdAt", "desc")
       .onSnapshot(
         function (snap) {
+          scriptsSnapshotReceived = true;
           var scripts = snap.docs.map(function (doc) {
             var data = doc.data() || {};
             return {
