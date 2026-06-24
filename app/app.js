@@ -4717,6 +4717,10 @@
       '      <button type="button" class="library-chevron-btn" id="library-expand-all-toggle" aria-label="Expand or collapse audio controls on all cards">▼</button>' +
       "    </div>" +
       '    <div class="library-toolbar-actions" id="library-app-only-toolbar" style="display:none">' +
+      '      <div id="premade-category-nav" class="premade-category-nav" hidden>' +
+      '        <button type="button" class="app-btn app-btn-ghost premade-category-back-btn" id="premade-category-back-toolbar" data-premade-category-back="1">← Categories</button>' +
+      '        <span id="premade-category-nav-title" class="premade-category-toolbar-title"></span>' +
+      "      </div>" +
       '      <button type="button" class="library-chevron-btn" id="premade-expand-all-audio" aria-label="Expand or collapse audio controls on all premade cards">▼</button>' +
       "    </div>" +
       '    <div class="library-toolbar-actions library-search-toolbar">' +
@@ -4749,7 +4753,7 @@
       "  </div>" +
       '  <div id="library-sub-app" hidden>' +
       '<section aria-label="App Library (Premade)" style="margin-top:1rem;">' +
-      '  <div class="app-section-title-row premade-app-toolbar">' +
+      '  <div class="app-section-title-row premade-app-toolbar" id="premade-app-toolbar">' +
       "    <h2>App Library</h2>" +
       '    <div class="premade-app-toolbar-actions">' +
       '      <button type="button" class="app-btn" id="btn-open-publish-premade">Publish from My Library</button>' +
@@ -7494,7 +7498,10 @@
     if (activeLibraryTab !== "my-library") closeLibraryCreateMenu();
     syncLibrarySegmentedPill();
     if (activeLibraryTab === "my-library") updateLibraryExpandAllToggleUi();
-    if (activeLibraryTab === "app-library") updatePremadeExpandAllToggleUi();
+    if (activeLibraryTab === "app-library") {
+      updatePremadeExpandAllToggleUi();
+      syncPremadeCategoryNavUi();
+    }
     var librarySearchInput = document.getElementById("section-search-input-library");
     if (librarySearchInput) {
       librarySearchInput.placeholder =
@@ -7932,6 +7939,19 @@
       ">" +
       libraryPlaylistIconSvg() +
       "</button>" +
+      "</div>"
+    );
+  }
+
+  function scriptCardToolbarRowHtml(statusHtml, actionsHtml, trailingHtml) {
+    if (!statusHtml && !actionsHtml && !trailingHtml) return "";
+    return (
+      '<div class="script-card-toolbar-row">' +
+      (statusHtml ? '<div class="script-card-toolbar-status">' + statusHtml + "</div>" : "") +
+      '<div class="script-card-toolbar-actions">' +
+      (actionsHtml || "") +
+      (trailingHtml || "") +
+      "</div>" +
       "</div>"
     );
   }
@@ -13596,18 +13616,25 @@
       : '<p class="app-muted premade-category-empty">No premade scripts in this category yet.</p>';
     return (
       '<div class="premade-category-detail">' +
-      '  <div class="premade-category-detail-nav">' +
-      '    <button type="button" class="app-btn app-btn-ghost premade-category-back-btn" data-premade-category-back="1">← Categories</button>' +
-      "  </div>" +
-      '  <h3 class="premade-category-detail-title">' +
-      escapeHtml(categoryName) +
-      "</h3>" +
-      '<p class="app-muted catalog-legend">Cards with a blue edge are from the extended catalog.</p>' +
+      '  <p class="app-muted catalog-legend">Cards with a blue edge are from the extended catalog.</p>' +
       '  <div class="premade-category-detail-cards">' +
       cardsHtml +
       "  </div>" +
       "</div>"
     );
+  }
+
+  function syncPremadeCategoryNavUi() {
+    var nav = document.getElementById("premade-category-nav");
+    var navTitle = document.getElementById("premade-category-nav-title");
+    var appToolbar = document.getElementById("premade-app-toolbar");
+    var appHeading = appToolbar ? appToolbar.querySelector("h2") : null;
+    var inCategory = !!(activePremadeCategoryId && activeLibraryTab === "app-library");
+    if (nav) nav.hidden = !inCategory;
+    if (navTitle) {
+      navTitle.textContent = inCategory ? premadeLibraryCategoryDisplayName(activePremadeCategoryId) : "";
+    }
+    if (appHeading) appHeading.hidden = inCategory;
   }
 
   function closePremadeCategoryView() {
@@ -13629,6 +13656,13 @@
   }
 
   function bindPremadeCategoryNavActions() {
+    document.querySelectorAll("[data-premade-category-back]").forEach(function (btn) {
+      if (btn.dataset.boundPremadeBack === "1") return;
+      btn.dataset.boundPremadeBack = "1";
+      btn.addEventListener("click", function () {
+        closePremadeCategoryView();
+      });
+    });
     var list = document.getElementById("premade-list");
     if (!list) return;
     list.querySelectorAll("[data-premade-category-open]").forEach(function (btn) {
@@ -13639,11 +13673,7 @@
         renderPremade();
       });
     });
-    list.querySelectorAll("[data-premade-category-back]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        closePremadeCategoryView();
-      });
-    });
+    syncPremadeCategoryNavUi();
   }
 
   function setScriptBusy(scriptId, busy) {
@@ -14775,9 +14805,7 @@
       (playingThis ? " script-card-play-btn--playing" : "");
 
     var primaryActionsHtml = "";
-    var actionsBarClass = "app-card-actions script-card-actions-bar";
     if (controlsReadOnly) {
-      actionsBarClass += " script-card-actions-bar--compact";
       primaryActionsHtml = scriptCardEditPlaylistDualHtml(script.id, {
         viewOnly: true,
         editAction: "view-script-text",
@@ -14787,26 +14815,25 @@
     } else if (showSplit) {
       if (isBusy) {
         primaryActionsHtml =
-          '<button type="button" class="app-btn app-btn-secondary script-card-edit-primary" disabled>Generating\u2026</button>';
+          '<button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" disabled>Generating\u2026</button>';
       } else {
         primaryActionsHtml =
-          '<button type="button" class="app-btn app-btn-primary script-card-edit-primary" data-action="open-workshop" data-script-id="' +
+          '<button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" data-action="open-workshop" data-script-id="' +
           escapeHtml(script.id) +
           '">Edit</button>' +
-          '<button type="button" class="app-btn script-card-generate-split" data-action="generate-audio" data-script-id="' +
+          '<button type="button" class="app-btn script-card-toolbar-btn script-card-generate-split" data-action="generate-audio" data-script-id="' +
           escapeHtml(script.id) +
           '">Generate</button>' +
           scriptCardPlaylistOnlyBtnHtml(script.id, !currentPlaylists.length);
       }
     } else if (hasAudio) {
-      actionsBarClass += needsRegen && !isBusy ? "" : " script-card-actions-bar--compact";
       if (isBusy) {
         primaryActionsHtml =
-          '<button type="button" class="app-btn app-btn-secondary script-card-generate-prominent" disabled>Generating\u2026</button>' +
+          '<button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" disabled>Generating\u2026</button>' +
           scriptCardEditPlaylistDualHtml(script.id, { editDisabled: true, playlistDisabled: !hasAudio });
       } else if (needsRegen) {
         primaryActionsHtml =
-          '<button type="button" class="app-btn script-card-generate-split script-card-generate-prominent" data-action="generate-audio" data-script-id="' +
+          '<button type="button" class="app-btn script-card-toolbar-btn script-card-generate-split" data-action="generate-audio" data-script-id="' +
           escapeHtml(script.id) +
           '">Regenerate</button>' +
           scriptCardEditPlaylistDualHtml(script.id, {});
@@ -14814,9 +14841,27 @@
         primaryActionsHtml = scriptCardEditPlaylistDualHtml(script.id, {});
       }
     } else {
-      actionsBarClass += " script-card-actions-bar--compact";
       primaryActionsHtml = scriptCardEditPlaylistDualHtml(script.id, { playlistDisabled: true });
     }
+
+    var shareBtnHtml = showShareLink
+      ? '<button type="button" class="app-btn app-btn-secondary library-script-share-btn script-card-toolbar-icon-btn" data-action="share-audio" data-script-id="' +
+        escapeHtml(script.id) +
+        '" title="Creator: share listen link" aria-label="Share listen link">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>'
+      : "";
+    var deleteBtnHtml = controlsExpanded
+      ? '<button type="button" class="script-card-icon-btn script-card-icon-btn-delete" data-action="delete" data-script-id="' +
+        escapeHtml(script.id) +
+        '" title="' +
+        (isSharedListenOnly ? "Remove from library" : "Delete script") +
+        '" aria-label="' +
+        (isSharedListenOnly ? "Remove" : "Delete") +
+        '">\u2715</button>'
+      : "";
+    var expandedToolbarHtml = controlsExpanded
+      ? scriptCardToolbarRowHtml(syncStatusHtml, primaryActionsHtml + shareBtnHtml, deleteBtnHtml)
+      : "";
 
     var audioSection = controlsExpanded
       ? '<div class="script-card-audio-section">' +
@@ -14840,33 +14885,13 @@
             escapeHtml((script.text && String(script.text)) || "") +
             "</pre></div>"
           : "") +
-        '<div class="' +
-        actionsBarClass +
-        '">' +
-        primaryActionsHtml +
-        (showShareLink
-          ? '  <button type="button" class="app-btn app-btn-secondary library-script-share-btn" data-action="share-audio" data-script-id="' +
-            escapeHtml(script.id) +
-            '" title="Creator: share listen link">' +
-            '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>'
-          : "") +
-        "</div>" +
+        expandedToolbarHtml +
         "</div>"
       : "";
     var expandableHtml = '<div class="script-card-expandable">' + audioSection + "</div>";
-    var footerHtml =
-      '<div class="script-card-footer">' +
-      syncStatusHtml +
-      (controlsExpanded
-        ? '  <button type="button" class="script-card-icon-btn script-card-icon-btn-delete script-card-footer-delete" data-action="delete" data-script-id="' +
-          escapeHtml(script.id) +
-          '" title="' +
-          (isSharedListenOnly ? "Remove from library" : "Delete script") +
-          '" aria-label="' +
-          (isSharedListenOnly ? "Remove" : "Delete") +
-          '">\u2715</button>'
-        : "") +
-      "</div>";
+    var footerHtml = controlsExpanded
+      ? ""
+      : '<div class="script-card-footer">' + syncStatusHtml + "</div>";
     var libraryChip = isSharedListenOnly
       ? '<span class="app-chip">Shared · ' +
         escapeHtml((script.sharedFrom && script.sharedFrom.senderDisplayName) || "Someone") +
@@ -18280,50 +18305,67 @@
       (hasAudio && !isBusy ? " script-card-play-btn--ready" : "") +
       (playingThis ? " script-card-play-btn--playing" : "");
     var showSyncRow = paid && hasAudio && isStreamableCloudPremade(p);
-    var syncMessage = showSyncRow && !isBusy ? "Synced with cloud" : "";
-    var syncColor = "#22c55e";
+    var premadeSyncStatusHtml = "";
+    if (showSyncRow) {
+      premadeSyncStatusHtml =
+        '<div class="script-card-sync-row" role="status">' +
+        '<span class="' +
+        (isBusy ? "script-card-sync-busy" : "script-card-sync-ok") +
+        '">' +
+        (isBusy ? "Generating\u2026" : '<span aria-hidden="true">\u2713</span> Synced with cloud') +
+        "</span></div>";
+    }
     var offlineIconHtml = "";
     if (paid && isStreamableCloudPremade(p)) {
       if (premadeOfflineObjectUrlCache[p.id]) {
         offlineIconHtml =
-          '<button type="button" class="premade-offline-icon-btn" data-premade-action="remove-offline" data-premade-id="' +
+          '<button type="button" class="premade-offline-icon-btn script-card-toolbar-icon-btn" data-premade-action="remove-offline" data-premade-id="' +
           escapeHtml(p.id) +
           '" title="Remove offline download" aria-label="Remove offline download">✓☁️</button>';
       } else {
         offlineIconHtml =
-          '<button type="button" class="premade-offline-icon-btn" data-premade-action="download-offline" data-premade-id="' +
+          '<button type="button" class="premade-offline-icon-btn script-card-toolbar-icon-btn" data-premade-action="download-offline" data-premade-id="' +
           escapeHtml(p.id) +
           '" title="Download for offline" aria-label="Download for offline">☁️↓</button>';
       }
     }
-    var syncFooterHtml = showSyncRow
-      ? '<div class="premade-sync-row" style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;margin:0.45rem 0 0;">' +
-        '<span class="app-muted" style="margin:0;font-size:0.78rem;line-height:1.4;color:' +
-        syncColor +
-        ';">' +
-        escapeHtml(syncMessage) +
-        "</span>" +
-        offlineIconHtml +
-        "</div>"
-      : "";
     var audioControlsExpanded = controlsExpandedForPremade(p.id);
     var chevChar = audioControlsExpanded ? "▲" : "▼";
-    var chipLabel = premadeLibraryCategoryDisplayName((p.categoryID || "").trim());
+    var hideCategoryChip = !!activePremadeCategoryId;
     var paidActionsHtml = premadeCardEditPlaylistDualHtml(p.id);
+    var paidToolbarTrailingHtml =
+      offlineIconHtml +
+      (adminModeEnabled && isStreamableCloudPremade(p)
+        ? '  <button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" data-premade-action="hide" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">Hide</button>'
+        : "") +
+      (adminModeEnabled
+        ? '  <button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" data-premade-action="edit" data-premade-id="' +
+          escapeHtml(p.id) +
+          '">Edit</button>'
+        : "");
     var freeActionsHtml =
-      '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="toggle-text" data-premade-id="' +
+      '  <button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" data-premade-action="toggle-text" data-premade-id="' +
       escapeHtml(p.id) +
       '">' +
       (isExpanded ? "Hide Text" : "Show Text") +
       "</button>" +
-      '  <button type="button" class="app-btn app-btn-primary" data-premade-action="save" data-premade-id="' +
+      '  <button type="button" class="app-btn app-btn-primary script-card-toolbar-btn" data-premade-action="save" data-premade-id="' +
       escapeHtml(p.id) +
-      '">Save to My Library</button>' +
-      '  <button type="button" class="app-btn app-btn-ghost" data-premade-action="add-playlist" data-premade-id="' +
+      '">Save</button>' +
+      '  <button type="button" class="app-btn app-btn-ghost script-card-toolbar-btn" data-premade-action="add-playlist" data-premade-id="' +
       escapeHtml(p.id) +
       '"' +
       (!currentPlaylists.length ? " disabled" : "") +
-      ">Save + Add to Playlist</button>";
+      ">Playlist</button>";
+    var expandedToolbarHtml = audioControlsExpanded
+      ? scriptCardToolbarRowHtml(
+          premadeSyncStatusHtml,
+          paid ? paidActionsHtml : freeActionsHtml,
+          paid ? paidToolbarTrailingHtml : ""
+        )
+      : "";
     var audioSection = audioControlsExpanded
       ? '<div class="premade-card-audio-section">' +
         (!paid
@@ -18337,20 +18379,7 @@
         escapeHtml(backgroundNameById(publishedBackgroundID)) +
         "</span>" +
         "</div>" +
-        '<div class="app-card-actions script-card-actions-bar script-card-actions-bar--compact">' +
-        (paid ? paidActionsHtml : freeActionsHtml) +
-        (adminModeEnabled && isStreamableCloudPremade(p)
-          ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="hide" data-premade-id="' +
-            escapeHtml(p.id) +
-            '">Hide</button>'
-          : "") +
-        (adminModeEnabled
-          ? '  <button type="button" class="app-btn app-btn-secondary" data-premade-action="edit" data-premade-id="' +
-            escapeHtml(p.id) +
-            '">Edit</button>'
-          : "") +
-        "</div>" +
-        syncFooterHtml +
+        expandedToolbarHtml +
         "</div>"
       : "";
     var catalogClass = p.isCloudCatalog ? " catalog-card--extended" : " catalog-card--included";
@@ -18395,9 +18424,11 @@
       '<div class="app-card-meta">' +
       escapeHtml(p.description || "No description") +
       "</div>" +
-      '<span class="app-chip">' +
-      escapeHtml(chipLabel) +
-      "</span>" +
+      (hideCategoryChip
+        ? ""
+        : '<span class="app-chip">' +
+          escapeHtml(premadeLibraryCategoryDisplayName((p.categoryID || "").trim())) +
+          "</span>") +
       "</div>" +
       (isExpanded
         ? '<p class="app-card-text">' +
@@ -18516,6 +18547,7 @@
       bindPremadeCategoryNavActions();
       bindHiddenPremadeAdminActions();
       updatePremadeExpandAllToggleUi();
+      syncPremadeCategoryNavUi();
     }
 
     function finishDetailHtml(html) {
@@ -18524,6 +18556,7 @@
       bindPremadeCategoryNavActions();
       bindHiddenPremadeAdminActions();
       updatePremadeExpandAllToggleUi();
+      syncPremadeCategoryNavUi();
     }
 
     if (activePremadeCategoryId) {
