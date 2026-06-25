@@ -16,6 +16,10 @@
   var lastAppliedProfileDefaultsAt = 0;
   /** Latest `users/{uid}/meta/listening` (plays, streaks, last played); mirrors iOS UsageManager + Firestore. */
   var webListeningStats = null;
+  /** Public web beta: new signups are testers; Stripe checkout stays off until launch. Set false when going live. */
+  var WEB_PUBLIC_BETA_MODE = true;
+  var WEB_BETA_BANNER_DISMISS_KEY = "focusshiftWebBetaBannerDismissed";
+
   var currentUser = null;
   var currentScripts = [];
   var currentPlaylists = [];
@@ -56,6 +60,10 @@
   var scriptWorkOverlayTimerId = null;
   var scriptWorkOverlayStartedAt = 0;
   var activeAudio = null;
+  /** Web Audio gain for paid-tier volume boost above 100%. */
+  var playbackAudioContext = null;
+  var activeAudioGainNode = null;
+  var activeAudioSourceNode = null;
   var activeAudioScriptId = null;
   var activeAudioTitle = "";
   var activeVoicePreviewId = "";
@@ -120,7 +128,7 @@
   var PREF_ADMIN_MODE_KEY = "focusshiftWebAdminModeEnabled";
   var PREF_APP_THEME_KEY = "focusshiftWebAppTheme";
   var PREF_HOME_PLAYS_PERIOD_KEY = "focusshiftWebHomePlaysPeriod";
-  /** 0–1, applies to script / playlist / voice-adjust preview playback in this browser. */
+  /** 0–2 for Starter/Creator (boost above 100% via Web Audio); 0–1 on Free. */
   var PREF_PLAYBACK_VOLUME_KEY = "focusshiftWebPlaybackVolume";
   var adminModeEnabled = false;
   /** Premade Content Manager modal tab: working | premade | backgrounds | categories */
@@ -152,6 +160,10 @@
 
   applyAppThemeToDocument(readAppTheme());
 
+  function readPlaybackVolumeMax() {
+    return isWebPaidTierForAI() ? 2 : 1;
+  }
+
   function readPlaybackVolume() {
     try {
       var raw = localStorage.getItem(PREF_PLAYBACK_VOLUME_KEY);
@@ -159,7 +171,8 @@
       var n = parseFloat(raw);
       if (!isFinite(n)) return 1;
       if (n < 0) return 0;
-      if (n > 1) return 1;
+      var max = readPlaybackVolumeMax();
+      if (n > max) return max;
       return n;
     } catch (_e) {
       return 1;
@@ -170,16 +183,66 @@
     var n = Number(v);
     if (!isFinite(n)) return;
     if (n < 0) n = 0;
-    if (n > 1) n = 1;
+    var max = readPlaybackVolumeMax();
+    if (n > max) n = max;
     try {
       localStorage.setItem(PREF_PLAYBACK_VOLUME_KEY, String(n));
     } catch (_e) {}
   }
 
+  function teardownActiveAudioWebAudio() {
+    if (activeAudioSourceNode) {
+      try {
+        activeAudioSourceNode.disconnect();
+      } catch (_e) {}
+      activeAudioSourceNode = null;
+    }
+    activeAudioGainNode = null;
+  }
+
+  function ensureActiveAudioWebAudio(audioEl) {
+    if (!audioEl || !isWebPaidTierForAI()) {
+      teardownActiveAudioWebAudio();
+      return;
+    }
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      if (!playbackAudioContext) playbackAudioContext = new Ctx();
+      if (playbackAudioContext.state === "suspended") {
+        playbackAudioContext.resume().catch(function () {});
+      }
+      if (activeAudioSourceNode && activeAudioSourceNode.mediaElement === audioEl) return;
+      teardownActiveAudioWebAudio();
+      activeAudioSourceNode = playbackAudioContext.createMediaElementSource(audioEl);
+      activeAudioGainNode = playbackAudioContext.createGain();
+      activeAudioSourceNode.connect(activeAudioGainNode);
+      activeAudioGainNode.connect(playbackAudioContext.destination);
+    } catch (_eWa) {
+      teardownActiveAudioWebAudio();
+    }
+  }
+
+  function assignActiveAudioFromUrl(url) {
+    teardownActiveAudioWebAudio();
+    activeAudio = new Audio(url);
+    ensureActiveAudioWebAudio(activeAudio);
+    applyPlaybackVolumeToActiveAudio();
+    return activeAudio;
+  }
+
   function applyPlaybackVolumeToActiveAudio() {
     if (!activeAudio) return;
+    ensureActiveAudioWebAudio(activeAudio);
+    var vol = readPlaybackVolume();
     try {
-      activeAudio.volume = readPlaybackVolume();
+      if (vol <= 1 || !activeAudioGainNode) {
+        activeAudio.volume = vol;
+        if (activeAudioGainNode) activeAudioGainNode.gain.value = 1;
+      } else {
+        activeAudio.volume = 1;
+        activeAudioGainNode.gain.value = vol;
+      }
     } catch (_e) {}
   }
   var accountEscapeBound = false;
@@ -1469,6 +1532,10 @@
 
   function handleUserBackgroundImportSelected(ev) {
     if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.bgImport)) return;
+    if (!canAddWebCustomBackground()) {
+      setBackgroundsMessage(webCustomBackgroundLimitExceededMessage(), "error");
+      return;
+    }
     var input = ev && ev.target;
     var file = input && input.files && input.files[0] ? input.files[0] : null;
     if (input)
@@ -1586,7 +1653,7 @@
         "• Timer — Set a sleep timer from the clock icon.\n" +
         "• Tap a track row to play from that point (or pause if it's already playing).\n\n" +
         "Mini player\n" +
-        "• The bar at the bottom shows what's playing. Use play/pause, skip, seek, and volume.\n" +
+        "• The bar at the bottom shows what's playing. Use play/pause, stop, seek, and volume (Starter/Creator can boost above 100% if a track is quiet).\n" +
         "• Open expanded controls from the mini player when available on your device.",
     },
     voices: {
@@ -3575,7 +3642,9 @@
       tier === "creator" ? "is-creator" : tier === "starter" ? "is-starter" : "is-free";
     var upgradeHtml =
       tier !== "creator"
-        ? ' <button type="button" class="home-dashboard-upgrade-btn" id="home-dashboard-upgrade">Upgrade</button>'
+        ? ' <button type="button" class="home-dashboard-upgrade-btn" id="home-dashboard-upgrade">' +
+          (isWebPublicBetaActive() ? "Beta" : "Upgrade") +
+          "</button>"
         : "";
     var lastTitle = (ls.lastPlayedTitle && String(ls.lastPlayedTitle).trim()) || "";
     var lastTime = (ls.lastPlayedTime && String(ls.lastPlayedTime).trim()) || "";
@@ -3748,8 +3817,7 @@
     var url = s && s.lastPlayedAudioURL ? String(s.lastPlayedAudioURL).trim() : "";
     if (!url) return;
     stopActiveAudio();
-    activeAudio = new Audio(url);
-    applyPlaybackVolumeToActiveAudio();
+    assignActiveAudioFromUrl(url);
     activeAudioScriptId = null;
     activeAudioTitle = (s.lastPlayedTitle && String(s.lastPlayedTitle).trim()) || "Listen again";
     bindAudioLifecycle();
@@ -4481,6 +4549,9 @@
   }
 
   function subscriptionPlansInfoBodyWeb() {
+    if (isWebPublicBetaActive()) {
+      return "Web subscriptions open at launch. During beta, new accounts are Free-tier testers — browse and listen in the App Library. iOS subscriptions use the App Store when the app is available.";
+    }
     return "iOS uses the App Store for mobile subscriptions. Web upgrades here use Stripe Checkout with the same Firebase account. In Stripe test mode you can use card 4242 4242 4242 4242. Live checkout needs the four STRIPE_PRICE_* env vars on your API function.";
   }
 
@@ -4642,6 +4713,13 @@
       '<div class="app-admin-sticky-head">' +
       '<div id="admin-mode-banner" class="admin-mode-banner" role="status" hidden>' +
       "<strong>Admin mode is on.</strong> You can publish to the App Library catalog and edit premade entries in Firestore. Turn this off in Account → Admin mode when you are done." +
+      "</div>" +
+      '<div id="web-beta-banner" class="web-beta-banner" role="status" hidden>' +
+      '<div class="web-beta-banner-inner">' +
+      "<strong>Web beta.</strong> You are using Focus Shift as a beta tester on the Free plan — browse the App Library and listen to premade audio. Paid subscriptions will open at launch. " +
+      '<a class="web-beta-banner-link" href="/support/">Contact support</a> if you need help.' +
+      '<button type="button" class="web-beta-banner-dismiss" id="web-beta-banner-dismiss" aria-label="Dismiss beta banner">Dismiss</button>' +
+      "</div>" +
       "</div>" +
       '<nav class="site-top app-site-top-in-shell" aria-label="Focus Shift site">' +
       '  <a class="site-top-skip" href="#admin-main-tabs">Skip to content</a>' +
@@ -4972,6 +5050,10 @@
       "          </div>" +
       "        </div>" +
         '        <div id="account-plans-panel" class="account-plans-panel" hidden>' +
+      '          <div id="account-plans-beta-wrap" hidden>' +
+      '            <p class="app-muted account-plans-panel-note">Focus Shift on the web is in <strong>beta</strong>. You are on the Free plan as a beta tester — explore the App Library and listen to premade audio. Web subscriptions are not available yet; paid plans will open at launch (App Store and web).</p>' +
+      '            <p class="app-muted account-plans-panel-note">Need full access for testing? Reach us via <a href="/support/">Support</a>.</p>' +
+      "          </div>" +
       '          <div id="account-plans-stripe-wrap">' +
       '            <p class="app-muted account-plans-panel-note">Choose a billing period. You will be redirected to Stripe Checkout.</p>' +
       '            <div class="account-plans-grid">' +
@@ -5167,10 +5249,13 @@
       '<span class="mini-player-toggle-icon">' +
       '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>' +
       "</span></button>" +
+      '      <button type="button" id="mini-player-stop" class="mini-player-icon-btn mini-player-stop-btn" disabled aria-label="Stop">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="1"/></svg>' +
+      "</button>" +
       "    </div>" +
       '    <div class="mini-player-volume-cluster" role="group" aria-label="Volume">' +
       '      <button type="button" id="mini-player-vol-down" class="mini-player-step-btn" aria-label="Volume down">−</button>' +
-      '      <input type="range" id="mini-player-volume" min="0" max="1" step="0.02" value="1" aria-label="Volume" />' +
+      '      <input type="range" id="mini-player-volume" min="0" max="1" step="0.02" value="1" aria-label="Volume" title="Volume (Starter/Creator can go above 100%)" />' +
       '      <button type="button" id="mini-player-vol-up" class="mini-player-step-btn" aria-label="Volume up">+</button>' +
       "    </div>" +
       '    <div id="mini-player-time" class="mini-player-time">—</div>' +
@@ -5799,10 +5884,15 @@
             );
             return;
           }
+          if (guardWebBetaStripeCheckout()) return;
           postStripeCheckoutTier(pair[0], pair[1]);
         });
       }
     })();
+    var webBetaDismissBtn = document.getElementById("web-beta-banner-dismiss");
+    if (webBetaDismissBtn) {
+      webBetaDismissBtn.addEventListener("click", dismissWebBetaBanner);
+    }
     document.getElementById("account-btn-view-plans").addEventListener("click", function () {
       var panel = document.getElementById("account-plans-panel");
       if (!panel) return;
@@ -6067,23 +6157,32 @@
       }
       updateMiniPlayer();
     });
+    var miniPlayerStopBtn = document.getElementById("mini-player-stop");
+    if (miniPlayerStopBtn) {
+      miniPlayerStopBtn.addEventListener("click", function () {
+        stopActiveAudio();
+        rerenderMyLibraryCardsIfNeeded();
+        renderSelectedPlaylistDetail();
+        refreshHomeDailySparkTransportIfVisible();
+      });
+    }
     (function bindMiniPlayerVolume() {
       var vol = document.getElementById("mini-player-volume");
       var step = 0.07;
       function bump(delta) {
         var cur = readPlaybackVolume();
-        var next = Math.min(1, Math.max(0, cur + delta));
+        var next = Math.min(readPlaybackVolumeMax(), Math.max(0, cur + delta));
         writePlaybackVolume(next);
         applyPlaybackVolumeToActiveAudio();
-        if (vol) vol.value = String(next);
+        syncMiniPlayerVolumeUi();
       }
       if (vol) {
-        vol.value = String(readPlaybackVolume());
         vol.addEventListener("input", function () {
           var v = parseFloat(vol.value);
           if (!isFinite(v)) return;
           writePlaybackVolume(v);
           applyPlaybackVolumeToActiveAudio();
+          syncMiniPlayerVolumeUi();
         });
       }
       var down = document.getElementById("mini-player-vol-down");
@@ -6184,6 +6283,10 @@
     if (audioImportBtn && audioImportInput) {
       audioImportBtn.addEventListener("click", function () {
         if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.bgImport)) return;
+        if (!canAddWebCustomBackground()) {
+          setBackgroundsMessage(webCustomBackgroundLimitExceededMessage(), "error");
+          return;
+        }
         setBackgroundsMessage("Choose an audio file (MP3, M4A, WAV, …). Stored only in this browser.", "");
         audioImportInput.click();
       });
@@ -6357,6 +6460,7 @@
     if (sdkEl) sdkEl.textContent = (firebase && firebase.SDK_VERSION) || "-";
     applyAdminModeUi();
     syncPaidFeatureControls();
+    syncWebBetaUi();
   }
 
   function openPlaylistPicker(script, onSuccess) {
@@ -10363,6 +10467,8 @@
     parts.push(
       "Your imports sync across devices on Starter and Creator. This browser also keeps a local copy for faster mixing."
     );
+    var quotaLine = webCustomBackgroundQuotaLineHtml();
+    if (quotaLine) parts.push(" " + quotaLine);
     parts.push("</p>");
     if (none) {
       parts.push('<div class="app-bg-none-row">' + audioBuiltinRowMarkup(none, { showPinToMy: false }) + "</div>");
@@ -10433,6 +10539,7 @@
     renderAudioMyList();
     renderAudioAppList();
     renderAudioPageSubtab();
+    syncAudioImportQuotaUi();
   }
 
   function renderBackgrounds() {
@@ -10951,6 +11058,65 @@
     return 2;
   }
 
+  /** Mirrors iOS `SubscriptionGating.maxCustomBackgrounds` — null = unlimited. */
+  function webTierMaxCustomBackgrounds(tier) {
+    if (tier === "starter") return 5;
+    if (tier === "creator") return null;
+    return 0;
+  }
+
+  function webCustomBackgroundCount() {
+    return mergedUserBackgroundMetas().length;
+  }
+
+  function canAddWebCustomBackground() {
+    if (!isWebPaidTierForAI()) return false;
+    var limit = webTierMaxCustomBackgrounds(resolvedSubscriptionTier());
+    if (limit === null) return true;
+    return webCustomBackgroundCount() < limit;
+  }
+
+  function webCustomBackgroundLimitExceededMessage() {
+    var tier = resolvedSubscriptionTier();
+    var limit = webTierMaxCustomBackgrounds(tier);
+    var count = webCustomBackgroundCount();
+    var tierName = tier === "creator" ? "Creator" : tier === "starter" ? "Starter" : "Free";
+    if (limit === null) return "";
+    return (
+      "Your " +
+      tierName +
+      " plan allows " +
+      String(limit) +
+      " custom background" +
+      (limit === 1 ? "" : "s") +
+      ". You have " +
+      String(count) +
+      ". Delete an import or upgrade to Creator for unlimited."
+    );
+  }
+
+  function webCustomBackgroundQuotaLineHtml() {
+    if (!isWebPaidTierForAI()) return "";
+    var limit = webTierMaxCustomBackgrounds(resolvedSubscriptionTier());
+    if (limit === null) return "";
+    return (
+      '<span class="audio-import-quota">Imports: ' +
+      String(webCustomBackgroundCount()) +
+      " / " +
+      String(limit) +
+      ".</span>"
+    );
+  }
+
+  function syncAudioImportQuotaUi() {
+    var btn = document.getElementById("btn-audio-import");
+    if (!btn) return;
+    var atLimit = isWebPaidTierForAI() && !canAddWebCustomBackground();
+    btn.disabled = atLimit;
+    btn.setAttribute("aria-disabled", atLimit ? "true" : "false");
+    btn.title = atLimit ? webCustomBackgroundLimitExceededMessage() : "";
+  }
+
   function webTierUsageLimits(tier) {
     if (tier === "starter") {
       return { scriptsLimit: 50, wordsLimit: 3000, ttsLimit: 15000 };
@@ -11299,6 +11465,52 @@
     return resolveSubscriptionBillingChannel() === "manual";
   }
 
+  function webBetaBannerDismissed() {
+    try {
+      return localStorage.getItem(WEB_BETA_BANNER_DISMISS_KEY) === "1";
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function dismissWebBetaBanner() {
+    try {
+      localStorage.setItem(WEB_BETA_BANNER_DISMISS_KEY, "1");
+    } catch (_e) {}
+    syncWebBetaUi();
+  }
+
+  function isWebPublicBetaActive() {
+    if (!WEB_PUBLIC_BETA_MODE || !currentUser) return false;
+    if (profileUsesComplimentaryBilling()) return false;
+    return resolvedSubscriptionTier() === "free";
+  }
+
+  function webBetaCheckoutBlockedMessage() {
+    return "Web subscriptions open at launch. During beta you can browse the App Library and listen on the Free plan. Invited testers receive complimentary access from the team.";
+  }
+
+  function guardWebBetaStripeCheckout() {
+    if (!isWebPublicBetaActive()) return false;
+    setAccountMessage(webBetaCheckoutBlockedMessage(), "info");
+    showAppBanner("Beta — subscriptions coming soon", webBetaCheckoutBlockedMessage(), "info", {
+      duration: 9000,
+    });
+    return true;
+  }
+
+  function syncWebBetaUi() {
+    var banner = document.getElementById("web-beta-banner");
+    if (banner) {
+      banner.hidden = !isWebPublicBetaActive() || webBetaBannerDismissed();
+    }
+    syncAccountPlansPanelForBilling();
+    var viewPlansBtn = document.getElementById("account-btn-view-plans");
+    if (viewPlansBtn && viewPlansBtn.getAttribute("aria-expanded") !== "true") {
+      viewPlansBtn.textContent = viewPlansButtonLabelCollapsed();
+    }
+  }
+
   function renderAccountAiUsagePanel() {
     var group = document.getElementById("account-ai-usage-group");
     var el = document.getElementById("account-ai-usage-panel");
@@ -11473,6 +11685,9 @@
     }
     if (t === "starter") return "Perfect for getting started.";
     if (t === "creator") return "For creators who need more.";
+    if (isWebPublicBetaActive()) {
+      return "Beta tester on the Free plan — browse and listen in the App Library. Paid features and subscriptions open at launch.";
+    }
     return "Limited features on the Free tier. Upgrade for more scripts, voices, and cloud sync.";
   }
 
@@ -11545,6 +11760,9 @@
   }
 
   function viewPlansButtonLabelCollapsed() {
+    if (isWebPublicBetaActive()) {
+      return "About beta access";
+    }
     if (profileUsesAppStoreBilling() && resolvedSubscriptionTier() !== "free") {
       return "View plans";
     }
@@ -11554,9 +11772,12 @@
   function syncAccountPlansPanelForBilling() {
     var stripeWrap = document.getElementById("account-plans-stripe-wrap");
     var appStoreWrap = document.getElementById("account-plans-appstore-wrap");
+    var betaWrap = document.getElementById("account-plans-beta-wrap");
     var manualPaid = profileUsesComplimentaryBilling();
     var storePaid = !manualPaid && profileUsesAppStoreBilling() && resolvedSubscriptionTier() !== "free";
-    if (stripeWrap) stripeWrap.hidden = manualPaid || storePaid;
+    var betaActive = isWebPublicBetaActive();
+    if (betaWrap) betaWrap.hidden = !betaActive;
+    if (stripeWrap) stripeWrap.hidden = manualPaid || storePaid || betaActive;
     if (appStoreWrap) appStoreWrap.hidden = manualPaid || !storePaid;
     var btn = document.getElementById("account-btn-view-plans");
     if (btn && btn.getAttribute("aria-expanded") !== "true") {
@@ -11576,6 +11797,8 @@
     syncAccountBillingButtons();
     syncAccountPlansPanelForBilling();
     syncPaidFeatureControls();
+    syncWebBetaUi();
+    syncMiniPlayerVolumeUi();
   }
 
   function resetAccountPlansPanel() {
@@ -15142,9 +15365,15 @@
       if (activeVoicesTab === "my-voices") activeVoicesTab = "app-voices";
       if (activeAudioPageTab === "my-audio") activeAudioPageTab = "app-audio";
     }
+    if (readPlaybackVolume() > readPlaybackVolumeMax()) {
+      writePlaybackVolume(readPlaybackVolumeMax());
+      applyPlaybackVolumeToActiveAudio();
+    }
+    syncMiniPlayerVolumeUi();
     syncAccountDefaultMediaLabels();
     if (activeAdminTab === "library") renderPremade();
     if (activeAdminTab === "audio") renderAudioPage();
+    syncAudioImportQuotaUi();
   }
 
   function setAITextEditError(message, kind) {
@@ -16421,6 +16650,7 @@
         activeAudio.pause();
       } catch (_e) {}
     }
+    teardownActiveAudioWebAudio();
     if (activePreviewBlobURL) {
       try {
         URL.revokeObjectURL(activePreviewBlobURL);
@@ -16467,8 +16697,7 @@
     stopActiveAudio();
     var playKind = script.isPremade ? "premade_play" : "user_audio_play";
     reportCatalogStorageCostFromUrl(audioURL, playKind);
-    activeAudio = new Audio(audioURL);
-    applyPlaybackVolumeToActiveAudio();
+    assignActiveAudioFromUrl(audioURL);
     activeAudioScriptId = script.id;
     activeAudioTitle = script.title || "Audio";
     bindAudioLifecycle();
@@ -16517,8 +16746,7 @@
     activePlaylistIndex = index;
     activeAudioScriptId = script.id;
     reportCatalogStorageCostFromUrl(audioURL, script.isPremade ? "premade_play" : "user_audio_play");
-    activeAudio = new Audio(audioURL);
-    applyPlaybackVolumeToActiveAudio();
+    assignActiveAudioFromUrl(audioURL);
     activeAudioTitle = script.title || "Playlist audio";
     bindAudioLifecycle(function () {
       var next = activePlaylistIndex + 1;
@@ -16643,18 +16871,31 @@
   var MINI_PLAYER_PAUSE_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>';
 
+  function syncMiniPlayerVolumeUi() {
+    var volEl = document.getElementById("mini-player-volume");
+    if (!volEl) return;
+    var max = readPlaybackVolumeMax();
+    volEl.max = String(max);
+    volEl.step = max > 1 ? "0.04" : "0.02";
+    if (document.activeElement !== volEl) {
+      volEl.value = String(readPlaybackVolume());
+    }
+    volEl.title =
+      max > 1
+        ? "Volume — drag above 100% if a track is too quiet (Starter/Creator)"
+        : "Volume";
+  }
+
   function updateMiniPlayer() {
     var shell = document.getElementById("mini-player");
     if (!shell) return;
     shell.hidden = false;
     var titleEl = document.getElementById("mini-player-title");
     var toggleEl = document.getElementById("mini-player-toggle");
+    var stopEl = document.getElementById("mini-player-stop");
     var iconWrap = toggleEl ? toggleEl.querySelector(".mini-player-toggle-icon") : null;
     var timeEl = document.getElementById("mini-player-time");
-    var volEl = document.getElementById("mini-player-volume");
-    if (volEl && document.activeElement !== volEl) {
-      volEl.value = String(readPlaybackVolume());
-    }
+    syncMiniPlayerVolumeUi();
     if (!activeAudio) {
       shell.classList.add("mini-player-is-idle");
       if (titleEl) titleEl.textContent = "Nothing playing";
@@ -16663,10 +16904,12 @@
         toggleEl.setAttribute("aria-label", "Play");
         if (iconWrap) iconWrap.innerHTML = MINI_PLAYER_PLAY_SVG;
       }
+      if (stopEl) stopEl.disabled = true;
       if (timeEl) timeEl.textContent = "—";
       return;
     }
     shell.classList.remove("mini-player-is-idle");
+    if (stopEl) stopEl.disabled = false;
     if (titleEl) titleEl.textContent = activeAudioTitle || "Now playing";
     if (toggleEl) {
       toggleEl.disabled = false;
@@ -16757,6 +17000,7 @@
 
   function postStripeCheckoutTier(tier, billingInterval) {
     if (!currentUser) return;
+    if (guardWebBetaStripeCheckout()) return;
     setAccountMessage("Opening Stripe checkout…", "");
     currentUser
       .getIdToken(true)
@@ -16780,6 +17024,7 @@
 
   function postStripeStepUpCheckout() {
     if (!currentUser) return;
+    if (guardWebBetaStripeCheckout()) return;
     setAccountMessage("Opening Stripe checkout for usage add-on…", "");
     currentUser
       .getIdToken(true)

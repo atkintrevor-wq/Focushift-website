@@ -131,6 +131,45 @@
 .admin-mode-banner strong {
   color: #fde68a;
 }
+.web-beta-banner {
+  padding: 0.45rem 0.65rem 0.5rem;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #dbeafe;
+  background: rgba(59, 130, 246, 0.18);
+  border-bottom: 1px solid rgba(96, 165, 250, 0.35);
+}
+.web-beta-banner-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.65rem;
+}
+.web-beta-banner strong {
+  color: #bfdbfe;
+}
+.web-beta-banner-link {
+  color: #93c5fd;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.web-beta-banner-link:hover {
+  color: #dbeafe;
+}
+.web-beta-banner-dismiss {
+  margin-left: auto;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  color: #dbeafe;
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.web-beta-banner-dismiss:hover {
+  background: rgba(15, 23, 42, 0.55);
+}
 .app-admin-header {
   display: flex;
   flex-wrap: wrap;
@@ -3861,6 +3900,18 @@ body.fs-app-body.fs-modal-scroll-lock {
 .mini-player-icon-btn:disabled {
   opacity: 0.38;
   cursor: default;
+}
+.mini-player-stop-btn {
+  opacity: 0.92;
+}
+.mini-player-stop-btn:disabled {
+  opacity: 0.35;
+}
+.audio-import-quota {
+  display: inline-block;
+  margin-left: 0.35rem;
+  font-weight: 600;
+  color: #93c5fd;
 }
 .mini-player-icon-btn:focus-visible {
   outline: 2px solid rgba(96, 165, 250, 0.95);
