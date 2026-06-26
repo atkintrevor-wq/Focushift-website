@@ -202,20 +202,28 @@
     activeAudioGainNode = null;
   }
 
-  function ensureActiveAudioWebAudio(audioEl) {
-    if (!audioEl || !isWebPaidTierForAI()) {
-      teardownActiveAudioWebAudio();
-      return;
+  function resumePlaybackAudioContext() {
+    if (!playbackAudioContext) return Promise.resolve();
+    if (playbackAudioContext.state === "running") return Promise.resolve();
+    try {
+      return playbackAudioContext.resume().catch(function () {});
+    } catch (_e) {
+      return Promise.resolve();
     }
+  }
+
+  /** Route through Web Audio only when paid tier needs volume above 100%. */
+  function ensureActiveAudioWebAudio(audioEl) {
+    if (!audioEl || !isWebPaidTierForAI() || readPlaybackVolume() <= 1) return;
     try {
       var Ctx = window.AudioContext || window.webkitAudioContext;
       if (!Ctx) return;
       if (!playbackAudioContext) playbackAudioContext = new Ctx();
-      if (playbackAudioContext.state === "suspended") {
-        playbackAudioContext.resume().catch(function () {});
-      }
       if (activeAudioSourceNode && activeAudioSourceNode.mediaElement === audioEl) return;
       teardownActiveAudioWebAudio();
+      try {
+        if (!audioEl.crossOrigin) audioEl.crossOrigin = "anonymous";
+      } catch (_cors) {}
       activeAudioSourceNode = playbackAudioContext.createMediaElementSource(audioEl);
       activeAudioGainNode = playbackAudioContext.createGain();
       activeAudioSourceNode.connect(activeAudioGainNode);
@@ -228,24 +236,40 @@
   function assignActiveAudioFromUrl(url) {
     teardownActiveAudioWebAudio();
     activeAudio = new Audio(url);
-    ensureActiveAudioWebAudio(activeAudio);
     applyPlaybackVolumeToActiveAudio();
     return activeAudio;
   }
 
   function applyPlaybackVolumeToActiveAudio() {
     if (!activeAudio) return;
-    ensureActiveAudioWebAudio(activeAudio);
     var vol = readPlaybackVolume();
+    if (!isWebPaidTierForAI()) {
+      activeAudio.volume = vol;
+      return;
+    }
+    if (vol > 1) {
+      ensureActiveAudioWebAudio(activeAudio);
+      resumePlaybackAudioContext();
+    }
     try {
-      if (vol <= 1 || !activeAudioGainNode) {
-        activeAudio.volume = vol;
-        if (activeAudioGainNode) activeAudioGainNode.gain.value = 1;
+      if (activeAudioGainNode) {
+        activeAudio.volume = vol > 1 ? 1 : vol;
+        activeAudioGainNode.gain.value = vol > 1 ? vol : 1;
       } else {
-        activeAudio.volume = 1;
-        activeAudioGainNode.gain.value = vol;
+        activeAudio.volume = vol;
       }
     } catch (_e) {}
+  }
+
+  function playActiveAudioElement() {
+    if (!activeAudio) return Promise.reject(new Error("No active audio"));
+    var chain = Promise.resolve();
+    if (activeAudioGainNode && playbackAudioContext) {
+      chain = resumePlaybackAudioContext();
+    }
+    return chain.then(function () {
+      return activeAudio.play();
+    });
   }
   var accountEscapeBound = false;
   var playlistPickerScript = null;
@@ -3238,7 +3262,7 @@
     }
     if (isDailySparkActiveAudio()) {
       if (activeAudio.paused) {
-        activeAudio.play().catch(function () {
+        playActiveAudioElement().catch(function () {
           setMessage("Could not play Daily Spark.", "error");
         });
       } else {
@@ -3850,8 +3874,7 @@
     activeAudioScriptId = null;
     activeAudioTitle = (s.lastPlayedTitle && String(s.lastPlayedTitle).trim()) || "Listen again";
     bindAudioLifecycle();
-    activeAudio
-      .play()
+    playActiveAudioElement()
       .then(function () {
         updateMiniPlayer();
         renderScripts(currentScripts);
@@ -6178,7 +6201,7 @@
     document.getElementById("mini-player-toggle").addEventListener("click", function () {
       if (!activeAudio) return;
       if (activeAudio.paused) {
-        activeAudio.play().catch(function () {});
+        playActiveAudioElement().catch(function () {});
       } else {
         activeAudio.pause();
       }
@@ -16855,7 +16878,7 @@
     }
     if (activeAudioScriptId === script.id && activeAudio) {
       if (activeAudio.paused) {
-        activeAudio.play().catch(function () {
+        playActiveAudioElement().catch(function () {
           reportClientError("Could not play audio in browser.", "playback", {
             script_id: script.id,
           });
@@ -16877,8 +16900,7 @@
     activeAudioScriptId = script.id;
     activeAudioTitle = script.title || "Audio";
     bindAudioLifecycle();
-    activeAudio
-      .play()
+    playActiveAudioElement()
       .then(function () {
         updateMiniPlayer();
         rerenderMyLibraryCardsIfNeeded();
@@ -16938,8 +16960,7 @@
         playQueueAt(next);
       }
     });
-    activeAudio
-      .play()
+    playActiveAudioElement()
       .then(function () {
         updateMiniPlayer();
         renderSelectedPlaylistDetail();
@@ -16995,7 +17016,7 @@
       });
     if (isPlayingThisQueue && activeAudioScriptId === scriptId && activeAudio) {
       if (activeAudio.paused) {
-        activeAudio.play().catch(function () {
+        playActiveAudioElement().catch(function () {
           setPlaylistsMessage("Could not resume in browser.", "error");
         });
       } else {
