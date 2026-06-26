@@ -2121,9 +2121,26 @@
     return "Notice";
   }
 
+  /** Extract a readable message from backend / ElevenLabs error payloads. */
+  function parseBackendErrorMessage(raw) {
+    if (raw == null) return "";
+    var s = String(raw).trim();
+    if (!s) return "";
+    try {
+      var j = JSON.parse(s);
+      if (j.detail) {
+        if (typeof j.detail === "string") return j.detail;
+        if (j.detail.message) return String(j.detail.message);
+      }
+      if (j.error) return parseBackendErrorMessage(j.error);
+      if (j.message) return String(j.message);
+    } catch (_e) {}
+    return s;
+  }
+
   function showAppBanner(title, detail, type, options) {
     options = options || {};
-    var textDetail = String(detail || "").trim();
+    var textDetail = parseBackendErrorMessage(detail) || String(detail || "").trim();
     var textTitle = String(title || "").trim();
     if (!textDetail && !textTitle) {
       hideAppBanner();
@@ -9356,8 +9373,7 @@
         setVoiceAdjustMessage("", "");
       })
       .catch(function (e) {
-        setVoicesMessage(e.message || "Could not open adjustment step.", "error");
-        openVoiceCompleteModal(cloneAdjustVoiceName);
+        setVoicesMessage(parseBackendErrorMessage(e.message) || "Could not open adjustment step.", "error");
       });
   }
 
@@ -9390,7 +9406,7 @@
     }).then(function (resp) {
       if (!resp.ok) {
         return resp.json().then(function (json) {
-          throw new Error((json && json.error) || "Could not preview voice.");
+          throw new Error(parseBackendErrorMessage(json && json.error) || "Could not preview voice.");
         }).catch(function (e) {
           if (e && e.message) throw e;
           throw new Error("Could not preview voice.");
