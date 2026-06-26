@@ -2477,8 +2477,9 @@
           applyAdminModeUi();
           refreshAppLibraryPremadesFromCloud();
           renderAccountInsights();
-          syncAccountSubscriptionHeadline();
-          if (activeAdminTab === "library") renderPremade();
+    syncAccountSubscriptionHeadline();
+    syncAccountDeleteModalUi();
+    if (activeAdminTab === "library") renderPremade();
         },
         function () {}
       );
@@ -5209,7 +5210,7 @@
       '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-export-json">Export my data (JSON)</button>' +
       '          <button type="button" class="app-btn app-btn-danger" id="account-privacy-delete-account">Delete account…</button>' +
       "        </div>" +
-      '        <p class="app-muted account-section-card__text" style="margin-top:0.55rem;">You can delete your account from the web (server-side, same cloud cleanup as iOS). Local data on phones or tablets is cleared the next time that app syncs or you remove the app.</p>' +
+      '        <p class="app-muted account-section-card__text" style="margin-top:0.55rem;">Stripe subscriptions cancel automatically when you delete. App Store subscriptions must be canceled on your iPhone or iPad first.</p>' +
       '        <div class="account-section-card__btn-row">' +
       '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>' +
       '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>' +
@@ -5230,8 +5231,8 @@
       '<div id="account-delete-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="account-delete-title">' +
       '    <h3 id="account-delete-title">Delete account</h3>' +
-      '    <p class="app-muted" style="margin:0 0 0.5rem;">This removes your sign-in and deletes your cloud library (scripts, playlists, cloned voices, and hosted audio). Export first if you need a copy. Other devices signed into this account will lose access.</p>' +
-      '    <p class="app-muted" style="margin:0 0 0.55rem;">This is not the same as canceling a subscription or switching to Free—use subscription management when web billing is available.</p>' +
+      '    <p id="account-delete-notice" class="app-muted" style="margin:0 0 0.55rem;line-height:1.45;">This removes your sign-in and deletes your cloud library (scripts, playlists, cloned voices, and hosted audio). Export first if you need a copy.</p>' +
+      '    <p id="account-delete-appstore-block" class="app-inline-msg is-error" role="alert" hidden style="margin:0 0 0.55rem;">Cancel your App Store subscription before deleting. On iPhone or iPad: Settings → Apple ID → Subscriptions → Focus Shift.</p>' +
       '    <label class="account-pref-row" for="account-delete-phrase">Type <strong>DELETE</strong> to confirm</label>' +
       '    <input id="account-delete-phrase" type="text" autocomplete="off" placeholder="DELETE" style="width:100%;box-sizing:border-box;margin-bottom:0.45rem;padding:0.55rem;border-radius:10px;">' +
       '    <div id="account-delete-error" class="app-inline-msg" style="display:none;margin-bottom:0.35rem;"></div>' +
@@ -5959,9 +5960,7 @@
       var confirmBtn = document.getElementById("account-delete-confirm");
       var errEl = document.getElementById("account-delete-error");
       function syncDeletePhrase() {
-        if (!phraseEl || !confirmBtn) return;
-        var ok = phraseEl.value.trim().toUpperCase() === "DELETE";
-        confirmBtn.disabled = !ok;
+        syncAccountDeleteModalUi();
       }
       if (phraseEl) {
         phraseEl.addEventListener("input", syncDeletePhrase);
@@ -10697,6 +10696,43 @@
       });
   }
 
+  function hasActiveAppStoreSubscriptionWeb() {
+    return profileUsesAppStoreBilling() && isWebPaidTierForAI();
+  }
+
+  function accountDeleteBillingNoticeWeb() {
+    if (hasActiveAppStoreSubscriptionWeb()) {
+      return (
+        "Cancel your App Store subscription before you can delete this account. On iPhone or iPad: Settings → Apple ID → Subscriptions → Focus Shift. " +
+        "App Store and web billing are separate — deleting here does not cancel Apple billing."
+      );
+    }
+    if (profileUsesStripeBilling() && isWebPaidTierForAI()) {
+      return (
+        "Your Stripe subscription will be canceled immediately when you delete this account. You will not be charged again. " +
+        "This also removes your sign-in and deletes your cloud library (scripts, playlists, cloned voices, and hosted audio). Export first if you need a copy."
+      );
+    }
+    return (
+      "This removes your sign-in and deletes your cloud library (scripts, playlists, cloned voices, and hosted audio). Export first if you need a copy. " +
+      "Other devices signed into this account will lose access."
+    );
+  }
+
+  function syncAccountDeleteModalUi() {
+    var noticeEl = document.getElementById("account-delete-notice");
+    var blockEl = document.getElementById("account-delete-appstore-block");
+    var confirmBtn = document.getElementById("account-delete-confirm");
+    var phraseEl = document.getElementById("account-delete-phrase");
+    if (noticeEl) noticeEl.textContent = accountDeleteBillingNoticeWeb();
+    var blocked = hasActiveAppStoreSubscriptionWeb();
+    if (blockEl) blockEl.hidden = !blocked;
+    if (confirmBtn && phraseEl) {
+      var phraseOk = phraseEl.value.trim().toUpperCase() === "DELETE";
+      confirmBtn.disabled = !phraseOk || blocked;
+    }
+  }
+
   function openAccountDeleteModal() {
     var bd = document.getElementById("account-delete-backdrop");
     var phraseEl = document.getElementById("account-delete-phrase");
@@ -10705,6 +10741,7 @@
     if (!bd || !phraseEl) return;
     phraseEl.value = "";
     if (confirmBtn) confirmBtn.disabled = true;
+    syncAccountDeleteModalUi();
     if (errEl) {
       errEl.style.display = "none";
       errEl.textContent = "";
@@ -10739,6 +10776,14 @@
   function runDeleteAccountWeb() {
     if (!currentUser) {
       setPrivacyMessage("You are not signed in.", "error");
+      return;
+    }
+    if (hasActiveAppStoreSubscriptionWeb()) {
+      setPrivacyMessage(
+        "Cancel your App Store subscription on iPhone or iPad first (Settings → Apple ID → Subscriptions), then delete your account.",
+        "error"
+      );
+      syncAccountDeleteModalUi();
       return;
     }
     if (!cloudFunctions) {
@@ -10781,6 +10826,17 @@
         if (code === "functions/not-found") {
           msg =
             "Server step not found. Deploy the deleteOwnAccount Cloud Function (see functions/index.js), then try again.";
+        } else if (
+          code === "functions/failed-precondition" ||
+          String(msg).toLowerCase().indexOf("app store subscription") >= 0
+        ) {
+          msg =
+            "Cancel your App Store subscription on iPhone or iPad first (Settings → Apple ID → Subscriptions), then try again.";
+        } else if (
+          String(msg).toLowerCase().indexOf("stripe subscription") >= 0 ||
+          String(msg).toLowerCase().indexOf("manage billing") >= 0
+        ) {
+          // keep server message for Stripe cancel failures
         } else if (
           code === "auth/requires-recent-login" ||
           String(msg).toLowerCase().indexOf("recent login") >= 0
