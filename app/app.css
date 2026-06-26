@@ -4651,13 +4651,23 @@ body.fs-app-body.fs-modal-scroll-lock {
   display: flex;
   flex-direction: column;
   gap: 0.45rem;
+  padding: 0.85rem 0.95rem;
+  border-style: solid;
+  border-radius: 12px;
+  background: var(--app-modal-row-bg, rgba(15, 23, 42, 0.35));
+  border-color: var(--app-surface-card-border, rgba(148, 163, 184, 0.22));
 }
 .voice-complete-row {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #d5e1f6;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: var(--app-empty-hint-fg, var(--text, #e8edf7));
   font-size: 0.9rem;
+  line-height: 1.45;
+}
+.voice-complete-row span[aria-hidden="true"] {
+  flex-shrink: 0;
+  line-height: 1.35;
 }
 .voice-script-paragraph {
   margin: 0 0 0.66rem;

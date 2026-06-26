@@ -5662,7 +5662,7 @@
       "      <h3>Voice Cloned Successfully!</h3>" +
       '      <p id="voice-complete-subtitle" class="app-muted" style="margin:0;">Your cloned voice is ready.</p>' +
       "    </div>" +
-      '    <div class="app-empty-hint voice-complete-info" style="border-style:solid;padding:0.7rem;">' +
+      '    <div class="app-empty-hint voice-complete-info">' +
       '      <div class="voice-complete-row"><span aria-hidden="true">🎙️</span><span>Your cloned voice is available in My Voices</span></div>' +
       '      <div class="voice-complete-row"><span aria-hidden="true">🎛️</span><span>You can adjust settings anytime</span></div>' +
       '      <div class="voice-complete-row"><span aria-hidden="true">🗑️</span><span>Delete it anytime from voice settings</span></div>' +
@@ -9367,28 +9367,53 @@
     setVoiceAdjustMessage("", "");
   }
 
-  function previewVoiceAdjust() {
-    if (!cloneAdjustElevenLabsVoiceId || !currentUser) return;
-    setVoiceAdjustMessage("Generating preview...", "");
-    currentUser
-      .getIdToken(true)
-      .then(function (token) {
-        return fetch(backendBaseURL() + "/text-to-speech", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer " + token,
-          },
-          body: JSON.stringify({
-            text: "Hello, this is a preview of how I sound.",
-            voiceID: cloneAdjustElevenLabsVoiceId,
-            voice_settings: currentVoiceAdjustPayload(),
-          }),
+  function fetchClonedVoiceTtsPreview(text, localVoiceId, voiceSettings, onError) {
+    if (!currentUser || !localVoiceId) {
+      var signInMsg = "Sign in to preview this voice.";
+      if (typeof onError === "function") onError(signInMsg);
+      return Promise.reject(new Error(signInMsg));
+    }
+    return currentUser.getIdToken(true).then(function (token) {
+      var body = {
+        text: text || "Hello, this is a preview of how I sound.",
+        voiceID: localVoiceId,
+      };
+      if (voiceSettings) body.voice_settings = voiceSettings;
+      return fetch(backendBaseURL() + "/text-to-speech", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(body),
+      });
+    }).then(function (resp) {
+      if (!resp.ok) {
+        return resp.json().then(function (json) {
+          throw new Error((json && json.error) || "Could not preview voice.");
+        }).catch(function (e) {
+          if (e && e.message) throw e;
+          throw new Error("Could not preview voice.");
         });
-      })
-      .then(function (resp) {
-        if (!resp.ok) throw new Error("Could not generate preview.");
-        return resp.blob();
+      }
+      return resp.blob();
+    });
+  }
+
+  function previewVoiceAdjust() {
+    if (!cloneAdjustLocalVoiceId || !currentUser) return;
+    setVoiceAdjustMessage("Generating preview...", "");
+    fetchClonedVoiceTtsPreview(
+      "Hello, this is a preview of how I sound.",
+      cloneAdjustLocalVoiceId,
+      currentVoiceAdjustPayload(),
+      function (msg) {
+        setVoiceAdjustMessage(msg, "error");
+      }
+    )
+      .then(function (blob) {
+        if (!blob) throw new Error("Could not generate preview.");
+        return blob;
       })
       .then(function (blob) {
         if (activePreviewBlobURL) {
@@ -9893,8 +9918,44 @@
     return activeAudio.play();
   }
 
+  function isClonedVoiceForPreview(voice) {
+    if (!voice || !voice.id) return false;
+    if (isClonedVoiceOption(voice)) return true;
+    return !!(voice.elevenLabsVoiceID && String(voice.elevenLabsVoiceID).trim());
+  }
+
+  function clonedVoiceSettingsForPreview(voice) {
+    var cloned = clonedVoiceById(voice.id);
+    if (cloned && cloned.settings) return normalizeVoiceSettingsPayload(cloned.settings);
+    return null;
+  }
+
   function previewVoiceSample(voice, onError) {
     if (!voice || !voice.id) return Promise.resolve(false);
+    if (isClonedVoiceForPreview(voice)) {
+      setVoicesMessage('Generating preview for "' + (voice.name || "voice") + '"...', "");
+      return fetchClonedVoiceTtsPreview(
+        "Hello, this is a preview of how I sound.",
+        voice.id,
+        clonedVoiceSettingsForPreview(voice),
+        onError
+      )
+        .then(function (blob) {
+          var blobURL = URL.createObjectURL(blob);
+          return startVoicePreviewPlayback(blobURL, voice, true);
+        })
+        .then(function () {
+          updateMiniPlayer();
+          setVoicesMessage("Playing preview.", "success");
+          return true;
+        })
+        .catch(function (e) {
+          var errMsg = e.message || "Could not preview voice.";
+          if (typeof onError === "function") onError(errMsg);
+          else setVoicesMessage(errMsg, "error");
+          return false;
+        });
+    }
     var sampleFile = (voice.file && String(voice.file).trim()) || "";
     if (sampleFile) {
       var sampleUrl = voiceSampleAssetUrl(sampleFile);
