@@ -2641,6 +2641,43 @@
     return "(T)";
   }
 
+  function homePlaysStatChipInnerHtml(ls, period) {
+    return (
+      '<span class="home-dashboard-stat-icon">' +
+      homeDashboardIconSvg("headphones") +
+      "</span>" +
+      "<span>" +
+      escapeHtml(String(playsCountForHomePeriod(ls, period))) +
+      " plays " +
+      escapeHtml(homePlaysPeriodParen(period)) +
+      "</span>"
+    );
+  }
+
+  function homePlaysStatsRowHtml(ls) {
+    var periods = ["week", "month", "year", "total"];
+    var period = readHomePlaysPeriod();
+    var expandedItems = periods
+      .map(function (p) {
+        return (
+          '<span class="home-dashboard-inline-stat home-dashboard-plays-stat tone-purple">' +
+          homePlaysStatChipInnerHtml(ls, p) +
+          "</span>"
+        );
+      })
+      .join("");
+    return (
+      '<div class="home-dashboard-plays-wrap">' +
+      '<div class="home-dashboard-plays-expanded" aria-label="Play counts by period">' +
+      expandedItems +
+      "</div>" +
+      '<button type="button" class="home-dashboard-inline-stat home-dashboard-plays-btn home-dashboard-plays-compact tone-purple" id="home-plays-period" title="Tap to cycle: week → month → year → all time">' +
+      homePlaysStatChipInnerHtml(ls, period) +
+      "</button>" +
+      "</div>"
+    );
+  }
+
   function readListenShortcutRaw() {
     try {
       var raw = (localStorage.getItem(PREF_LISTEN_SHORTCUT_KEY) || "playlists").trim();
@@ -3629,10 +3666,7 @@
   }
 
   function buildHomeDashboardCardHtml(ls) {
-    var period = readHomePlaysPeriod();
     var effStreak = effectiveStreakDisplayed(ls);
-    var playsShown = playsCountForHomePeriod(ls, period);
-    var periodParen = escapeHtml(homePlaysPeriodParen(period));
     var bestStreak = intFromFirestoreListening(ls.bestStreakCount);
     var bestStreakInline =
       bestStreak > 0
@@ -3733,15 +3767,7 @@
       "-day streak" +
       bestStreakInline +
       "</span></span>" +
-      '<button type="button" class="home-dashboard-inline-stat home-dashboard-plays-btn tone-purple" id="home-plays-period" title="Tap to cycle: week → month → year → all time">' +
-      '<span class="home-dashboard-stat-icon">' +
-      homeDashboardIconSvg("headphones") +
-      "</span>" +
-      "<span>" +
-      escapeHtml(String(playsShown)) +
-      " plays " +
-      periodParen +
-      "</span></button>" +
+      homePlaysStatsRowHtml(ls) +
       "</div>" +
       '<div class="home-dashboard-plan-row">' +
       '<span class="home-dashboard-plan-pill ' +
@@ -4756,7 +4782,7 @@
       '    <p class="app-welcome-line">Welcome, <strong>' +
       escapeHtml(welcomeName) +
       "</strong></p>" +
-      '    <p class="app-welcome-tagline">Where Focus Becomes Power</p>' +
+      '    <p class="app-welcome-tagline">Where Focus Becomes Power!</p>' +
       "  </div>" +
       "</header>" +
       '<div class="app-admin-tab-box">' +

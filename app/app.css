@@ -1379,6 +1379,28 @@ html.fs-app[data-app-theme="light"] .media-card-row.catalog-card--extended {
   cursor: pointer;
   transition: opacity 0.12s ease;
 }
+.home-dashboard-plays-wrap {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+}
+.home-dashboard-plays-expanded {
+  display: none;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 0.875rem;
+}
+.home-dashboard-plays-compact {
+  display: inline-flex;
+}
+@media (min-width: 720px) {
+  .home-dashboard-plays-expanded {
+    display: inline-flex;
+  }
+  .home-dashboard-plays-compact {
+    display: none;
+  }
+}
 .home-dashboard-plays-btn:hover {
   opacity: 0.82;
 }
