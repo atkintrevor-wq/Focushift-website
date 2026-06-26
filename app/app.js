@@ -80,6 +80,8 @@
   var activeLibraryTab = "my-library";
   /** null = category grid; otherwise category id (or __other__) for premade detail. */
   var activePremadeCategoryId = null;
+  /** After opening a category from search, scroll this premade card into view once. */
+  var scrollPremadeIdIntoView = null;
   var ADMIN_TAB_STORAGE_KEY = "focusshiftWebAdminTab";
   var PREF_RESUME_ADMIN_KEY = "focusshiftWebPrefResumeAdmin";
   var PREF_LIBRARY_SUB_KEY = "focusshiftWebPrefLibrarySub";
@@ -13883,6 +13885,62 @@
     return premadeItemsForCategoryDetail(list, categoryName, query).length;
   }
 
+  function premadeSearchResultsForList(grouped) {
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
+    if (!q) return [];
+    var results = [];
+    mergedPremadeLibraryCategories().forEach(function (c) {
+      var items = grouped.byId[c.id] || [];
+      premadeItemsForCategoryDetail(items, c.name, q).forEach(function (p) {
+        results.push({ premade: p, categoryId: c.id, categoryName: c.name });
+      });
+    });
+    if (grouped.other.length) {
+      premadeItemsForCategoryDetail(grouped.other, "Other", q).forEach(function (p) {
+        results.push({ premade: p, categoryId: "__other__", categoryName: "Other" });
+      });
+    }
+    results.sort(function (a, b) {
+      return String(a.premade.title || "").localeCompare(String(b.premade.title || ""), undefined, {
+        sensitivity: "base",
+      });
+    });
+    return results;
+  }
+
+  function premadeSearchResultRowHtml(result) {
+    return (
+      '<button type="button" class="premade-category-selector-card premade-search-result-card" data-premade-search-open="' +
+      escapeHtml(result.premade.id) +
+      '" data-premade-search-category="' +
+      escapeHtml(result.categoryId) +
+      '">' +
+      '  <span class="premade-search-result-icon" aria-hidden="true">🎧</span>' +
+      '  <span class="premade-category-selector-copy">' +
+      '    <span class="premade-category-selector-name">' +
+      escapeHtml(result.premade.title || "Untitled Premade") +
+      "</span>" +
+      '    <span class="premade-category-selector-sub">' +
+      escapeHtml(result.categoryName) +
+      " · App Library</span>" +
+      "  </span>" +
+      '  <span class="premade-category-selector-chevron" aria-hidden="true">\u203a</span>' +
+      "</button>"
+    );
+  }
+
+  function premadeSearchResultsListHtml(grouped) {
+    var results = premadeSearchResultsForList(grouped);
+    if (!results.length) {
+      return '<p class="app-muted" style="margin:0;">No premade scripts match your search.</p>';
+    }
+    return (
+      '<div class="premade-category-selector-list">' +
+      results.map(premadeSearchResultRowHtml).join("") +
+      "</div>"
+    );
+  }
+
   function premadeCategoryRowsForList(grouped) {
     var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
     var rows = mergedPremadeLibraryCategories().map(function (c) {
@@ -14002,6 +14060,20 @@
         var cid = btn.getAttribute("data-premade-category-open");
         if (!cid) return;
         activePremadeCategoryId = cid;
+        renderPremade();
+      });
+    });
+    list.querySelectorAll("[data-premade-search-open]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var premadeId = btn.getAttribute("data-premade-search-open");
+        var categoryId = btn.getAttribute("data-premade-search-category");
+        if (!premadeId || !categoryId) return;
+        scrollPremadeIdIntoView = premadeId;
+        sectionSearchQuery.library = "";
+        sectionSearchOpen.library = false;
+        syncSectionSearchUi("library");
+        activePremadeCategoryId = categoryId;
+        setPremadeCardAudioControlsExpanded(premadeId, true);
         renderPremade();
       });
     });
@@ -18956,6 +19028,20 @@
       bindHiddenPremadeAdminActions();
       updatePremadeExpandAllToggleUi();
       syncPremadeCategoryNavUi();
+      if (scrollPremadeIdIntoView) {
+        var pid = scrollPremadeIdIntoView;
+        scrollPremadeIdIntoView = null;
+        requestAnimationFrame(function () {
+          var found = list.querySelector('[data-premade-id="' + pid + '"]');
+          if (found) {
+            try {
+              found.scrollIntoView({ block: "nearest", behavior: "smooth" });
+            } catch (_e) {
+              found.scrollIntoView({ block: "nearest" });
+            }
+          }
+        });
+      }
     }
 
     if (activePremadeCategoryId) {
@@ -18993,10 +19079,8 @@
       return;
     }
 
-    if (hasSearch && !premadeCategoryRowsForList(grouped).length) {
-      finishListHtml(
-        '<p class="app-muted" style="margin:0 0 0.85rem;">No premade scripts match your search.</p>'
-      );
+    if (hasSearch && !activePremadeCategoryId) {
+      finishListHtml(premadeSearchResultsListHtml(grouped));
       return;
     }
 

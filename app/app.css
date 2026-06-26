@@ -4689,6 +4689,18 @@ body.fs-app-body.fs-modal-scroll-lock {
   gap: 0.45rem;
   flex-wrap: wrap;
 }
+.premade-search-result-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.13);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
 .premade-category-selector-list {
   display: flex;
   flex-direction: column;
