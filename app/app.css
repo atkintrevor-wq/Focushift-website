@@ -455,6 +455,28 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
 .account-ios-group {
   margin: 0;
 }
+.account-manage-account-block {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+.account-ios-group--manage-label {
+  margin-bottom: -0.35rem;
+}
+.account-ios-group--manage-label .account-ios-group__header {
+  margin-bottom: 0;
+}
+.account-ios-group__lede {
+  margin: 0 0 0.55rem;
+  padding: 0 0.15rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--muted, #94a3b8);
+}
+.account-ios-group__lede--footer {
+  margin: 0.35rem 0 0;
+  font-size: 0.82rem;
+}
 .account-ios-group__header {
   display: flex;
   align-items: center;

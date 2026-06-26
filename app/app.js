@@ -4619,7 +4619,7 @@
     if (profileUsesStripeBilling()) {
       return "Your plan is billed on the web (Stripe). Use Manage billing to cancel, update your card, or view invoices. Use View plans & upgrade to change tier. Changes sync to the iOS app when you sign in with the same account.";
     }
-    return "App Store billing is managed on iPhone or iPad: open the app → Account → Manage Subscriptions. When your plan becomes Free, your scripts, playlists, cloned voices, and cloud audio are removed from our servers. Content already on this device can remain. That is different from Delete account, which removes your sign-in and data from our services entirely.";
+    return "App Store billing is managed on iPhone or iPad: open the app → Account → Manage Account → Subscription & Billing. When your plan becomes Free, your scripts, playlists, cloned voices, and cloud audio are removed from our servers. Content already on this device can remain. That is different from Delete Account, which removes your sign-in and data from our services entirely.";
   }
 
   function subscriptionPlansInfoBodyWeb() {
@@ -4768,7 +4768,7 @@
             : devicesSharingInfoBodyWeb()
         );
       } else if (btn.id === "account-ai-usage-info") {
-        showAccountInfoModal("AI Script Usage", aiScriptUsageInfoBodyWeb());
+        showAccountInfoModal("AI Usage", aiScriptUsageInfoBodyWeb());
       }
     });
   }
@@ -4786,7 +4786,7 @@
     root.innerHTML =
       '<div class="app-admin-sticky-head">' +
       '<div id="admin-mode-banner" class="admin-mode-banner" role="status" hidden>' +
-      "<strong>Admin mode is on.</strong> You can publish to the App Library catalog and edit premade entries in Firestore. Turn this off in Account → Admin mode when you are done." +
+      "<strong>Admin mode is on.</strong> You can publish to the App Library catalog and edit premade entries in Firestore. Turn this off in Account → Advanced when you are done." +
       "</div>" +
       '<div id="web-beta-banner" class="web-beta-banner" role="status" hidden>' +
       '<div class="web-beta-banner-inner">' +
@@ -5103,8 +5103,12 @@
       "          </div>" +
       "        </div>" +
       "      </section>" +
+      '      <div class="account-manage-account-block">' +
+      '      <section class="account-ios-group account-ios-group--manage-label" aria-labelledby="account-manage-account-heading">' +
+      accountIosGroupHeader("Manage Account", null, null) +
+      "      </section>" +
       '      <section class="account-ios-group account-subscription-section" id="account-subscription-group">' +
-      accountIosGroupHeader("Subscription", "account-subscription-info", "About subscriptions and billing") +
+      accountIosGroupHeader("Subscription & Billing", "account-subscription-info", "About subscriptions and billing") +
       '        <div class="account-ios-list account-ios-list--subscription">' +
       '          <p class="account-subscription-plan-line tier-free" id="account-subscription-headline">Your plan: Free</p>' +
       '          <p class="app-muted account-subscription-desc" id="account-subscription-description">Limited features on the Free tier.</p>' +
@@ -5155,12 +5159,12 @@
       "              <li><strong>Starter</strong> — More scripts, voices, cloud sync, and AI usage.</li>" +
       "              <li><strong>Creator</strong> — Higher limits, sharing, and voice cloning.</li>" +
       "            </ul>" +
-      '            <p class="app-muted account-plans-panel-note" style="margin-top:0.55rem;">Open <strong>Focus Shift</strong> on your iPhone or iPad → <strong>Account</strong> → <strong>Subscription</strong> → <strong>View Plans &amp; Upgrade</strong> or <strong>Manage Subscriptions</strong>.</p>' +
+      '            <p class="app-muted account-plans-panel-note" style="margin-top:0.55rem;">Open <strong>Focus Shift</strong> on your iPhone or iPad → <strong>Account</strong> → <strong>Manage Account</strong> → <strong>Subscription &amp; Billing</strong>.</p>' +
       "          </div>" +
       "        </div>" +
       "      </section>" +
       '      <section class="account-ios-group" id="account-ai-usage-group" hidden>' +
-      accountIosGroupHeader("AI Script Usage", null, null) +
+      accountIosGroupHeader("AI Usage", null, null) +
       '        <div id="account-ai-usage-panel" class="account-ios-list account-ios-list--usage"></div>' +
       '        <div id="account-ai-usage-addon-host" class="account-ios-addon-host"></div>' +
       "      </section>" +
@@ -5186,9 +5190,18 @@
       '          <button type="button" class="app-btn app-btn-secondary" id="account-refresh-library-stats">Refresh Library Stats</button>' +
       "        </div>" +
       "      </section>" +
+      '      <section class="account-ios-group" id="account-security-group">' +
+      accountIosGroupHeader("Security", null, null) +
+      '        <p class="app-muted account-ios-group__lede">Web sign-in uses email/password or Google. Sign in with Apple on the iOS app. Biometric unlock is iOS-only today.</p>' +
+      '        <p id="account-apple-link-status" class="app-muted account-ios-group__lede">Apple Sign In on the web is unavailable while iOS and web share one Firebase Apple Services ID (bundle ID). Use the iOS app for Apple login.</p>' +
+      '        <div class="account-ios-actions account-ios-actions--stack">' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-password-reset">Send password reset email</button>' +
+      '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-refresh-session">Refresh session</button>' +
+      "        </div>" +
+      "      </section>" +
       '      <section id="account-admin-tools-section" class="account-ios-group">' +
-      accountIosGroupHeader("Admin Tools", null, null) +
-      '        <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">Visible only for approved admin accounts. Turn on Admin mode to publish premades and cloud backgrounds.</p>' +
+      accountIosGroupHeader("Advanced", null, null) +
+      '        <p class="app-muted account-ios-group__lede">Optional tools for approved admin accounts. Turn on Admin mode to publish premades and cloud backgrounds.</p>' +
       '        <div class="account-ios-list">' +
       '          <label class="account-ios-row account-ios-row--toggle account-pref-row"><input type="checkbox" id="pref-admin-mode" /> Admin mode (catalog publish &amp; edit)</label>' +
       '          <button type="button" class="account-ios-row account-ios-row--nav" id="account-open-premade-manager" hidden>' +
@@ -5196,6 +5209,15 @@
       '            <span class="account-ios-row__chev" aria-hidden="true">›</span>' +
       "          </button>" +
       "        </div>" +
+      "      </section>" +
+      "      </div>" +
+      '      <section class="account-ios-group" id="account-delete-group">' +
+      accountIosGroupHeader("Delete Account", null, null) +
+      '        <p class="app-muted account-ios-group__lede">Permanently removes your Focus Shift sign-in and deletes your cloud data. Export a copy first under Privacy &amp; Support if needed.</p>' +
+      '        <div class="account-ios-list">' +
+      '          <button type="button" class="account-ios-row account-ios-row--danger" id="account-delete-account">Delete Account</button>' +
+      "        </div>" +
+      '        <p class="app-muted account-ios-group__lede account-ios-group__lede--footer">Stripe subscriptions cancel automatically. Cancel an App Store subscription on iPhone or iPad before deleting.</p>' +
       "      </section>" +
       '      <section class="account-ios-group account-ios-group--signout">' +
       '        <div class="account-ios-list">' +
@@ -5268,22 +5290,12 @@
       '    <div id="account-tab-privacy" class="account-tab-panel account-tab-stack" hidden>' +
       '      <div id="account-privacy-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '      <section class="account-section-card">' +
-      '        <h4 class="account-section-card__title">Security</h4>' +
-      '        <p class="app-muted account-section-card__text">Web sign-in uses email/password or Google. Sign in with Apple on the iOS app. Biometric unlock is iOS-only today.</p>' +
-      '        <p id="account-apple-link-status" class="app-muted account-section-card__text">Apple Sign In on the web is unavailable while iOS and web share one Firebase Apple Services ID (bundle ID). Use the iOS app for Apple login.</p>' +
-      '        <div class="account-section-card__btn-row">' +
-      '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-password-reset">Send password reset email</button>' +
-      '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-refresh-session">Refresh session</button>' +
-      "        </div>" +
-      "      </section>" +
-      '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">Privacy &amp; data</h4>' +
       '        <p class="app-muted account-section-card__text">Your scripts, playlists, and generated audio live in your Firebase account. This browser may also store lightweight UI preferences locally.</p>' +
       '        <div class="account-section-card__btn-row">' +
       '          <button type="button" class="app-btn app-btn-secondary" id="account-privacy-export-json">Export my data (JSON)</button>' +
-      '          <button type="button" class="app-btn app-btn-danger" id="account-privacy-delete-account">Delete account…</button>' +
       "        </div>" +
-      '        <p class="app-muted account-section-card__text" style="margin-top:0.55rem;">Stripe subscriptions cancel automatically when you delete. App Store subscriptions must be canceled on your iPhone or iPad first.</p>' +
+      '        <p class="app-muted account-section-card__text" style="margin-top:0.55rem;">To permanently delete your account, open the <strong>Account</strong> tab → <strong>Delete Account</strong>.</p>' +
       '        <div class="account-section-card__btn-row">' +
       '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>' +
       '          <a class="app-btn app-btn-secondary" href="https://focusshift.app/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>' +
@@ -5291,9 +5303,10 @@
       "      </section>" +
       '      <section class="account-section-card">' +
       '        <h4 class="account-section-card__title">About &amp; support</h4>' +
-      '        <p class="app-muted account-section-card__text">Web workspace build. For app store reviews and device-specific help, use the iOS app.</p>' +
+      '        <p class="app-muted account-section-card__text">Web workspace build. For device-specific help (subscriptions, biometrics, Apple sign-in), use the iOS app.</p>' +
       '        <p class="app-muted account-section-card__text"><strong>Firebase JS:</strong> <span id="account-privacy-firebase-sdk">-</span></p>' +
       '        <div class="account-section-card__btn-row">' +
+      '          <a class="app-btn app-btn-secondary" href="/support/">Support</a>' +
       '          <a class="app-btn app-btn-secondary" href="mailto:support@focusshift.app">Contact support</a>' +
       "        </div>" +
       "      </section>" +
@@ -5303,7 +5316,7 @@
       "</div>" +
       '<div id="account-delete-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="account-delete-title">' +
-      '    <h3 id="account-delete-title">Delete account</h3>' +
+      '    <h3 id="account-delete-title">Delete Account</h3>' +
       '    <p id="account-delete-notice" class="app-muted" style="margin:0 0 0.55rem;line-height:1.45;">This removes your sign-in and deletes your cloud library (scripts, playlists, cloned voices, and hosted audio). Export first if you need a copy.</p>' +
       '    <p id="account-delete-appstore-block" class="app-inline-msg is-error" role="alert" hidden style="margin:0 0 0.55rem;">Cancel your App Store subscription before deleting. On iPhone or iPad: Settings → Apple ID → Subscriptions → Focus Shift.</p>' +
       '    <label class="account-pref-row" for="account-delete-phrase">Type <strong>DELETE</strong> to confirm</label>' +
@@ -6006,7 +6019,7 @@
     });
     document.getElementById("account-privacy-password-reset").addEventListener("click", function () {
       sendPasswordResetFromAccount();
-      setPrivacyMessage("If you requested a reset, check your email inbox.", "success");
+      setAccountMessage("If you requested a reset, check your email inbox.", "success");
     });
     var linkAppleBtn = document.getElementById("account-btn-link-apple");
     if (linkAppleBtn) {
@@ -6020,12 +6033,12 @@
     }
     document.getElementById("account-privacy-refresh-session").addEventListener("click", function () {
       refreshSessionToken();
-      setPrivacyMessage("Session refreshed.", "success");
+      setAccountMessage("Session refreshed.", "success");
     });
     document.getElementById("account-privacy-export-json").addEventListener("click", function () {
       exportWebAccountDataJson();
     });
-    document.getElementById("account-privacy-delete-account").addEventListener("click", function () {
+    document.getElementById("account-delete-account").addEventListener("click", function () {
       openAccountDeleteModal();
     });
     (function bindAccountDeleteModal() {
@@ -11859,7 +11872,7 @@
 
   function openAppStoreStepUpInstructions() {
     setAccountMessage(
-      "Usage add-ons on App Store plans are purchased in the Focus Shift iOS app. Open the app on iPhone or iPad → Account → Usage add-on. In TestFlight/Sandbox, sign in with your Sandbox Apple ID when prompted.",
+      "Usage add-ons on App Store plans are purchased in the Focus Shift iOS app. Open the app on iPhone or iPad → Account → Manage Account → AI Usage. In TestFlight/Sandbox, sign in with your Sandbox Apple ID when prompted.",
       "info"
     );
     showAppBanner(
