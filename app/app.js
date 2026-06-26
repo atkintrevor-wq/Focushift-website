@@ -8775,7 +8775,7 @@
     if (!isWebBackgroundAvailableForGeneration(bgId)) {
       return webGenerationGateMessage("background");
     }
-    if (voiceId.indexOf("-") >= 0) {
+    if (voiceId.indexOf("-") >= 0 || clonedVoiceById(voiceId)) {
       var cloned = clonedVoiceById(voiceId);
       if (!cloned || !(cloned.elevenLabsVoiceID && String(cloned.elevenLabsVoiceID).trim())) {
         return "This cloned voice is not ready on the server. Refresh the page or recreate the voice under Voices.";
@@ -17658,7 +17658,7 @@
 
             if (status === "failed") {
               cleanup();
-              reject(new Error(data.error || "Audio job failed."));
+              reject(new Error(parseBackendErrorMessage(data.error) || "Audio job failed."));
               return;
             }
             if (status === "awaiting_client_mix") {
