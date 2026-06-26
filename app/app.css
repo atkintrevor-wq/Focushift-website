@@ -42,6 +42,16 @@
   --voice-script-active-bg: rgba(59, 130, 246, 0.14);
   --voice-script-active-fg: #f4f8ff;
   --voice-script-active-border: rgba(147, 197, 253, 0.92);
+  --app-inline-success-fg: #bbf7d0;
+  --app-inline-success-bg: rgba(22, 163, 74, 0.14);
+  --app-inline-success-border: rgba(74, 222, 128, 0.35);
+  --app-inline-error-fg: #fecaca;
+  --app-inline-error-bg: rgba(220, 38, 38, 0.12);
+  --app-inline-error-border: rgba(248, 113, 113, 0.35);
+  --voice-recording-time-fg: #fecaca;
+  --voice-recording-time-bg: rgba(239, 68, 68, 0.16);
+  --voice-recording-time-border: rgba(248, 113, 113, 0.45);
+  --voice-recording-dot: #f87171;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3758,14 +3768,14 @@ body.fs-app-body.fs-modal-scroll-lock {
   border-color: rgba(148, 163, 184, 0.14);
 }
 .app-inline-msg.error {
-  color: #fecaca;
-  background: rgba(220, 38, 38, 0.12);
-  border-color: rgba(248, 113, 113, 0.35);
+  color: var(--app-inline-error-fg, #fecaca);
+  background: var(--app-inline-error-bg, rgba(220, 38, 38, 0.12));
+  border-color: var(--app-inline-error-border, rgba(248, 113, 113, 0.35));
 }
 .app-inline-msg.success {
-  color: #bbf7d0;
-  background: rgba(22, 163, 74, 0.14);
-  border-color: rgba(74, 222, 128, 0.35);
+  color: var(--app-inline-success-fg, #bbf7d0);
+  background: var(--app-inline-success-bg, rgba(22, 163, 74, 0.14));
+  border-color: var(--app-inline-success-border, rgba(74, 222, 128, 0.35));
 }
 .app-tabs {
   display: flex;
@@ -4502,11 +4512,11 @@ body.fs-app-body.fs-modal-scroll-lock {
 }
 .voice-recording-guide-time {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  color: #fecaca;
+  color: var(--voice-recording-time-fg, #fecaca);
   font-weight: 700;
   font-size: 0.83rem;
-  background: rgba(239, 68, 68, 0.16);
-  border: 1px solid rgba(248, 113, 113, 0.45);
+  background: var(--voice-recording-time-bg, rgba(239, 68, 68, 0.16));
+  border: 1px solid var(--voice-recording-time-border, rgba(248, 113, 113, 0.45));
   border-radius: 999px;
   padding: 0.12rem 0.5rem 0.14rem;
   display: inline-flex;
@@ -4518,7 +4528,7 @@ body.fs-app-body.fs-modal-scroll-lock {
   width: 0.42rem;
   height: 0.42rem;
   border-radius: 999px;
-  background: #f87171;
+  background: var(--voice-recording-dot, #f87171);
   box-shadow: 0 0 0 rgba(248, 113, 113, 0.7);
   opacity: 0;
 }
@@ -5408,6 +5418,16 @@ html.fs-app[data-app-theme="light"] {
   --voice-script-active-bg: rgba(37, 99, 235, 0.12);
   --voice-script-active-fg: #0f172a;
   --voice-script-active-border: rgba(37, 99, 235, 0.55);
+  --app-inline-success-fg: #14532d;
+  --app-inline-success-bg: rgba(22, 163, 74, 0.12);
+  --app-inline-success-border: rgba(22, 163, 74, 0.35);
+  --app-inline-error-fg: #991b1b;
+  --app-inline-error-bg: rgba(220, 38, 38, 0.1);
+  --app-inline-error-border: rgba(220, 38, 38, 0.35);
+  --voice-recording-time-fg: #991b1b;
+  --voice-recording-time-bg: rgba(239, 68, 68, 0.12);
+  --voice-recording-time-border: rgba(220, 38, 38, 0.4);
+  --voice-recording-dot: #dc2626;
 }
 
 html.fs-app[data-app-theme="light"] body.fs-app-body {
@@ -5504,6 +5524,16 @@ html.fs-app[data-app-theme="light"] .gen-clarify-progress {
     --voice-script-active-bg: rgba(37, 99, 235, 0.12);
     --voice-script-active-fg: #0f172a;
     --voice-script-active-border: rgba(37, 99, 235, 0.55);
+    --app-inline-success-fg: #14532d;
+    --app-inline-success-bg: rgba(22, 163, 74, 0.12);
+    --app-inline-success-border: rgba(22, 163, 74, 0.35);
+    --app-inline-error-fg: #991b1b;
+    --app-inline-error-bg: rgba(220, 38, 38, 0.1);
+    --app-inline-error-border: rgba(220, 38, 38, 0.35);
+    --voice-recording-time-fg: #991b1b;
+    --voice-recording-time-bg: rgba(239, 68, 68, 0.12);
+    --voice-recording-time-border: rgba(220, 38, 38, 0.4);
+    --voice-recording-dot: #dc2626;
   }
 
   html.fs-app[data-app-theme="system"] body.fs-app-body {
