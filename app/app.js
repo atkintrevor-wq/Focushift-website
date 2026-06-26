@@ -13865,6 +13865,24 @@
     });
   }
 
+  function premadeItemsForCategoryDetail(items, categoryName, query) {
+    if (!query) return items || [];
+    if (textMatchesSectionSearch(categoryName, query)) return items || [];
+    return (items || []).filter(function (p) {
+      return (
+        textMatchesSectionSearch(p.title, query) ||
+        textMatchesSectionSearch(p.scriptText, query) ||
+        textMatchesSectionSearch(p.description, query)
+      );
+    });
+  }
+
+  function premadeCategoryDisplayCount(categoryName, items, query) {
+    var list = items || [];
+    if (!query) return list.length;
+    return premadeItemsForCategoryDetail(list, categoryName, query).length;
+  }
+
   function premadeCategoryRowsForList(grouped) {
     var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
     var rows = mergedPremadeLibraryCategories().map(function (c) {
@@ -13884,7 +13902,8 @@
   }
 
   function premadeCategorySelectorCardHtml(row) {
-    var count = (row.items && row.items.length) || 0;
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
+    var count = premadeCategoryDisplayCount(row.name, row.items, q);
     var countLabel = count === 1 ? "1 script" : count + " scripts";
     return (
       '<button type="button" class="premade-category-selector-card" data-premade-category-open="' +
@@ -13954,12 +13973,15 @@
 
   function premadeIdsForExpandAllToggle() {
     if (!activePremadeCategoryId) return [];
-    var displayPremade = filteredPremadesForDisplay(currentPremade);
-    var grouped = groupPremadesByLibraryCategory(displayPremade);
+    var tierFiltered = filterPremadesByCatalogAccess(currentPremade);
+    var grouped = groupPremadesByLibraryCategory(tierFiltered);
+    var catName = premadeLibraryCategoryDisplayName(activePremadeCategoryId);
     var items =
       activePremadeCategoryId === "__other__"
         ? grouped.other
         : grouped.byId[activePremadeCategoryId] || [];
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
+    items = premadeItemsForCategoryDetail(items, catName, q);
     return items.map(function (p) {
       return p.id;
     });
@@ -18914,9 +18936,10 @@
   function renderPremade() {
     var list = document.getElementById("premade-list");
     if (!list) return;
-    var displayPremade = filteredPremadesForDisplay(currentPremade);
-    var grouped = groupPremadesByLibraryCategory(displayPremade);
-    var hasSearch = !!normalizeSectionSearchQuery(sectionSearchQuery.library);
+    var tierFiltered = filterPremadesByCatalogAccess(currentPremade);
+    var grouped = groupPremadesByLibraryCategory(tierFiltered);
+    var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
+    var hasSearch = !!q;
 
     function finishListHtml(html) {
       list.innerHTML = renderHiddenPremadesAdminSection() + html;
@@ -18941,6 +18964,7 @@
         activePremadeCategoryId === "__other__"
           ? grouped.other
           : grouped.byId[activePremadeCategoryId] || [];
+      items = premadeItemsForCategoryDetail(items, catName, q);
       if (!items.length) {
         finishDetailHtml(premadeCategoryDetailHtml(activePremadeCategoryId, catName, [], {}));
         return;
@@ -18969,7 +18993,7 @@
       return;
     }
 
-    if (hasSearch && !displayPremade.length) {
+    if (hasSearch && !premadeCategoryRowsForList(grouped).length) {
       finishListHtml(
         '<p class="app-muted" style="margin:0 0 0.85rem;">No premade scripts match your search.</p>'
       );
