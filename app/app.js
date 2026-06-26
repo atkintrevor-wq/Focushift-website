@@ -212,7 +212,7 @@
     }
   }
 
-  /** Route through Web Audio only when paid tier needs volume above 100%. */
+  /** Route through Web Audio only when paid tier needs volume above 100% at load time. */
   function ensureActiveAudioWebAudio(audioEl) {
     if (!audioEl || !isWebPaidTierForAI() || readPlaybackVolume() <= 1) return;
     try {
@@ -221,9 +221,6 @@
       if (!playbackAudioContext) playbackAudioContext = new Ctx();
       if (activeAudioSourceNode && activeAudioSourceNode.mediaElement === audioEl) return;
       teardownActiveAudioWebAudio();
-      try {
-        if (!audioEl.crossOrigin) audioEl.crossOrigin = "anonymous";
-      } catch (_cors) {}
       activeAudioSourceNode = playbackAudioContext.createMediaElementSource(audioEl);
       activeAudioGainNode = playbackAudioContext.createGain();
       activeAudioSourceNode.connect(activeAudioGainNode);
@@ -233,9 +230,22 @@
     }
   }
 
-  function assignActiveAudioFromUrl(url) {
+  function assignActiveAudioFromUrl(url, nativeOnly) {
     teardownActiveAudioWebAudio();
-    activeAudio = new Audio(url);
+    var urlStr = String(url || "").trim();
+    var vol = readPlaybackVolume();
+    var useBoost = !nativeOnly && isWebPaidTierForAI() && vol > 1;
+    if (useBoost) {
+      activeAudio = new Audio();
+      try {
+        activeAudio.crossOrigin = "anonymous";
+      } catch (_cors) {}
+      activeAudio.preload = "auto";
+      activeAudio.src = urlStr;
+      ensureActiveAudioWebAudio(activeAudio);
+    } else {
+      activeAudio = new Audio(urlStr);
+    }
     applyPlaybackVolumeToActiveAudio();
     return activeAudio;
   }
@@ -247,28 +257,40 @@
       activeAudio.volume = vol;
       return;
     }
-    if (vol > 1) {
-      ensureActiveAudioWebAudio(activeAudio);
-      resumePlaybackAudioContext();
-    }
-    try {
-      if (activeAudioGainNode) {
-        activeAudio.volume = vol > 1 ? 1 : vol;
-        activeAudioGainNode.gain.value = vol > 1 ? vol : 1;
+    if (activeAudioGainNode) {
+      if (vol > 1) {
+        activeAudio.volume = 1;
+        activeAudioGainNode.gain.value = vol;
       } else {
         activeAudio.volume = vol;
+        activeAudioGainNode.gain.value = 1;
       }
-    } catch (_e) {}
+      return;
+    }
+    activeAudio.volume = Math.min(vol, 1);
   }
 
   function playActiveAudioElement() {
     if (!activeAudio) return Promise.reject(new Error("No active audio"));
-    var chain = Promise.resolve();
-    if (activeAudioGainNode && playbackAudioContext) {
-      chain = resumePlaybackAudioContext();
+    if (activeAudioGainNode && playbackAudioContext && playbackAudioContext.state === "suspended") {
+      try {
+        playbackAudioContext.resume().catch(function () {});
+      } catch (_e) {}
     }
-    return chain.then(function () {
-      return activeAudio.play();
+    return activeAudio.play();
+  }
+
+  function playActiveAudioElementWithNativeFallback(sourceUrl, onReload) {
+    return playActiveAudioElement().catch(function () {
+      if (readPlaybackVolume() > 1) {
+        writePlaybackVolume(1);
+        syncMiniPlayerVolumeUi();
+      }
+      if (sourceUrl) {
+        assignActiveAudioFromUrl(sourceUrl, true);
+        if (typeof onReload === "function") onReload();
+      }
+      return playActiveAudioElement();
     });
   }
   var accountEscapeBound = false;
@@ -3874,7 +3896,7 @@
     activeAudioScriptId = null;
     activeAudioTitle = (s.lastPlayedTitle && String(s.lastPlayedTitle).trim()) || "Listen again";
     bindAudioLifecycle();
-    playActiveAudioElement()
+    playActiveAudioElementWithNativeFallback(url, bindAudioLifecycle)
       .then(function () {
         updateMiniPlayer();
         renderScripts(currentScripts);
@@ -16870,6 +16892,21 @@
     refreshHomeDailySparkTransportIfVisible();
   }
 
+  function beginScriptAudioPlayback(script, audioURL) {
+    stopActiveAudio();
+    reportCatalogStorageCostFromUrl(audioURL, script.isPremade ? "premade_play" : "user_audio_play");
+    assignActiveAudioFromUrl(audioURL, false);
+    activeAudioScriptId = script.id;
+    activeAudioTitle = script.title || "Audio";
+    bindAudioLifecycle();
+    return playActiveAudioElementWithNativeFallback(audioURL, bindAudioLifecycle).then(function () {
+      updateMiniPlayer();
+      rerenderMyLibraryCardsIfNeeded();
+      refreshHomeDailySparkTransportIfVisible();
+      recordWebListen(activeAudioTitle, audioURL);
+    });
+  }
+
   function togglePlayScriptAudio(script) {
     var audioURL = script.audioURL && String(script.audioURL).trim();
     if (!audioURL) {
@@ -16893,29 +16930,15 @@
       return;
     }
 
-    stopActiveAudio();
-    var playKind = script.isPremade ? "premade_play" : "user_audio_play";
-    reportCatalogStorageCostFromUrl(audioURL, playKind);
-    assignActiveAudioFromUrl(audioURL);
-    activeAudioScriptId = script.id;
-    activeAudioTitle = script.title || "Audio";
-    bindAudioLifecycle();
-    playActiveAudioElement()
-      .then(function () {
-        updateMiniPlayer();
-        rerenderMyLibraryCardsIfNeeded();
-        refreshHomeDailySparkTransportIfVisible();
-        recordWebListen(activeAudioTitle, audioURL);
-      })
-      .catch(function () {
-        reportClientError("Could not play audio in browser.", "playback", {
-          script_id: script.id,
-        });
-        setMessage("Could not play audio in browser.", "error");
-        stopActiveAudio();
-        rerenderMyLibraryCardsIfNeeded();
-        refreshHomeDailySparkTransportIfVisible();
+    beginScriptAudioPlayback(script, audioURL).catch(function () {
+      reportClientError("Could not play audio in browser.", "playback", {
+        script_id: script.id,
       });
+      setMessage("Could not play audio in browser.", "error");
+      stopActiveAudio();
+      rerenderMyLibraryCardsIfNeeded();
+      refreshHomeDailySparkTransportIfVisible();
+    });
   }
 
   function playQueueAt(index) {
@@ -16946,21 +16969,24 @@
     reportCatalogStorageCostFromUrl(audioURL, script.isPremade ? "premade_play" : "user_audio_play");
     assignActiveAudioFromUrl(audioURL);
     activeAudioTitle = script.title || "Playlist audio";
-    bindAudioLifecycle(function () {
-      var next = activePlaylistIndex + 1;
-      if (next >= activePlaylistQueue.length) {
-        if (activePlaylistLoopForQueue && activePlaylistQueue.length) {
-          playQueueAt(0);
+    function bindQueueEnded() {
+      bindAudioLifecycle(function () {
+        var next = activePlaylistIndex + 1;
+        if (next >= activePlaylistQueue.length) {
+          if (activePlaylistLoopForQueue && activePlaylistQueue.length) {
+            playQueueAt(0);
+          } else {
+            stopActiveAudio();
+            renderSelectedPlaylistDetail();
+            renderScripts(currentScripts);
+          }
         } else {
-          stopActiveAudio();
-          renderSelectedPlaylistDetail();
-          renderScripts(currentScripts);
+          playQueueAt(next);
         }
-      } else {
-        playQueueAt(next);
-      }
-    });
-    playActiveAudioElement()
+      });
+    }
+    bindQueueEnded();
+    playActiveAudioElementWithNativeFallback(audioURL, bindQueueEnded)
       .then(function () {
         updateMiniPlayer();
         renderSelectedPlaylistDetail();
