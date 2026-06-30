@@ -109,6 +109,8 @@
     freeStepUpEnabled: null,
     stepUpStripeConfigured: false,
     stepUpStripePriceDisplay: null,
+    /** From POST /usage/refresh — Stripe price labels for Account plan buttons. */
+    stripePlanPrices: {},
     /** From POST /usage/refresh — mirrors backend unlimitedUsage for admin / manual complimentary. */
     unlimitedUsage: false,
   };
@@ -5154,18 +5156,22 @@
       '            <div class="account-plans-grid">' +
       '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-month">' +
       '                <span class="account-plan-option__tier">Starter</span>' +
+      '                <span class="account-plan-option__price" data-stripe-plan-price="starter-month">—</span>' +
       '                <span class="account-plan-option__period">Monthly billing</span>' +
       "              </button>" +
       '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-year">' +
       '                <span class="account-plan-option__tier">Starter</span>' +
+      '                <span class="account-plan-option__price" data-stripe-plan-price="starter-year">—</span>' +
       '                <span class="account-plan-option__period">Yearly billing</span>' +
       "              </button>" +
       '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-month">' +
       '                <span class="account-plan-option__tier">Creator</span>' +
+      '                <span class="account-plan-option__price" data-stripe-plan-price="creator-month">—</span>' +
       '                <span class="account-plan-option__period">Monthly billing</span>' +
       "              </button>" +
       '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="creator-year">' +
       '                <span class="account-plan-option__tier">Creator</span>' +
+      '                <span class="account-plan-option__price" data-stripe-plan-price="creator-year">—</span>' +
       '                <span class="account-plan-option__period">Yearly billing</span>' +
       "              </button>" +
       "            </div>" +
@@ -11597,6 +11603,9 @@
             } else if (json && json.stepUpStripeConfigured === false) {
               accountInsightsSnapshot.stepUpStripePriceDisplay = null;
             }
+            if (json && json.stripePlanPrices && typeof json.stripePlanPrices === "object") {
+              accountInsightsSnapshot.stripePlanPrices = json.stripePlanPrices;
+            }
           })
           .catch(function () {
             return null;
@@ -11633,6 +11642,7 @@
         accountInsightsSnapshot.error = null;
         renderAccountInsights();
         renderUsageAddOnSection();
+        syncAccountPlanPriceLabels();
       })
       .catch(function (e) {
         accountInsightsSnapshot.loading = false;
@@ -11988,6 +11998,21 @@
     return "View plans & upgrade";
   }
 
+  function syncAccountPlanPriceLabels() {
+    var prices = accountInsightsSnapshot.stripePlanPrices || {};
+    var fallbacks = {
+      "starter-month": "$6.99/mo",
+      "starter-year": null,
+      "creator-month": "$14.99/mo",
+      "creator-year": null,
+    };
+    document.querySelectorAll("[data-stripe-plan-price]").forEach(function (el) {
+      var key = (el.getAttribute("data-stripe-plan-price") || "").trim();
+      var label = prices[key] || fallbacks[key] || "—";
+      el.textContent = label;
+    });
+  }
+
   function syncAccountPlansPanelForBilling() {
     var stripeWrap = document.getElementById("account-plans-stripe-wrap");
     var appStoreWrap = document.getElementById("account-plans-appstore-wrap");
@@ -12002,6 +12027,7 @@
     if (btn && btn.getAttribute("aria-expanded") !== "true") {
       btn.textContent = viewPlansButtonLabelCollapsed();
     }
+    syncAccountPlanPriceLabels();
   }
 
   function syncAccountSubscriptionHeadline() {

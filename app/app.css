@@ -1025,6 +1025,13 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   font-weight: 700;
   line-height: 1.2;
 }
+.account-plan-option__price {
+  display: block;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
 .account-plan-option__period {
   display: block;
   font-size: 0.8rem;
