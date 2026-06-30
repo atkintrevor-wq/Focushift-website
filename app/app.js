@@ -16,8 +16,8 @@
   var lastAppliedProfileDefaultsAt = 0;
   /** Latest `users/{uid}/meta/listening` (plays, streaks, last played); mirrors iOS UsageManager + Firestore. */
   var webListeningStats = null;
-  /** Public web beta: new signups are testers; Stripe checkout stays off until launch. Set false when going live. */
-  var WEB_PUBLIC_BETA_MODE = true;
+  /** When true, Free users see beta copy and Stripe checkout is blocked. Set false for public web billing. */
+  var WEB_PUBLIC_BETA_MODE = false;
   var WEB_BETA_BANNER_DISMISS_KEY = "focusshiftWebBetaBannerDismissed";
 
   var currentUser = null;
