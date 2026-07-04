@@ -38,6 +38,7 @@
   /** Active browse categories from Firestore `catalogCategories`. */
   var currentCatalogCategories = [];
   var currentClonedVoices = [];
+  var currentVoiceCloneLimits = null;
   var currentUserProfile = null;
   var isEditing = false;
   var editingScriptId = null;
@@ -139,6 +140,10 @@
   var premadeContentManagerTab = "working";
   /** Matches iOS `SubscriptionConfig.creatorOutgoingShareCap` (active outgoing share links). */
   var CREATOR_OUTGOING_SHARE_CAP = 50;
+  /** Matches iOS `SubscriptionConfig.Quotas.starterMaxClonedVoices`. */
+  var STARTER_MAX_CLONED_VOICES = 1;
+  /** Matches iOS `SubscriptionConfig.Quotas.creatorMaxClonedVoices`. */
+  var CREATOR_MAX_CLONED_VOICES = 2;
   /** Universal link base for share invites (`ShareLinkConstants` on iOS). */
   var SHARE_UNIVERSAL_LINK_ORIGIN = "https://focusshift.app/s/";
 
@@ -1711,8 +1716,9 @@
       content:
         "Choose the voice that speaks your affirmations when you generate audio.\n\n" +
         "My Voices\n" +
-        "• Your saved voices: cloned voices (Creator), added app voices, and uploaded custom voices (Starter/Creator).\n" +
-        "• Clone (Starter/Creator) opens a guided recording window—same flow as iOS.\n" +
+        "• Your saved voices: cloned voices, added app voices, and uploaded custom voices (Starter/Creator).\n" +
+        "• Starter includes 1 cloned voice; Creator includes up to 2.\n" +
+        "• Clone opens a guided recording window—same flow as iOS.\n" +
         "• Upload Voice Audio adds a file from your computer (MP3, WAV, M4A).\n\n" +
         "App Voices\n" +
         "• Built-in voices included with the app. Tap Preview to hear any voice.\n" +
@@ -2544,9 +2550,10 @@
           applyAdminModeUi();
           refreshAppLibraryPremadesFromCloud();
           renderAccountInsights();
-    syncAccountSubscriptionHeadline();
-    syncAccountDeleteModalUi();
-    if (activeAdminTab === "library") renderPremade();
+          syncAccountSubscriptionHeadline();
+          syncAccountDeleteModalUi();
+          refreshVoiceCloneLimits();
+          if (activeAdminTab === "library") renderPremade();
         },
         function () {}
       );
@@ -6421,6 +6428,7 @@
     });
     document.getElementById("btn-voice-clone").addEventListener("click", function () {
       if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceUpload)) return;
+      if (!requireCanCreateVoiceClone()) return;
       ensureVoiceCloneConsentThen(function () {
         setVoicesMessage("Choose a clear voice audio file to upload.", "");
         beginVoiceUploadFlow("clone");
@@ -6428,6 +6436,7 @@
     });
     document.getElementById("btn-voice-record").addEventListener("click", function () {
       if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return;
+      if (!requireCanCreateVoiceClone()) return;
       openCloneVoiceGuide();
     });
     document.getElementById("voice-upload-input").addEventListener("change", function (ev) {
@@ -8856,6 +8865,7 @@
   function renderVoices() {
     var list = document.getElementById("voices-list");
     if (!list) return;
+    updateVoiceCloneToolbar();
     var tabMy = document.getElementById("voices-tab-my");
     var tabApp = document.getElementById("voices-tab-app");
     var genderWrap = document.getElementById("voice-gender-filter-wrap");
@@ -9062,6 +9072,119 @@
         return cv.id === voiceID;
       }) || null
     );
+  }
+
+  function maxClonedVoicesForTier(tier) {
+    if (tier === "creator") return CREATOR_MAX_CLONED_VOICES;
+    if (tier === "starter") return STARTER_MAX_CLONED_VOICES;
+    return 0;
+  }
+
+  function computeCanCreateVoiceClone(limits) {
+    if (!limits) return false;
+    return (
+      limits.userCloneMax > 0 &&
+      limits.userCloneCount < limits.userCloneMax &&
+      limits.globalCloneCount < limits.globalCloneMax
+    );
+  }
+
+  function voiceCloneLimitBlockedReason(limits) {
+    if (!limits) return "Voice cloning is unavailable right now.";
+    if (limits.canCreate) return "";
+    if (limits.userCloneMax <= 0) {
+      return "Voice cloning requires a Starter or Creator subscription.";
+    }
+    if (limits.userCloneCount >= limits.userCloneMax) {
+      if (limits.userCloneMax === 1) {
+        return "Starter includes 1 cloned voice. Upgrade to Creator for up to 2, or delete your existing clone first.";
+      }
+      return "Creator includes up to 2 cloned voices. Delete an existing clone to add another.";
+    }
+    if (limits.globalCloneCount >= limits.globalCloneMax) {
+      return "Voice cloning is temporarily at capacity. Please try again later or contact support.";
+    }
+    return "You cannot create another cloned voice right now.";
+  }
+
+  function fetchVoiceCloneLimits() {
+    if (!currentUser) return Promise.resolve(null);
+    return currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return fetch(backendBaseURL() + "/elevenlabs/voice-clone-limits", {
+          method: "GET",
+          headers: {
+            Authorization: "Bearer " + token,
+          },
+        }).then(function (resp) {
+          return resp.json().then(function (json) {
+            if (!resp.ok || !json || json.ok === false) {
+              throw new Error(parseBackendErrorMessage(json && json.error) || "Could not load clone limits.");
+            }
+            var limits = {
+              userCloneCount: Number(json.userCloneCount) || 0,
+              userCloneMax: Number(json.userCloneMax) || 0,
+              globalCloneCount: Number(json.globalCloneCount) || 0,
+              globalCloneMax: Number(json.globalCloneMax) || 30,
+            };
+            limits.canCreate = computeCanCreateVoiceClone(limits);
+            return limits;
+          });
+        });
+      })
+      .catch(function () {
+        var limits = {
+          userCloneCount: currentClonedVoices.length,
+          userCloneMax: maxClonedVoicesForTier(resolvedSubscriptionTier()),
+          globalCloneCount: currentVoiceCloneLimits ? currentVoiceCloneLimits.globalCloneCount : 0,
+          globalCloneMax: currentVoiceCloneLimits ? currentVoiceCloneLimits.globalCloneMax : 30,
+        };
+        limits.canCreate = computeCanCreateVoiceClone(limits);
+        return limits;
+      });
+  }
+
+  function refreshVoiceCloneLimits() {
+    return fetchVoiceCloneLimits().then(function (limits) {
+      currentVoiceCloneLimits = limits;
+      updateVoiceCloneToolbar();
+      return limits;
+    });
+  }
+
+  function updateVoiceCloneToolbar() {
+    var uploadBtn = document.getElementById("btn-voice-clone");
+    var recordBtn = document.getElementById("btn-voice-record");
+    if (!uploadBtn || !recordBtn) return;
+    var paid = isWebPaidTierForAI();
+    var blocked = paid && currentVoiceCloneLimits && !currentVoiceCloneLimits.canCreate;
+    uploadBtn.classList.toggle("is-tier-locked", !paid || !!blocked);
+    recordBtn.classList.toggle("is-tier-locked", !paid || !!blocked);
+    var reason = blocked ? voiceCloneLimitBlockedReason(currentVoiceCloneLimits) : "";
+    uploadBtn.title = reason || "Upload a voice audio file to clone";
+    recordBtn.title = reason || "Record and clone your voice";
+  }
+
+  function requireCanCreateVoiceClone() {
+    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return false;
+    if (currentVoiceCloneLimits && !currentVoiceCloneLimits.canCreate) {
+      var reason = voiceCloneLimitBlockedReason(currentVoiceCloneLimits);
+      setVoicesMessage(reason, "error");
+      if (reason.indexOf("Upgrade to Creator") >= 0) {
+        promptWebPaidUpgrade("Upgrade to Creator for a second cloned voice.");
+      }
+      return false;
+    }
+    return true;
+  }
+
+  function handleVoiceCloneBackendError(json, fallbackMessage) {
+    var msg = parseBackendErrorMessage(json && json.error) || fallbackMessage || "Voice cloning failed.";
+    if (json && json.code === "clone_limit_user" && resolvedSubscriptionTier() === "starter") {
+      promptWebPaidUpgrade("Upgrade to Creator for a second cloned voice.");
+    }
+    return msg;
   }
 
   function clampVoiceSpeed(n, fallback) {
@@ -9533,6 +9656,7 @@
       promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.voiceClone);
       return;
     }
+    if (!requireCanCreateVoiceClone()) return;
     setVoiceRecordingGuideVisible(true);
     setVoiceRecordButtonState(false);
     setVoicesMessage("Review the script, then tap Start Recording when ready.", "");
@@ -9817,6 +9941,7 @@
     if (!currentUser) return;
     if (!file) return;
     if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return;
+    if (mode === "clone" && !requireCanCreateVoiceClone()) return;
     if (!file.type || file.type.indexOf("audio/") !== 0) {
       setVoicesMessage("Please choose an audio file.", "error");
       return;
@@ -9859,7 +9984,7 @@
       .then(function (resp) {
         return resp.json().then(function (json) {
           if (!resp.ok || !json || !json.voice_id) {
-            throw new Error((json && json.error) || "Voice cloning failed.");
+            throw new Error(handleVoiceCloneBackendError(json, "Voice cloning failed."));
           }
           return json.voice_id;
         });
@@ -9887,6 +10012,7 @@
             setVoiceRecordingGuideVisible(false);
             renderVoices();
             closeVoiceProcessingModal();
+            refreshVoiceCloneLimits();
             openVoiceAdjustModal(docRef.id, elevenLabsVoiceID, name.trim());
           });
       })
@@ -10246,6 +10372,7 @@
       })
       .then(function () {
         setVoicesMessage("Cloned voice deleted.", "success");
+        refreshVoiceCloneLimits();
       })
       .catch(function (e) {
         setVoicesMessage(e.message || "Could not delete cloned voice.", "error");
@@ -19505,12 +19632,15 @@
             settings: data.settings || null,
           };
         });
+        refreshVoiceCloneLimits();
         applyUserProfileDefaults({ onlyIfNewer: true });
         if (activeAdminTab === "voices") renderVoices();
         rerenderMyLibraryCardsIfNeeded();
       },
       function (_e) {
         currentClonedVoices = [];
+        currentVoiceCloneLimits = null;
+        updateVoiceCloneToolbar();
         if (activeAdminTab === "voices") renderVoices();
         rerenderMyLibraryCardsIfNeeded();
       }
@@ -19654,6 +19784,7 @@
         subscribeCatalogCategories();
         subscribeBackgroundCatalog();
         subscribeClonedVoices(user.uid);
+        refreshVoiceCloneLimits();
         subscribeUserBackgrounds(user.uid);
         subscribeListeningStats(user.uid);
         maybePresentPendingShareClaim();
@@ -19670,6 +19801,7 @@
         subscribeCatalogCategories();
         subscribeBackgroundCatalog();
         subscribeClonedVoices(user.uid);
+        refreshVoiceCloneLimits();
         subscribeUserBackgrounds(user.uid);
         subscribeListeningStats(user.uid);
         maybePresentPendingShareClaim();
