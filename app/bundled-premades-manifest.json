@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "description": "Metadata for premade audio shipped in the iOS app bundle (Free tier App Library). Update when bundled MP3s change.",
+  "categories": [
+    {
+      "id": "confidence",
+      "name": "Confidence & Self-Worth",
+      "items": [
+        { "id": "confidence_1", "title": "Embracing Inner Strength" },
+        { "id": "confidence_2", "title": "Radiating Self-Assurance" },
+        { "id": "confidence_3", "title": "Nurturing Self-Compassion" },
+        { "id": "confidence_4", "title": "Igniting Bold Confidence" },
+        { "id": "confidence_5", "title": "Cultivating Unwavering Worth" }
+      ]
+    },
+    {
+      "id": "relationships",
+      "name": "Relationships & Love",
+      "items": [
+        { "id": "relationships_1", "title": "Cultivating Deep Connections" },
+        { "id": "relationships_2", "title": "Embracing Self-Love First" },
+        { "id": "relationships_3", "title": "Fostering Harmony and Trust" },
+        { "id": "relationships_4", "title": "Attracting Passionate Bonds" },
+        { "id": "relationships_5", "title": "Nurturing Emotional Intimacy" }
+      ]
+    },
+    {
+      "id": "success-prosperity",
+      "name": "Success & Prosperity",
+      "items": [
+        { "id": "success-prosperity_1", "title": "Visionary Achievement" },
+        { "id": "success-prosperity_2", "title": "Resilient Prosperity" },
+        { "id": "success-prosperity_3", "title": "Empowered Wealth Building" },
+        { "id": "success-prosperity_4", "title": "Harmonious Success Flow" },
+        { "id": "success-prosperity_5", "title": "Bold Abundance Pursuit" }
+      ]
+    },
+    {
+      "id": "mental-wellbeing",
+      "name": "Mental Well-Being",
+      "items": [
+        { "id": "mental-wellbeing_1", "title": "Finding Inner Peace" },
+        { "id": "mental-wellbeing_2", "title": "Releasing Anxiety Gently" },
+        { "id": "mental-wellbeing_3", "title": "Cultivating Emotional Resilience" },
+        { "id": "mental-wellbeing_4", "title": "Embracing Daily Mindfulness" },
+        { "id": "mental-wellbeing_5", "title": "Nurturing Mental Harmony" }
+      ]
+    },
+    {
+      "id": "health-fitness",
+      "name": "Health & Fitness",
+      "items": [
+        { "id": "health-fitness_1", "title": "Building Vital Strength" },
+        { "id": "health-fitness_2", "title": "Nurturing Body Confidence" },
+        { "id": "health-fitness_3", "title": "Igniting Daily Energy" },
+        { "id": "health-fitness_4", "title": "Embracing Holistic Wellness" },
+        { "id": "health-fitness_5", "title": "Achieving Peak Performance" }
+      ]
+    },
+    {
+      "id": "sports-performance",
+      "name": "Sports Performance",
+      "items": [
+        { "id": "sports-performance_1", "title": "Unleashing Peak Performance" },
+        { "id": "sports-performance_2", "title": "Building Unstoppable Resilience" },
+        { "id": "sports-performance_3", "title": "Igniting Competitive Fire" },
+        { "id": "sports-performance_4", "title": "Mastering Athletic Flow" },
+        { "id": "sports-performance_5", "title": "Claiming Champion Mindset" }
+      ]
+    },
+    {
+      "id": "sleep-rest",
+      "name": "Sleep & Rest",
+      "items": [
+        { "id": "sleep-rest_1", "title": "Embracing Gentle Slumber" },
+        { "id": "sleep-rest_2", "title": "Cultivating Deep Recovery" },
+        { "id": "sleep-rest_3", "title": "Nurturing Serene Downtime" },
+        { "id": "sleep-rest_4", "title": "Igniting Restful Renewal" },
+        { "id": "sleep-rest_5", "title": "Claiming Tranquil Restoration" }
+      ]
+    }
+  ]
+}

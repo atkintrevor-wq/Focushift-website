@@ -347,6 +347,10 @@
     { id: "sports-performance", name: "Sports Performance" },
     { id: "sleep-rest", name: "Sleep & Rest" },
   ];
+  /** iOS app bundle catalog — loaded from bundled-premades-manifest.json for admin Content Manager. */
+  var bundledPremadeManifest = null;
+  var bundledPremadeManifestLoadPromise = null;
+  var BUNDLED_PREMADE_MANIFEST_URL = "bundled-premades-manifest.json";
   var PREMADE_CATEGORY_ICON_SVGS = {
     confidence:
       '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.39 4.84L20 8.27l-4 3.9.94 5.5L12 15.9l-4.94 2.77.94-5.5-4-3.9 5.61-.43L12 2z"/></svg>',
@@ -6948,6 +6952,174 @@
     }
   }
 
+  function premadeCategorySortIndex(categoryId) {
+    var cid = (categoryId && String(categoryId).trim()) || "__other__";
+    var idx = PREMADE_LIBRARY_CATEGORY_ORDER.findIndex(function (c) {
+      return c.id === cid;
+    });
+    return idx >= 0 ? idx : 9999;
+  }
+
+  function groupPremadesByCategory(items, getCategoryId) {
+    var buckets = {};
+    (items || []).forEach(function (item) {
+      var cid = (getCategoryId(item) || "").trim() || "__other__";
+      if (!buckets[cid]) buckets[cid] = [];
+      buckets[cid].push(item);
+    });
+    var keys = Object.keys(buckets).sort(function (a, b) {
+      var da = premadeCategorySortIndex(a);
+      var db = premadeCategorySortIndex(b);
+      if (da !== db) return da - db;
+      return premadeLibraryCategoryDisplayName(a).localeCompare(premadeLibraryCategoryDisplayName(b));
+    });
+    return keys.map(function (cid) {
+      return {
+        categoryId: cid,
+        categoryName: premadeLibraryCategoryDisplayName(cid),
+        items: buckets[cid].slice().sort(function (a, b) {
+          var at = (a && a.title) || "";
+          var bt = (b && b.title) || "";
+          return at.localeCompare(bt, undefined, { sensitivity: "base" });
+        }),
+      };
+    });
+  }
+
+  function pcmPremadeRowHtml(title, metaHtml, actionsHtml) {
+    return (
+      '<div class="pcm-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.55rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
+      '<div style="flex:1;min-width:0;"><strong>' +
+      escapeHtml(title || "Untitled") +
+      '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
+      metaHtml +
+      "</span></div>" +
+      (actionsHtml || "") +
+      "</div>"
+    );
+  }
+
+  function renderPcmCategoryGroupedPremades(groups, rowBuilder) {
+    if (!groups.length) {
+      return '<p class="app-muted" style="margin:0;">None.</p>';
+    }
+    return groups
+      .map(function (g) {
+        return (
+          '<div class="pcm-category-section" style="margin:0 0 1rem;">' +
+          '<div style="font-weight:600;margin:0.15rem 0 0.35rem;display:flex;align-items:baseline;gap:0.35rem;">' +
+          escapeHtml(g.categoryName) +
+          '<span class="app-muted" style="font-size:0.82rem;font-weight:400;">(' +
+          g.items.length +
+          ")</span></div>" +
+          g.items.map(rowBuilder).join("") +
+          "</div>"
+        );
+      })
+      .join("");
+  }
+
+  function loadBundledPremadeManifest() {
+    if (bundledPremadeManifest) return Promise.resolve(bundledPremadeManifest);
+    if (bundledPremadeManifestLoadPromise) return bundledPremadeManifestLoadPromise;
+    bundledPremadeManifestLoadPromise = fetch(BUNDLED_PREMADE_MANIFEST_URL + "?v=1")
+      .then(function (r) {
+        if (!r.ok) throw new Error("Manifest not found");
+        return r.json();
+      })
+      .then(function (data) {
+        bundledPremadeManifest = data && data.categories ? data : { categories: [] };
+        return bundledPremadeManifest;
+      })
+      .catch(function () {
+        bundledPremadeManifest = { categories: [] };
+        return bundledPremadeManifest;
+      });
+    return bundledPremadeManifestLoadPromise;
+  }
+
+  function renderBundledPremadesAdminSection() {
+    var categories = (bundledPremadeManifest && bundledPremadeManifest.categories) || [];
+    var total = categories.reduce(function (n, c) {
+      return n + ((c.items && c.items.length) || 0);
+    }, 0);
+    var intro =
+      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Shipped inside the iOS app bundle — Free users see these in App Library. Web lists metadata from <code>bundled-premades-manifest.json</code> (update when bundled MP3s change).</p>';
+    if (!total) {
+      return (
+        '<details class="admin-bundled-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+        '<summary style="cursor:pointer;font-weight:600;">Bundled premades (iOS app) (0)</summary>' +
+        intro +
+        '<p class="app-muted" style="margin:0.35rem 0 0;">Could not load bundled manifest, or no entries yet.</p>' +
+        "</details>"
+      );
+    }
+    var sections = categories
+      .map(function (cat) {
+        var items = cat.items || [];
+        if (!items.length) return "";
+        return (
+          '<div class="pcm-category-section" style="margin:0 0 0.85rem;">' +
+          '<div style="font-weight:600;margin:0.15rem 0 0.35rem;display:flex;align-items:baseline;gap:0.35rem;">' +
+          escapeHtml(cat.name || cat.id || "Category") +
+          '<span class="app-muted" style="font-size:0.82rem;font-weight:400;">(' +
+          items.length +
+          ")</span></div>" +
+          items
+            .map(function (item) {
+              return pcmPremadeRowHtml(
+                item.title,
+                "Bundled · Free (all users)" +
+                  (item.id ? " · " + escapeHtml(item.id) : "")
+              );
+            })
+            .join("") +
+          "</div>"
+        );
+      })
+      .join("");
+    return (
+      '<details class="admin-bundled-premades-panel" open style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+      '<summary style="cursor:pointer;font-weight:600;">Bundled premades (iOS app) (' +
+      total +
+      ")</summary>" +
+      intro +
+      sections +
+      "</details>"
+    );
+  }
+
+  function renderPremadeContentManagerPremadeTab(body) {
+    body.innerHTML = '<p class="app-muted" style="margin:0;">Loading premade catalog…</p>';
+    loadBundledPremadeManifest().then(function () {
+      if (!body.isConnected) return;
+      var live = sortPremadeByCreatedAtDesc(currentPremade);
+      var liveGroups = groupPremadesByCategory(live, function (p) {
+        return p.categoryID;
+      });
+      var liveRows = renderPcmCategoryGroupedPremades(liveGroups, function (p) {
+        return pcmPremadeRowHtml(
+          p.title,
+          escapeHtml((p.accessTier || "paid") === "free" ? "Free (all users)" : "Paid (Starter & Creator)"),
+          '<button type="button" class="app-btn app-btn-secondary" data-pcm-hide-premade="' +
+            escapeHtml(p.id) +
+            '">Hide</button>'
+        );
+      });
+      var hiddenBlock = renderHiddenPremadesAdminSection();
+      var bundledBlock = renderBundledPremadesAdminSection();
+      body.innerHTML =
+        '<p class="app-muted" style="margin:0 0 0.65rem;">Live cloud premades grouped by category. Hide removes from App Library; restore from Hidden below.</p>' +
+        (live.length
+          ? liveRows
+          : '<p class="app-muted" style="margin:0 0 0.85rem;">No published cloud premades yet.</p>') +
+        hiddenBlock +
+        bundledBlock;
+      bindHiddenPremadeAdminActions(body);
+      bindPremadeContentManagerBodyActions();
+    });
+  }
+
   function renderPremadeContentManager() {
     var body = document.getElementById("pcm-body");
     if (!body) return;
@@ -7004,37 +7176,8 @@
             .join("");
       }
     } else if (premadeContentManagerTab === "premade") {
-      var live = sortPremadeByCreatedAtDesc(currentPremade);
-      var hiddenBlock = renderHiddenPremadesAdminSection();
-      if (!live.length) {
-        body.innerHTML =
-          '<p class="app-muted" style="margin:0 0 0.65rem;">Live cloud premades in App Library.</p>' +
-          '<p class="app-muted">No published premades yet.</p>' +
-          hiddenBlock;
-      } else {
-        body.innerHTML =
-          '<p class="app-muted" style="margin:0 0 0.65rem;">Hide removes from App Library; restore from Hidden below.</p>' +
-          live
-            .map(function (p) {
-              return (
-                '<div class="pcm-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.55rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
-                '<div style="flex:1;min-width:0;"><strong>' +
-                escapeHtml(p.title || "Untitled") +
-                '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
-                escapeHtml(premadeLibraryCategoryDisplayName((p.categoryID || "").trim())) +
-                " · " +
-                escapeHtml((p.accessTier || "paid") === "free" ? "Free" : "Paid") +
-                "</span></div>" +
-                '<button type="button" class="app-btn app-btn-secondary" data-pcm-hide-premade="' +
-                escapeHtml(p.id) +
-                '">Hide</button>' +
-                "</div>"
-              );
-            })
-            .join("") +
-          hiddenBlock;
-      }
-      bindHiddenPremadeAdminActions();
+      renderPremadeContentManagerPremadeTab(body);
+      return;
     } else if (premadeContentManagerTab === "backgrounds") {
       body.innerHTML =
         '<div class="pcm-bg-publish-row" style="margin:0 0 0.75rem;">' +
@@ -19497,25 +19640,24 @@
         "</details>"
       );
     }
-    var rows = currentHiddenPremade
-      .map(function (p) {
-        return (
-          '<div class="admin-hidden-premade-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
-          '<div style="flex:1;min-width:0;"><strong>' +
-          escapeHtml(p.title || "Untitled") +
-          '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
-          escapeHtml(premadeLibraryCategoryDisplayName((p.categoryID || "").trim())) +
-          "</span></div>" +
-          '<button type="button" class="app-btn app-btn-secondary" data-hidden-premade-action="restore" data-hidden-premade-id="' +
-          escapeHtml(p.id) +
-          '">Restore</button>' +
-          '<button type="button" class="app-btn app-btn-danger" data-hidden-premade-action="delete" data-hidden-premade-id="' +
-          escapeHtml(p.id) +
-          '">Delete</button>' +
-          "</div>"
-        );
-      })
-      .join("");
+    var groups = groupPremadesByCategory(currentHiddenPremade, function (p) {
+      return p.categoryID;
+    });
+    var rows = renderPcmCategoryGroupedPremades(groups, function (p) {
+      return (
+        '<div class="admin-hidden-premade-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
+        '<div style="flex:1;min-width:0;"><strong>' +
+        escapeHtml(p.title || "Untitled") +
+        "</strong></div>" +
+        '<button type="button" class="app-btn app-btn-secondary" data-hidden-premade-action="restore" data-hidden-premade-id="' +
+        escapeHtml(p.id) +
+        '">Restore</button>' +
+        '<button type="button" class="app-btn app-btn-danger" data-hidden-premade-action="delete" data-hidden-premade-id="' +
+        escapeHtml(p.id) +
+        '">Delete</button>' +
+        "</div>"
+      );
+    });
     return (
       '<details class="admin-hidden-premades-panel" open style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
       '<summary style="cursor:pointer;font-weight:600;">Hidden premades (' +
@@ -19527,10 +19669,16 @@
     );
   }
 
-  function bindHiddenPremadeAdminActions() {
+  function bindHiddenPremadeAdminActions(scopeRoot) {
+    var roots = [];
+    if (scopeRoot) roots.push(scopeRoot);
+    var pcmBody = document.getElementById("pcm-body");
+    if (pcmBody && roots.indexOf(pcmBody) < 0) roots.push(pcmBody);
     var list = document.getElementById("premade-list");
-    if (!list) return;
-    list.querySelectorAll("[data-hidden-premade-action]").forEach(function (btn) {
+    if (list && roots.indexOf(list) < 0) roots.push(list);
+    if (!roots.length) return;
+    roots.forEach(function (root) {
+      root.querySelectorAll("[data-hidden-premade-action]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         if (!adminModeEnabled) return;
         var action = btn.getAttribute("data-hidden-premade-action");
