@@ -141,9 +141,9 @@
   /** Matches iOS `SubscriptionConfig.creatorOutgoingShareCap` (active outgoing share links). */
   var CREATOR_OUTGOING_SHARE_CAP = 50;
   /** Matches iOS `SubscriptionConfig.Quotas.starterMaxClonedVoices`. */
-  var STARTER_MAX_CLONED_VOICES = 1;
+  var STARTER_MAX_CLONED_VOICES = 2;
   /** Matches iOS `SubscriptionConfig.Quotas.creatorMaxClonedVoices`. */
-  var CREATOR_MAX_CLONED_VOICES = 2;
+  var CREATOR_MAX_CLONED_VOICES = 5;
   /** Universal link base for share invites (`ShareLinkConstants` on iOS). */
   var SHARE_UNIVERSAL_LINK_ORIGIN = "https://focusshift.app/s/";
 
@@ -1717,7 +1717,7 @@
         "Choose the voice that speaks your affirmations when you generate audio.\n\n" +
         "My Voices\n" +
         "• Your saved voices: cloned voices, added app voices, and uploaded custom voices (Starter/Creator).\n" +
-        "• Starter includes 1 cloned voice; Creator includes up to 2.\n" +
+        "• Starter includes up to 2 cloned voices; Creator includes up to 5.\n" +
         "• Clone opens a guided recording window—same flow as iOS.\n" +
         "• Upload Voice Audio adds a file from your computer (MP3, WAV, M4A).\n\n" +
         "App Voices\n" +
@@ -5186,8 +5186,8 @@
       '          <div id="account-plans-appstore-wrap" hidden>' +
       '            <p class="app-muted account-plans-panel-note">Your subscription is managed through the <strong>App Store</strong>. Upgrades, downgrades, and cancellations must be done on iPhone or iPad — not through Stripe on the web.</p>' +
       '            <ul class="account-plans-readonly">' +
-      "              <li><strong>Starter</strong> — More scripts, voices, cloud sync, and AI usage.</li>" +
-      "              <li><strong>Creator</strong> — Higher limits, sharing, and voice cloning.</li>" +
+      "              <li><strong>Starter</strong> — Cloud sync, AI usage, and voice cloning (up to 2 voices).</li>" +
+      "              <li><strong>Creator</strong> — Higher limits, up to 5 cloned voices, and sharing.</li>" +
       "            </ul>" +
       '            <p class="app-muted account-plans-panel-note" style="margin-top:0.55rem;">Open <strong>Focus Shift</strong> on your iPhone or iPad → <strong>Account</strong> → <strong>Manage Account</strong> → <strong>Subscription &amp; Billing</strong>.</p>' +
       "          </div>" +
@@ -9096,10 +9096,16 @@
       return "Voice cloning requires a Starter or Creator subscription.";
     }
     if (limits.userCloneCount >= limits.userCloneMax) {
-      if (limits.userCloneMax === 1) {
-        return "Starter includes 1 cloned voice. Upgrade to Creator for up to 2, or delete your existing clone first.";
+      if (limits.userCloneMax < CREATOR_MAX_CLONED_VOICES) {
+        return (
+          "Starter includes up to " +
+          limits.userCloneMax +
+          " cloned voices. Upgrade to Creator for up to " +
+          CREATOR_MAX_CLONED_VOICES +
+          ", or delete an existing clone first."
+        );
       }
-      return "Creator includes up to 2 cloned voices. Delete an existing clone to add another.";
+      return "Creator includes up to " + limits.userCloneMax + " cloned voices. Delete an existing clone to add another.";
     }
     if (limits.globalCloneCount >= limits.globalCloneMax) {
       return "Voice cloning is temporarily at capacity. Please try again later or contact support.";
@@ -9172,7 +9178,7 @@
       var reason = voiceCloneLimitBlockedReason(currentVoiceCloneLimits);
       setVoicesMessage(reason, "error");
       if (reason.indexOf("Upgrade to Creator") >= 0) {
-        promptWebPaidUpgrade("Upgrade to Creator for a second cloned voice.");
+        promptWebPaidUpgrade("Upgrade to Creator for up to 5 cloned voices.");
       }
       return false;
     }
@@ -9182,7 +9188,7 @@
   function handleVoiceCloneBackendError(json, fallbackMessage) {
     var msg = parseBackendErrorMessage(json && json.error) || fallbackMessage || "Voice cloning failed.";
     if (json && json.code === "clone_limit_user" && resolvedSubscriptionTier() === "starter") {
-      promptWebPaidUpgrade("Upgrade to Creator for a second cloned voice.");
+      promptWebPaidUpgrade("Upgrade to Creator for up to 5 cloned voices.");
     }
     return msg;
   }
