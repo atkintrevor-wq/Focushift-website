@@ -19679,51 +19679,52 @@
     if (!roots.length) return;
     roots.forEach(function (root) {
       root.querySelectorAll("[data-hidden-premade-action]").forEach(function (btn) {
-      btn.addEventListener("click", function () {
-        if (!adminModeEnabled) return;
-        var action = btn.getAttribute("data-hidden-premade-action");
-        var pid = btn.getAttribute("data-hidden-premade-id");
-        if (!pid) return;
-        var premade = currentHiddenPremade.find(function (x) {
-          return x.id === pid;
-        });
-        var title = (premade && premade.title) || "this premade";
-        if (action === "restore") {
-          btn.disabled = true;
-          restorePremadeById(pid)
-            .then(function () {
-              showAppBanner("Premade restored", '"' + title + '" is live again.', "success", { duration: 5000 });
-            })
-            .catch(function (e) {
-              showAppBanner("Restore failed", e.message || "Could not restore premade.", "error", { duration: 7000 });
-            })
-            .finally(function () {
-              btn.disabled = false;
-            });
-        } else if (action === "delete") {
-          if (
-            !window.confirm(
-              'Permanently delete "' +
-                title +
-                '"?\n\nThis removes the Firestore record and Storage audio. This cannot be undone.'
-            )
-          ) {
-            return;
-          }
-          btn.disabled = true;
-          deletePremadePermanentlyById(pid)
-            .then(function () {
-              showAppBanner("Premade deleted", '"' + title + '" was permanently removed.', "success", {
-                duration: 5000,
+        btn.addEventListener("click", function () {
+          if (!adminModeEnabled) return;
+          var action = btn.getAttribute("data-hidden-premade-action");
+          var pid = btn.getAttribute("data-hidden-premade-id");
+          if (!pid) return;
+          var premade = currentHiddenPremade.find(function (x) {
+            return x.id === pid;
+          });
+          var title = (premade && premade.title) || "this premade";
+          if (action === "restore") {
+            btn.disabled = true;
+            restorePremadeById(pid)
+              .then(function () {
+                showAppBanner("Premade restored", '"' + title + '" is live again.', "success", { duration: 5000 });
+              })
+              .catch(function (e) {
+                showAppBanner("Restore failed", e.message || "Could not restore premade.", "error", { duration: 7000 });
+              })
+              .finally(function () {
+                btn.disabled = false;
               });
-            })
-            .catch(function (e) {
-              showAppBanner("Delete failed", e.message || "Could not delete premade.", "error", { duration: 7000 });
-            })
-            .finally(function () {
-              btn.disabled = false;
-            });
-        }
+          } else if (action === "delete") {
+            if (
+              !window.confirm(
+                'Permanently delete "' +
+                  title +
+                  '"?\n\nThis removes the Firestore record and Storage audio. This cannot be undone.'
+              )
+            ) {
+              return;
+            }
+            btn.disabled = true;
+            deletePremadePermanentlyById(pid)
+              .then(function () {
+                showAppBanner("Premade deleted", '"' + title + '" was permanently removed.', "success", {
+                  duration: 5000,
+                });
+              })
+              .catch(function (e) {
+                showAppBanner("Delete failed", e.message || "Could not delete premade.", "error", { duration: 7000 });
+              })
+              .finally(function () {
+                btn.disabled = false;
+              });
+          }
+        });
       });
     });
   }
