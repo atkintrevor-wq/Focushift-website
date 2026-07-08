@@ -6868,45 +6868,53 @@
     if (!adminModeEnabled) return "";
     var count = currentBackgroundCatalog.length;
     var intro =
-      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Cloud tracks in Firestore <code>backgroundCatalog</code>. Bundled App Audio files are unchanged.</p>';
+      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Cloud tracks in Firestore <code>backgroundCatalog</code>, grouped by category. Tap a category to expand.</p>';
     var header =
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:0.5rem;flex-wrap:wrap;margin:0.5rem 0 0.65rem;">' +
       '<span class="app-muted" style="font-size:0.88rem;">Admin: cloud background catalog</span>' +
       '<button type="button" class="app-btn app-btn-secondary" id="btn-open-publish-background">Publish Background</button>' +
       "</div>";
+    var cloudBody = "";
     if (!count) {
-      return (
-        '<details class="admin-cloud-bg-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
-        '<summary style="cursor:pointer;font-weight:600;">Cloud backgrounds (0)</summary>' +
-        intro +
-        header +
-        '<p class="app-muted" style="margin:0.35rem 0 0;">No cloud backgrounds yet.</p>' +
-        "</details>"
-      );
-    }
-    var rows = currentBackgroundCatalog
-      .map(function (b) {
+      cloudBody = '<p class="app-muted" style="margin:0.35rem 0 0;">No cloud backgrounds yet.</p>';
+    } else {
+      var groups = groupBackgroundsByCategory(currentBackgroundCatalog);
+      cloudBody = renderPcmCategoryGroupedBackgrounds(groups, function (b) {
         return (
           '<div class="admin-cloud-bg-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
           '<div style="flex:1;min-width:0;"><strong>' +
           escapeHtml(b.name || "Background") +
           '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
-          escapeHtml(backgroundCategoryDisplayName(normalizedBackgroundBrowseCategoryID(b.categoryID))) +
-          " · " +
-          escapeHtml((b.accessTier || "free") === "paid" ? "Paid" : "Free") +
-          "</span></div>" +
-          "</div>"
+          escapeHtml((b.accessTier || "free") === "paid" ? "Paid (Starter & Creator)" : "Free (all users)") +
+          "</span></div></div>"
         );
-      })
-      .join("");
+      });
+    }
+    var bundledGroups = groupBackgroundsByCategory(availableBackgrounds);
+    var bundledTotal = availableBackgrounds.length;
+    var bundledBlocks = renderPcmCategoryGroupedBackgrounds(bundledGroups, function (b) {
+      return (
+        '<div class="admin-cloud-bg-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
+        '<div style="flex:1;min-width:0;"><strong>' +
+        escapeHtml(b.name || "Background") +
+        '</strong><br><span class="app-muted" style="font-size:0.82rem;">Bundled · Free (all users)</span></div></div>'
+      );
+    });
     return (
-      '<details class="admin-cloud-bg-panel" open style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+      '<details class="admin-cloud-bg-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
       '<summary style="cursor:pointer;font-weight:600;">Cloud backgrounds (' +
       count +
       ")</summary>" +
       intro +
       header +
-      rows +
+      cloudBody +
+      "</details>" +
+      '<details class="admin-bundled-bg-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+      '<summary style="cursor:pointer;font-weight:600;">Bundled backgrounds (iOS app) (' +
+      bundledTotal +
+      ")</summary>" +
+      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Shipped inside the app bundle. Free users browse these in App Audio.</p>' +
+      (bundledTotal ? bundledBlocks : '<p class="app-muted" style="margin:0.35rem 0 0;">No bundled backgrounds found.</p>') +
       "</details>"
     );
   }
@@ -7006,17 +7014,52 @@
     return groups
       .map(function (g) {
         return (
-          '<div class="pcm-category-section" style="margin:0 0 1rem;">' +
-          '<div style="font-weight:600;margin:0.15rem 0 0.35rem;display:flex;align-items:baseline;gap:0.35rem;">' +
+          '<details class="pcm-category-collapse" style="margin:0 0 0.55rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.5rem;padding:0.35rem 0.65rem;">' +
+          '<summary style="cursor:pointer;font-weight:600;padding:0.2rem 0;">' +
           escapeHtml(g.categoryName) +
-          '<span class="app-muted" style="font-size:0.82rem;font-weight:400;">(' +
+          ' <span class="app-muted" style="font-size:0.82rem;font-weight:400;">(' +
           g.items.length +
-          ")</span></div>" +
+          ")</span></summary>" +
+          '<div style="margin-top:0.35rem;">' +
           g.items.map(rowBuilder).join("") +
-          "</div>"
+          "</div></details>"
         );
       })
       .join("");
+  }
+
+  function backgroundCategorySortIndex(categoryId) {
+    var cid = (categoryId && String(categoryId).trim()) || "__other__";
+    var idx = backgroundCategoryOrder.indexOf(cid);
+    return idx >= 0 ? idx : 9999;
+  }
+
+  function groupBackgroundsByCategory(items) {
+    var buckets = {};
+    (items || []).forEach(function (item) {
+      var cid = normalizedBackgroundBrowseCategoryID(item.categoryID) || "__other__";
+      if (!buckets[cid]) buckets[cid] = [];
+      buckets[cid].push(item);
+    });
+    var keys = Object.keys(buckets).sort(function (a, b) {
+      var da = backgroundCategorySortIndex(a);
+      var db = backgroundCategorySortIndex(b);
+      if (da !== db) return da - db;
+      return backgroundCategoryDisplayName(a).localeCompare(backgroundCategoryDisplayName(b));
+    });
+    return keys.map(function (cid) {
+      return {
+        categoryId: cid,
+        categoryName: backgroundCategoryDisplayName(cid),
+        items: buckets[cid].slice().sort(function (a, b) {
+          return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+        }),
+      };
+    });
+  }
+
+  function renderPcmCategoryGroupedBackgrounds(groups, rowBuilder) {
+    return renderPcmCategoryGroupedPremades(groups, rowBuilder);
   }
 
   function loadBundledPremadeManifest() {
@@ -7058,28 +7101,29 @@
       .map(function (cat) {
         var items = cat.items || [];
         if (!items.length) return "";
+        var rows = items
+          .map(function (item) {
+            return pcmPremadeRowHtml(
+              item.title,
+              "Bundled · Free (all users)" + (item.id ? " · " + escapeHtml(item.id) : "")
+            );
+          })
+          .join("");
         return (
-          '<div class="pcm-category-section" style="margin:0 0 0.85rem;">' +
-          '<div style="font-weight:600;margin:0.15rem 0 0.35rem;display:flex;align-items:baseline;gap:0.35rem;">' +
+          '<details class="pcm-category-collapse" style="margin:0 0 0.55rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.5rem;padding:0.35rem 0.65rem;">' +
+          '<summary style="cursor:pointer;font-weight:600;padding:0.2rem 0;">' +
           escapeHtml(cat.name || cat.id || "Category") +
-          '<span class="app-muted" style="font-size:0.82rem;font-weight:400;">(' +
+          ' <span class="app-muted" style="font-size:0.82rem;font-weight:400;">(' +
           items.length +
-          ")</span></div>" +
-          items
-            .map(function (item) {
-              return pcmPremadeRowHtml(
-                item.title,
-                "Bundled · Free (all users)" +
-                  (item.id ? " · " + escapeHtml(item.id) : "")
-              );
-            })
-            .join("") +
-          "</div>"
+          ")</span></summary>" +
+          '<div style="margin-top:0.35rem;">' +
+          rows +
+          "</div></details>"
         );
       })
       .join("");
     return (
-      '<details class="admin-bundled-premades-panel" open style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+      '<details class="admin-bundled-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
       '<summary style="cursor:pointer;font-weight:600;">Bundled premades (iOS app) (' +
       total +
       ")</summary>" +
@@ -7108,11 +7152,17 @@
       });
       var hiddenBlock = renderHiddenPremadesAdminSection();
       var bundledBlock = renderBundledPremadesAdminSection();
+      var publishedBlock = live.length
+        ? '<details class="admin-published-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+          '<summary style="cursor:pointer;font-weight:600;">Published (Cloud) (' +
+          live.length +
+          ")</summary>" +
+          '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;">Tap a category to expand. Hide removes from App Library.</p>' +
+          liveRows +
+          "</details>"
+        : '<p class="app-muted" style="margin:0 0 0.85rem;">No published cloud premades yet.</p>';
       body.innerHTML =
-        '<p class="app-muted" style="margin:0 0 0.65rem;">Live cloud premades grouped by category. Hide removes from App Library; restore from Hidden below.</p>' +
-        (live.length
-          ? liveRows
-          : '<p class="app-muted" style="margin:0 0 0.85rem;">No published cloud premades yet.</p>') +
+        publishedBlock +
         hiddenBlock +
         bundledBlock;
       bindHiddenPremadeAdminActions(body);
@@ -19659,7 +19709,7 @@
       );
     });
     return (
-      '<details class="admin-hidden-premades-panel" open style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+      '<details class="admin-hidden-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
       '<summary style="cursor:pointer;font-weight:600;">Hidden premades (' +
       count +
       ")</summary>" +
