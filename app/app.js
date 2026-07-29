@@ -1671,7 +1671,7 @@
     home: {
       title: "Home",
       content:
-        "Create Personalized Mind Training Script — Tap to start the questionnaire and generate a personalized mind training script (Starter and Creator). On Free, you'll be prompted to upgrade.\n\n" +
+        "Create my affirmation audio — Tap to start the questionnaire and generate personalized affirmation audio. Free includes one short sample; Starter and Creator unlock ongoing creation and voice cloning.\n\n" +
         "Daily Spark — Tap to play today's short curated affirmation (Starter and Creator).\n\n" +
         "Listen today — Tap to run your saved playlist or library shortcut. Set the target in Account → Preferences.\n\n" +
         "Dashboard — Streak, plays (tap plays to cycle week / month / year / total), plan, last played, milestones, and reminders status. Same Firestore fields as the iOS app.\n\n" +
@@ -11675,7 +11675,8 @@
     if (tier === "creator") {
       return { scriptsLimit: null, wordsLimit: 8000, ttsLimit: 40000 };
     }
-    return { scriptsLimit: 0, wordsLimit: 0, ttsLimit: 0 };
+    // Free lifetime taste (matches Cloud Functions TIER_RULES.free; counters never reset).
+    return { scriptsLimit: 1, wordsLimit: 400, ttsLimit: 2000 };
   }
 
   function usageDocInt(usage, key) {
@@ -12238,12 +12239,16 @@
     if (profileUsesComplimentaryBilling()) {
       return "Complimentary access with paid-tier features.";
     }
-    if (t === "starter") return "Perfect for getting started.";
-    if (t === "creator") return "For creators who need more.";
-    if (isWebPublicBetaActive()) {
-      return "Beta tester on the Free plan — browse and listen in the App Library. Paid features and subscriptions open at launch.";
+    if (t === "starter") {
+      return "Create personalized affirmation audio from your goals — optionally in your own voice.";
     }
-    return "Limited features on the Free tier. Upgrade for more scripts, voices, and cloud sync.";
+    if (t === "creator") {
+      return "Higher creation limits, plus share your audio with others.";
+    }
+    if (isWebPublicBetaActive()) {
+      return "Beta tester on the Free plan — browse sample audio in the App Library. Upgrade later to create personalized audio.";
+    }
+    return "Try one free personalized script + audio on Free. Upgrade to create more — optionally in your own voice.";
   }
 
   function subscriptionPlanHeadlineWeb() {
@@ -13451,8 +13456,10 @@
 
   function beginScriptGenerationFromForm(displayName) {
     if (!currentUser) return;
+    if (!requireWebCreateOrTaste()) return;
     var ctx = readGenerateFormFromDom();
     ctx.displayName = displayName || "";
+    if (isWebFreeTier()) ctx.length = "Short";
     if (!ctx.q1 || !ctx.q2) {
       generationMessage("Please answer both questions first.", "error");
       return;
@@ -13515,6 +13522,97 @@
     }
   }
 
+  function firstCreateHearStorageKey() {
+    var uid = currentUser && currentUser.uid ? currentUser.uid : "anon";
+    return "fs_firstCreateHearFinished_" + uid;
+  }
+
+  function isFirstCreateHearFinishedWeb() {
+    try {
+      return localStorage.getItem(firstCreateHearStorageKey()) === "1";
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function finishFirstCreateHearWeb() {
+    try {
+      localStorage.setItem(firstCreateHearStorageKey(), "1");
+    } catch (_e2) {}
+  }
+
+  function firstCreateHearHomeCardHtml() {
+    if (isFirstCreateHearFinishedWeb()) return "";
+    var createEligible = canWebParticipateInCreateHearPath();
+    if (createEligible) {
+      return (
+        '<div class="app-card app-glass-card" style="margin:0;padding:0.9rem;" id="home-first-create-hear-card">' +
+        "  <div style=\"display:flex;justify-content:space-between;gap:0.6rem;align-items:flex-start;\">" +
+        "    <div>" +
+        '      <strong style="font-size:1rem;">Step 1 of 3 — Create your first audio</strong>' +
+        '      <p class="app-muted" style="margin:0.3rem 0 0;">Answer a few questions, pick a voice, generate audio, then hear something made for you.' +
+        (isWebFreeTier() ? " Free includes one short sample." : "") +
+        "</p>" +
+        "    </div>" +
+        '    <button type="button" class="app-btn" id="home-first-create-skip" style="flex-shrink:0;">Not now</button>' +
+        "  </div>" +
+        '  <div style="margin-top:0.7rem;"><button type="button" class="app-btn app-btn-primary" id="home-first-create-start">Start creating</button></div>' +
+        "</div>"
+      );
+    }
+    return (
+      '<div class="app-card app-glass-card" style="margin:0;padding:0.9rem;" id="home-first-create-hear-card">' +
+      "  <div style=\"display:flex;justify-content:space-between;gap:0.6rem;align-items:flex-start;\">" +
+      "    <div>" +
+      '      <strong style="font-size:1rem;">Create personalized audio (not just samples)</strong>' +
+      '      <p class="app-muted" style="margin:0.3rem 0 0;">Upgrade to build more scripts from your goals — optionally in your own voice. App Library samples are just a preview.</p>' +
+      "    </div>" +
+      '    <button type="button" class="app-btn" id="home-first-create-skip" style="flex-shrink:0;">Not now</button>' +
+      "  </div>" +
+      '  <div style="margin-top:0.7rem;display:flex;flex-wrap:wrap;gap:0.5rem;">' +
+      '    <button type="button" class="app-btn app-btn-primary" id="home-first-create-upgrade">See plans</button>' +
+      '    <button type="button" class="app-btn" id="home-first-create-browse">Browse samples</button>' +
+      "  </div>" +
+      "</div>"
+    );
+  }
+
+  function bindFirstCreateHearHomeCard(displayName) {
+    var skip = document.getElementById("home-first-create-skip");
+    if (skip) {
+      skip.addEventListener("click", function () {
+        finishFirstCreateHearWeb();
+        renderHomeFlow(displayName);
+      });
+    }
+    var start = document.getElementById("home-first-create-start");
+    if (start) {
+      start.addEventListener("click", function () {
+        if (!requireWebCreateOrTaste()) return;
+        setHomeFlowStep("category", displayName);
+      });
+    }
+    var upgrade = document.getElementById("home-first-create-upgrade");
+    if (upgrade) {
+      upgrade.addEventListener("click", function () {
+        openAccountModal();
+      });
+    }
+    var browse = document.getElementById("home-first-create-browse");
+    if (browse) {
+      browse.addEventListener("click", function () {
+        finishFirstCreateHearWeb();
+        activeLibraryTab = "app-library";
+        try {
+          localStorage.setItem(PREF_LIBRARY_SUB_KEY, "app-library");
+        } catch (_e) {}
+        setAdminTab("library");
+        renderLibrarySubtab();
+        renderPremade();
+      });
+    }
+  }
+
   function renderHomeFlow(displayName) {
     var el = document.getElementById("home-flow");
     if (!el) return;
@@ -13529,14 +13627,15 @@
       var listenSub = escapeHtml(listenTodaySubtitleWeb(ls));
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
+        firstCreateHearHomeCardHtml() +
         '  <div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
         '    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">' +
         "      <div>" +
-        '        <strong style="font-size:1rem;">Create Personalized Mind Training Script</strong>' +
+        '        <strong style="font-size:1rem;">Create my affirmation audio</strong>' +
         '        <p class="app-muted" style="margin:0.25rem 0 0;">Follow category selection, then answer your survey questions.</p>' +
         "      </div>" +
         "    </div>" +
-        '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create Personalized Mind Training Script</button></div>' +
+        '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create my affirmation audio</button></div>' +
         "  </div>" +
         '  <div class="app-card app-glass-card home-action-buttons-card">' +
         '    <div class="home-action-buttons-grid">' +
@@ -13570,14 +13669,11 @@
         "  </div>" +
         buildHomeDashboardCardHtml(ls) +
         "</div>";
+      bindFirstCreateHearHomeCard(displayName);
       var startBtn = document.getElementById("home-start-create");
       if (startBtn) {
         startBtn.addEventListener("click", function () {
-          if (!isWebPaidTierForAI()) {
-            setMessage("AI script generation requires Starter or Creator.", "info");
-            openAccountModal();
-            return;
-          }
+          if (!requireWebCreateOrTaste()) return;
           setHomeFlowStep("category", displayName);
         });
       }
@@ -13761,20 +13857,27 @@
       '    <option value="Assertive">Assertive</option>' +
       "  </select>" +
       '  <p class="gen-field-label" style="margin-top:0.85rem;">Length</p>' +
-      '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
-      '    <span class="gen-pill-item">' +
-      '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" />' +
-      '      <label for="gen-length-short" class="gen-pill-label">Short</label>' +
-      "    </span>" +
-      '    <span class="gen-pill-item">' +
-      '      <input type="radio" name="gen-length" id="gen-length-medium" value="Medium" class="gen-pill-input" checked />' +
-      '      <label for="gen-length-medium" class="gen-pill-label">Medium</label>' +
-      "    </span>" +
-      '    <span class="gen-pill-item">' +
-      '      <input type="radio" name="gen-length" id="gen-length-long" value="Long" class="gen-pill-input" />' +
-      '      <label for="gen-length-long" class="gen-pill-label">Long</label>' +
-      "    </span>" +
-      "  </div>" +
+      (isWebFreeTier()
+        ? '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
+          '    <span class="gen-pill-item">' +
+          '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" checked />' +
+          '      <label for="gen-length-short" class="gen-pill-label">Short (free sample)</label>' +
+          "    </span>" +
+          "  </div>"
+        : '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
+          '    <span class="gen-pill-item">' +
+          '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" />' +
+          '      <label for="gen-length-short" class="gen-pill-label">Short</label>' +
+          "    </span>" +
+          '    <span class="gen-pill-item">' +
+          '      <input type="radio" name="gen-length" id="gen-length-medium" value="Medium" class="gen-pill-input" checked />' +
+          '      <label for="gen-length-medium" class="gen-pill-label">Medium</label>' +
+          "    </span>" +
+          '    <span class="gen-pill-item">' +
+          '      <input type="radio" name="gen-length" id="gen-length-long" value="Long" class="gen-pill-input" />' +
+          '      <label for="gen-length-long" class="gen-pill-label">Long</label>' +
+          "    </span>" +
+          "  </div>") +
       '  <p id="gen-length-hint" class="gen-pill-hint app-muted"></p>' +
       '  <p class="gen-field-label" style="margin-top:0.75rem;">Perspective</p>' +
       '  <div class="gen-pill-row" role="radiogroup" aria-label="Narration perspective">' +
@@ -14595,7 +14698,8 @@
   }
 
   function showSplitEditGenerateOnCard(script, controlsReadOnly) {
-    if (controlsReadOnly || isWebFreeTier()) return false;
+    if (controlsReadOnly) return false;
+    if (isWebFreeTier() && !canWebGenerateAiTaste()) return false;
     var text = (script.text || "").trim();
     if (!text) return false;
     if (!effectiveVoiceIdForScript(script)) return false;
@@ -15131,8 +15235,28 @@
     var primaryTitle = workshopPrimaryButtonTitle(script, primaryAction);
     var primaryDisabled = primaryAction === "none";
     var chevronHtml = scriptWorkshopChevronHtml(script, primaryAction);
+    var cloneNudgeHtml = "";
+    try {
+      var cloneNudgeKey =
+        "fs_voiceCloneNudgeDismissed_" + ((currentUser && currentUser.uid) || "anon");
+      var cloneNudgeDismissed = localStorage.getItem(cloneNudgeKey) === "1";
+      var hasClones = Array.isArray(currentClonedVoices) && currentClonedVoices.length > 0;
+      if (isWebPaidTierForAI() && !cloneNudgeDismissed && !hasClones) {
+        cloneNudgeHtml =
+          '<div class="app-empty-hint" id="script-workshop-clone-nudge" style="margin:0 0 0.75rem;padding:0.75rem 0.85rem;">' +
+          "  <strong>Hear this in your voice</strong>" +
+          '  <p style="margin:0.3rem 0 0.55rem;">Clone your voice once (~60 seconds). Your brain trusts your own voice most.</p>' +
+          '  <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;">' +
+          '    <button type="button" class="app-btn app-btn-primary" id="script-workshop-clone-cta" style="font-size:0.88rem;">Clone my voice</button>' +
+          '    <button type="button" class="app-btn" id="script-workshop-clone-dismiss" style="font-size:0.88rem;">Not now</button>' +
+          "  </div>" +
+          "</div>";
+      }
+    } catch (_cloneNudgeErr) {}
+
     body.innerHTML =
       '<p class="script-workshop-section-label">How you\'ll listen</p>' +
+      cloneNudgeHtml +
       '<div class="script-workshop-media-row">' +
       '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-voice">Voice: ' +
       escapeHtml(workshopVoiceLabelFromDraft(scriptWorkshopDraft)) +
@@ -15191,6 +15315,28 @@
     document.getElementById("script-workshop-background").onclick = function () {
       openMediaPicker({ kind: "workshop", field: "background" });
     };
+    var cloneCta = document.getElementById("script-workshop-clone-cta");
+    if (cloneCta) {
+      cloneCta.onclick = function () {
+        if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.voiceClone)) return;
+        if (!requireCanCreateVoiceClone()) return;
+        setAdminTab("voices");
+        openCloneVoiceGuide();
+      };
+    }
+    var cloneDismiss = document.getElementById("script-workshop-clone-dismiss");
+    if (cloneDismiss) {
+      cloneDismiss.onclick = function () {
+        try {
+          localStorage.setItem(
+            "fs_voiceCloneNudgeDismissed_" + ((currentUser && currentUser.uid) || "anon"),
+            "1"
+          );
+        } catch (_e) {}
+        var nudge = document.getElementById("script-workshop-clone-nudge");
+        if (nudge) nudge.remove();
+      };
+    }
     var aiBtn = document.getElementById("script-workshop-ai-edit");
     if (aiBtn) {
       aiBtn.disabled = !canEditTextBody;
@@ -15761,7 +15907,7 @@
             escapeHtml((script.sharedFrom && script.sharedFrom.senderDisplayName) || "someone") +
             ". Listen-only — you can play audio and add to playlists, but not edit or regenerate.</p>"
           : isFreeReadOnly
-            ? '<p class="app-muted script-card-shared-note" style="margin:0 0 0.65rem;line-height:1.45;">Free plan: play and add to playlists. Upgrade to Starter or Creator to edit, change voice/background, or generate new audio.</p>'
+            ? '<p class="app-muted script-card-shared-note" style="margin:0 0 0.65rem;line-height:1.45;">Free sample used: play and add to playlists. Upgrade to Starter or Creator to edit, change voice/background, or generate more audio.</p>'
             : "") +
         '<div class="script-card-voice-bg-grid script-card-voice-bg-readonly">' +
         '  <span class="script-card-media-chip"><span class="script-card-media-chip-label">Voice</span> ' +
@@ -15873,6 +16019,48 @@
     return tier === "starter" || tier === "creator";
   }
 
+  /** Free lifetime: 1 short AI script remaining (server-enforced). */
+  function canWebStartAiTaste() {
+    if (isWebPaidTierForAI()) return true;
+    if (!isWebFreeTier()) return false;
+    var usage = (accountInsightsSnapshot && accountInsightsSnapshot.usage) || {};
+    return usageDocInt(usage, "scriptsThisMonth") < 1;
+  }
+
+  /** Free lifetime: TTS taste remaining (any prior TTS usage counts as used). */
+  function canWebGenerateAiTaste() {
+    if (isWebPaidTierForAI()) return true;
+    if (!isWebFreeTier()) return false;
+    var usage = (accountInsightsSnapshot && accountInsightsSnapshot.usage) || {};
+    return usageDocInt(usage, "ttsCharactersThisMonth") === 0;
+  }
+
+  function canWebParticipateInCreateHearPath() {
+    return isWebPaidTierForAI() || canWebStartAiTaste() || canWebGenerateAiTaste();
+  }
+
+  function requireWebCreateOrTaste(detail) {
+    if (canWebStartAiTaste()) return true;
+    promptWebPaidUpgrade(
+      detail ||
+        (isWebFreeTier()
+          ? "You've used your free personalized script. Upgrade to Starter or Creator to create more."
+          : "AI script generation requires Starter or Creator.")
+    );
+    return false;
+  }
+
+  function requireWebGenerateOrTaste(detail) {
+    if (canWebGenerateAiTaste()) return true;
+    promptWebPaidUpgrade(
+      detail ||
+        (isWebFreeTier()
+          ? "You've used your free audio sample. Upgrade to Starter or Creator to generate more."
+          : WEB_PAID_FEATURE_COPY.generate)
+    );
+    return false;
+  }
+
   function catalogAccessTierFromData(data) {
     var raw =
       data && data.accessTier != null ? String(data.accessTier).trim().toLowerCase() : "";
@@ -15957,6 +16145,8 @@
 
   function isWebFreeReadOnlyLibraryScript(script) {
     if (!isWebFreeTier() || scriptIsSharedListenOnly(script)) return false;
+    // Listen-only after Free taste (script + audio) is fully used.
+    if (canWebStartAiTaste() || canWebGenerateAiTaste()) return false;
     var text = (script && script.text && String(script.text).trim()) || "";
     return !!text;
   }
@@ -15986,6 +16176,8 @@
       "My Audio is available with Starter or Creator. Upgrade to import or pin your own sounds.",
     generate:
       "Generating or customizing audio requires Starter or Creator. Upgrade to create new audio.",
+    generateTasteUsed:
+      "You've used your free audio sample. Upgrade to Starter or Creator to generate more.",
     editScript:
       "Upgrade to Starter or Creator to edit scripts, change voices, or generate new audio.",
     setDefault:
@@ -17034,6 +17226,81 @@
     }
   }
 
+  function myLibraryEmptyStateHtml() {
+    var canCreate = canWebStartAiTaste();
+    var primaryLabel = canCreate ? "Create my affirmation audio" : "Upgrade to create my audio";
+    return (
+      '<div class="app-empty-hint library-empty-create" style="padding:1.1rem 1rem;">' +
+      "  <strong style=\"display:block;font-size:1.05rem;margin-bottom:0.35rem;\">Create your first personalized affirmation audio</strong>" +
+      '  <p style="margin:0 0 0.85rem;">Answer a few questions and we’ll build a script for you — then turn it into audio you can listen to on repeat.</p>' +
+      '  <div style="display:flex;flex-wrap:wrap;gap:0.55rem;align-items:center;">' +
+      '    <button type="button" class="app-btn app-btn-primary" id="btn-my-library-empty-create">' +
+      escapeHtml(primaryLabel) +
+      "</button>" +
+      '    <button type="button" class="app-btn" id="btn-my-library-empty-browse">Browse sample audio in App Library</button>' +
+      "  </div>" +
+      "</div>"
+    );
+  }
+
+  function bindMyLibraryEmptyStateActions() {
+    var createBtn = document.getElementById("btn-my-library-empty-create");
+    if (createBtn) {
+      createBtn.addEventListener("click", function () {
+        startPersonalizedCreateFromLibrary();
+      });
+    }
+    var browseBtn = document.getElementById("btn-my-library-empty-browse");
+    if (browseBtn) {
+      browseBtn.addEventListener("click", function () {
+        activeLibraryTab = "app-library";
+        try {
+          localStorage.setItem(PREF_LIBRARY_SUB_KEY, "app-library");
+        } catch (_e) {}
+        renderLibrarySubtab();
+        renderPremade();
+      });
+    }
+  }
+
+  function startPersonalizedCreateFromLibrary() {
+    if (!requireWebCreateOrTaste()) return;
+    var displayName = (currentUser && currentUser.displayName) || "";
+    setAdminTab("home");
+    setHomeFlowStep("category", displayName);
+  }
+
+  function freeAppLibrarySamplesBannerHtml() {
+    if (isWebPaidTierForAI()) return "";
+    var canCreate = canWebStartAiTaste();
+    return (
+      '<div class="app-empty-hint library-samples-banner" style="margin:0 0 0.85rem;padding:0.75rem 0.85rem;">' +
+      "  <strong>These are sample starters</strong>" +
+      '  <p style="margin:0.3rem 0 0.55rem;">' +
+      (canCreate
+        ? "Browse and listen freely — or try one free personalized script + audio."
+        : "Browse and listen freely. Upgrade to create more affirmation audio personalized to you.") +
+      "</p>" +
+      '  <button type="button" class="app-btn app-btn-primary" id="btn-app-library-samples-upgrade" style="font-size:0.88rem;">' +
+      (canCreate ? "Try my free personalized audio" : "Upgrade to create yours") +
+      "</button>" +
+      "</div>"
+    );
+  }
+
+  function bindFreeAppLibrarySamplesBanner() {
+    var btn = document.getElementById("btn-app-library-samples-upgrade");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      if (canWebStartAiTaste()) {
+        startPersonalizedCreateFromLibrary();
+        return;
+      }
+      setMessage("Starter and Creator unlock more personalized scripts and voice cloning.", "info");
+      openAccountModal();
+    });
+  }
+
   function renderScripts(scripts, scrollScriptIdIntoView) {
     var list = document.getElementById("scripts-list");
     if (!list) return;
@@ -17045,9 +17312,12 @@
       displayScripts = filteredScriptsForDisplay(scripts);
     }
     if (!displayScripts.length) {
-      list.innerHTML = scripts.length && normalizeSectionSearchQuery(sectionSearchQuery.library) && activeLibraryTab === "my-library"
-        ? '<div class="app-empty-hint">No scripts match your search.</div>'
-        : '<div class="app-empty-hint">No scripts yet. Use <strong>New</strong> or <strong>Import Audio</strong> in the toolbar, or use the <strong>Home</strong> tab flow to generate a personalized mind training script and auto-save it here.</div>';
+      if (scripts.length && normalizeSectionSearchQuery(sectionSearchQuery.library) && activeLibraryTab === "my-library") {
+        list.innerHTML = '<div class="app-empty-hint">No scripts match your search.</div>';
+      } else {
+        list.innerHTML = myLibraryEmptyStateHtml();
+        bindMyLibraryEmptyStateActions();
+      }
       updateLibraryExpandAllToggleUi();
       return;
     }
@@ -17803,7 +18073,7 @@
   function generateAudioForScript(script, options) {
     options = options || {};
     if (!currentUser) return;
-    if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.generate)) return;
+    if (!requireWebGenerateOrTaste(WEB_PAID_FEATURE_COPY.generateTasteUsed)) return;
     if (scriptIsSharedListenOnly(script)) {
       setMessage("Shared audio is listen-only — playback uses the sender’s hosted file.", "info");
       return;
@@ -19501,9 +19771,11 @@
     var grouped = groupPremadesByLibraryCategory(tierFiltered);
     var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
     var hasSearch = !!q;
+    var samplesBanner = freeAppLibrarySamplesBannerHtml();
 
     function finishListHtml(html) {
-      list.innerHTML = renderHiddenPremadesAdminSection() + html;
+      list.innerHTML = samplesBanner + renderHiddenPremadesAdminSection() + html;
+      bindFreeAppLibrarySamplesBanner();
       bindPremadeCategoryNavActions();
       bindHiddenPremadeAdminActions();
       updatePremadeExpandAllToggleUi();
@@ -19511,7 +19783,8 @@
     }
 
     function finishDetailHtml(html) {
-      list.innerHTML = renderHiddenPremadesAdminSection() + html;
+      list.innerHTML = samplesBanner + renderHiddenPremadesAdminSection() + html;
+      bindFreeAppLibrarySamplesBanner();
       bindPremadeCardActions();
       bindPremadeCategoryNavActions();
       bindHiddenPremadeAdminActions();
