@@ -115,6 +115,10 @@
     /** From POST /usage/refresh — mirrors backend unlimitedUsage for admin / manual complimentary. */
     unlimitedUsage: false,
   };
+  /** Live listener for users/{uid}/meta/usage — keeps Free taste gates in sync with iOS. */
+  var usageDocUnsubscribe = null;
+  /** True after first usage snapshot (or error) so Free gates don't assume unused. */
+  var freeUsageReady = false;
   /** Pending share invite token from ?share= or /s/ redirect. */
   var pendingShareClaimToken = null;
   /** Creator share management rows loaded in Account. */
@@ -4258,6 +4262,7 @@
     closeVoiceAdjustModal();
     closeVoiceCompleteModal();
     closeVoiceMicHelpModal();
+    stopUsageDocListener();
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -4283,6 +4288,7 @@
     closeVoiceAdjustModal();
     closeVoiceCompleteModal();
     closeVoiceMicHelpModal();
+    stopUsageDocListener();
     teardownScriptsListener();
     teardownPlaylistsListener();
     teardownPremadeListener();
@@ -13389,7 +13395,7 @@
       .then(function (json) {
         if (!json.content) throw new Error("Empty script response.");
         var title = uniqueScriptTitle(ctx.cat.name + " Script");
-        var docRef = scriptCollection(currentUser.uid).doc();
+        var newScriptId = db.collection("users").doc(currentUser.uid).collection("scripts").doc().id;
         var mediaRec = recommendedMediaForCategory(ctx.cat.id, ctx.tone);
         var saveVoiceId = preferredWebVoiceId(
           accountDefaultVoiceId() ||
@@ -13403,12 +13409,68 @@
             (mediaRec && mediaRec.backgroundID) ||
             ""
         );
+        var scriptText = String(json.content).trim();
+        var now = firebase.firestore.Timestamp.now();
+        var entry = {
+          id: newScriptId,
+          title: title,
+          text: scriptText,
+          audioURL: "",
+          voiceID: saveVoiceId,
+          backgroundID: saveBgId,
+          categoryID: ctx.cat.id,
+          createdAt: now,
+          updatedAt: null,
+          audioCreatedAt: null,
+          audioContentHash: "",
+          audioVoiceID: "",
+          audioBackgroundID: "",
+        };
+
+        function afterSaved() {
+          generationMessage("Generated and saved as \"" + title + "\".", "success");
+          homeClarifyFlow = null;
+          homeDeepenState = null;
+          var q1El = document.getElementById("gen-q1");
+          var q2El = document.getElementById("gen-q2");
+          if (q1El) q1El.value = "";
+          if (q2El) q2El.value = "";
+          upsertCurrentScript(entry);
+          seedInlineScriptDraft(newScriptId, title, scriptText);
+          setMessage(
+            isWebFreeTier()
+              ? "Saved on this device — Free samples stay local (not synced). Pick a voice and generate audio."
+              : "Saved to My Library — edit the title or script below.",
+            "success"
+          );
+          setHomeFlowStep("landing", ctx.displayName || "");
+          openInlineScriptEditorForScript(newScriptId, true);
+        }
+
+        // Free: device-local only. Taste counters live in shared meta/usage (server).
+        if (isWebFreeTier()) {
+          upsertFreeLocalScript(currentUser.uid, {
+            id: entry.id,
+            title: entry.title,
+            text: entry.text,
+            audioURL: "",
+            voiceID: entry.voiceID,
+            backgroundID: entry.backgroundID,
+            categoryID: entry.categoryID,
+            createdAt: entry.createdAt && entry.createdAt.toDate ? entry.createdAt.toDate().toISOString() : new Date().toISOString(),
+            updatedAt: null,
+            audioCreatedAt: null,
+          });
+          afterSaved();
+          return;
+        }
+
         return scriptCollection(currentUser.uid)
-          .doc(docRef.id)
+          .doc(newScriptId)
           .set({
             title: title,
-            text: String(json.content).trim(),
-            createdAt: firebase.firestore.Timestamp.now(),
+            text: scriptText,
+            createdAt: now,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             audioURL: "",
             backgroundID: saveBgId,
@@ -13416,37 +13478,7 @@
             audioCreatedAt: null,
             categoryID: ctx.cat.id,
           })
-          .then(function () {
-            var newScriptId = docRef.id;
-            var scriptText = String(json.content).trim();
-            var now = firebase.firestore.Timestamp.now();
-            generationMessage("Generated and saved as \"" + title + "\".", "success");
-            homeClarifyFlow = null;
-            homeDeepenState = null;
-            var q1El = document.getElementById("gen-q1");
-            var q2El = document.getElementById("gen-q2");
-            if (q1El) q1El.value = "";
-            if (q2El) q2El.value = "";
-            upsertCurrentScript({
-              id: newScriptId,
-              title: title,
-              text: scriptText,
-              audioURL: "",
-              voiceID: saveVoiceId,
-              backgroundID: saveBgId,
-              categoryID: ctx.cat.id,
-              createdAt: now,
-              updatedAt: null,
-              audioCreatedAt: null,
-              audioContentHash: "",
-              audioVoiceID: "",
-              audioBackgroundID: "",
-            });
-            seedInlineScriptDraft(newScriptId, title, scriptText);
-            setMessage("Saved to My Library — edit the title or script below.", "success");
-            setHomeFlowStep("landing", ctx.displayName || "");
-            openInlineScriptEditorForScript(newScriptId, true);
-          });
+          .then(afterSaved);
       })
       .catch(function (e) {
         var msg = e.message || "Could not generate script.";
@@ -16135,43 +16167,67 @@
     return tier === "starter" || tier === "creator";
   }
 
-  /** Free lifetime: 1 short AI script remaining (server-enforced). */
+  /** Free lifetime: 1 short AI script remaining (server-enforced; shared with iOS). */
   function canWebStartAiTaste() {
     if (isWebPaidTierForAI()) return true;
     if (!isWebFreeTier()) return false;
+    // Until usage loads, do not offer another Free create (prevents cross-device double-dip UI).
+    if (!freeUsageReady) return false;
     var usage = (accountInsightsSnapshot && accountInsightsSnapshot.usage) || {};
     return usageDocInt(usage, "scriptsThisMonth") < 1;
   }
 
-  /** Free lifetime: TTS taste remaining (any prior TTS usage counts as used). */
+  /** Free lifetime: TTS taste remaining (any prior TTS usage counts as used; shared with iOS). */
   function canWebGenerateAiTaste() {
     if (isWebPaidTierForAI()) return true;
     if (!isWebFreeTier()) return false;
+    if (!freeUsageReady) return false;
     var usage = (accountInsightsSnapshot && accountInsightsSnapshot.usage) || {};
     return usageDocInt(usage, "ttsCharactersThisMonth") === 0;
   }
 
   function canWebParticipateInCreateHearPath() {
-    return isWebPaidTierForAI() || canWebStartAiTaste() || canWebGenerateAiTaste();
+    if (isWebPaidTierForAI()) return true;
+    if (!isWebFreeTier()) return false;
+    if (!freeUsageReady) return false;
+    return canWebStartAiTaste() || canWebGenerateAiTaste();
   }
 
   function requireWebCreateOrTaste(detail) {
+    if (isWebFreeTier() && !freeUsageReady) {
+      showAppBanner(
+        "Checking free sample",
+        "Confirming whether your free create is still available on this account…",
+        "info",
+        { duration: 3500 }
+      );
+      return false;
+    }
     if (canWebStartAiTaste()) return true;
     promptWebPaidUpgrade(
       detail ||
         (isWebFreeTier()
-          ? "You've used your free personalized script. Upgrade to Starter or Creator to create more."
+          ? "You've used your free personalized script (shared across the iOS app and web). Upgrade to Starter or Creator to create more."
           : "AI script generation requires Starter or Creator.")
     );
     return false;
   }
 
   function requireWebGenerateOrTaste(detail) {
+    if (isWebFreeTier() && !freeUsageReady) {
+      showAppBanner(
+        "Checking free sample",
+        "Confirming whether your free audio is still available on this account…",
+        "info",
+        { duration: 3500 }
+      );
+      return false;
+    }
     if (canWebGenerateAiTaste()) return true;
     promptWebPaidUpgrade(
       detail ||
         (isWebFreeTier()
-          ? "You've used your free audio sample. Upgrade to Starter or Creator to generate more."
+          ? "You've used your free audio sample (shared across the iOS app and web). Upgrade to Starter or Creator to generate more."
           : WEB_PAID_FEATURE_COPY.generate)
     );
     return false;
@@ -16341,6 +16397,44 @@
         var now = firebase.firestore.Timestamp.now();
         var title = uniqueScriptTitle("My Affirmation");
         var scriptId = doc.id;
+        var categoryID = doc.data.categoryId || doc.data.categoryID || "";
+        var entry = {
+          id: scriptId,
+          title: title,
+          text: doc.content,
+          audioURL: "",
+          voiceID: voiceID,
+          backgroundID: backgroundID,
+          categoryID: categoryID,
+          createdAt: doc.data.createdAt || now,
+          updatedAt: null,
+          audioCreatedAt: null,
+          audioContentHash: "",
+          audioVoiceID: "",
+          audioBackgroundID: "",
+        };
+
+        // Free libraries stay device-local; generatedScripts is only an audit/resume source.
+        if (isWebFreeTier()) {
+          upsertFreeLocalScript(currentUser.uid, {
+            id: entry.id,
+            title: entry.title,
+            text: entry.text,
+            audioURL: "",
+            voiceID: entry.voiceID,
+            backgroundID: entry.backgroundID,
+            categoryID: entry.categoryID,
+            createdAt:
+              entry.createdAt && entry.createdAt.toDate
+                ? entry.createdAt.toDate().toISOString()
+                : new Date().toISOString(),
+            updatedAt: null,
+            audioCreatedAt: null,
+          });
+          upsertCurrentScript(entry);
+          return scriptId;
+        }
+
         return scriptCollection(currentUser.uid)
           .doc(scriptId)
           .set(
@@ -16353,26 +16447,12 @@
               backgroundID: backgroundID,
               voiceID: voiceID,
               audioCreatedAt: null,
-              categoryID: doc.data.categoryId || doc.data.categoryID || "",
+              categoryID: categoryID,
             },
             { merge: true }
           )
           .then(function () {
-            upsertCurrentScript({
-              id: scriptId,
-              title: title,
-              text: doc.content,
-              audioURL: "",
-              voiceID: voiceID,
-              backgroundID: backgroundID,
-              categoryID: doc.data.categoryId || doc.data.categoryID || "",
-              createdAt: doc.data.createdAt || now,
-              updatedAt: null,
-              audioCreatedAt: null,
-              audioContentHash: "",
-              audioVoiceID: "",
-              audioBackgroundID: "",
-            });
+            upsertCurrentScript(entry);
             return scriptId;
           });
       })
@@ -20586,6 +20666,59 @@
     subscribeIncomingSharedScripts(uid);
   }
 
+  /**
+   * Shared Free taste counters (same doc iOS listens to). Lifetime for Free — never monthly-reset.
+   * Content stays device-local; only these counters cross devices.
+   */
+  function subscribeUsageDoc(uid) {
+    if (typeof usageDocUnsubscribe === "function") {
+      usageDocUnsubscribe();
+      usageDocUnsubscribe = null;
+    }
+    freeUsageReady = false;
+    if (!uid) {
+      accountInsightsSnapshot.usage = {};
+      freeUsageReady = true;
+      return;
+    }
+    usageDocUnsubscribe = db
+      .collection("users")
+      .doc(uid)
+      .collection("meta")
+      .doc("usage")
+      .onSnapshot(
+        function (snap) {
+          accountInsightsSnapshot.usage = snap.exists ? snap.data() || {} : {};
+          freeUsageReady = true;
+          if (activeAdminTab === "home") {
+            renderHomeFlow((currentUser && currentUser.displayName) || "");
+          }
+          if (activeAdminTab === "library" && activeLibraryTab === "my-library") {
+            renderScripts(currentScripts);
+          }
+          try {
+            renderAccountInsights();
+          } catch (_eInsights) {}
+        },
+        function (err) {
+          console.warn("[usage] listener failed", err && err.message);
+          accountInsightsSnapshot.usage = accountInsightsSnapshot.usage || {};
+          freeUsageReady = true;
+          if (activeAdminTab === "home") {
+            renderHomeFlow((currentUser && currentUser.displayName) || "");
+          }
+        }
+      );
+  }
+
+  function stopUsageDocListener() {
+    if (typeof usageDocUnsubscribe === "function") {
+      usageDocUnsubscribe();
+      usageDocUnsubscribe = null;
+    }
+    freeUsageReady = false;
+  }
+
   auth.onAuthStateChanged(function (user) {
     currentUser = user || null;
     if (!user) {
@@ -20633,6 +20766,7 @@
         renderAdminShell(user.email, user.displayName);
         handleStripeAndAccountQueryParams();
         subscribeUserProfile(user.uid);
+        subscribeUsageDoc(user.uid);
         subscribeScripts(user.uid);
         subscribePlaylists(user.uid);
         subscribePremade();
@@ -20650,6 +20784,7 @@
         renderAdminShell(user.email, user.displayName);
         handleStripeAndAccountQueryParams();
         subscribeUserProfile(user.uid);
+        subscribeUsageDoc(user.uid);
         subscribeScripts(user.uid);
         subscribePlaylists(user.uid);
         subscribePremade();
