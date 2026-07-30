@@ -1654,8 +1654,13 @@
   var activeCategoryId = "confidence";
   var homeFlowStep = "landing";
   var homeDashboardBadgesExpanded = false;
-  /** Set while asking Stripe-style follow-ups before final script (see iOS SurveyViewModel). */
+  /** Active follow-up question sheet (one at a time). */
   var homeClarifyFlow = null;
+  /**
+   * Persists survey answers + optional follow-ups across survey ↔ clarify
+   * (matches iOS Follow Up | Generate Script UX).
+   */
+  var homeDeepenState = null;
   /** Cached Daily Spark payload + playback blob URL (Starter/Creator). */
   var dailySparkState = {
     spark: null,
@@ -1848,16 +1853,22 @@
   ];
 
   var surveyIntakeObstacleQuestion =
-    "What's the main obstacle, inner critic, or habit that gets in the way? (e.g., self-doubt before meetings, racing thoughts at night)";
+    "What's the main obstacle, inner critic, or habit that gets in the way? (e.g., self-doubt before meetings, racing thoughts at night) (optional)";
   var surveyIntakeContextQuestion =
     "When or where does this matter most? (e.g., morning routine, before a game, bedtime, at work)";
+  var surveyIntakeFeelingQuestion =
+    "How do you want to feel in that moment? (e.g., calm and clear, confident in my chest, ready to take the next step)";
   var sleepRestIntakeObstacleQuestion =
-    "What usually gets between you and the rest you want? (e.g., mind replaying the day, body stays tense, hard to switch off after work, guilt about stopping)";
+    "What usually gets between you and the rest you want? (optional — e.g., mind replaying the day, body stays tense)";
   var sleepRestIntakeContextQuestion =
     "What's your listening setup when you'll use this audio? (e.g., already in bed in a dark room, on the couch 15 minutes before sleep, phone on do-not-disturb, fan or white noise)";
+  var sleepRestIntakeFeelingQuestion =
+    "How do you want to feel as you settle into rest? (e.g., heavy and safe, mind quiet, body soft)";
 
   function surveyIntakeSectionSubtitle(catId) {
-    return catId === "sleep-rest" ? "Rest & sleep details (optional)" : "Deeper intake (optional)";
+    return catId === "sleep-rest"
+      ? "Rest details — when/where you listen and how you want to feel (required)"
+      : "Make it yours — when/where + how you want to feel (required)";
   }
 
   function surveyIntakeObstacleForCategory(catId) {
@@ -1868,24 +1879,36 @@
     return catId === "sleep-rest" ? sleepRestIntakeContextQuestion : surveyIntakeContextQuestion;
   }
 
+  function surveyIntakeFeelingForCategory(catId) {
+    return catId === "sleep-rest" ? sleepRestIntakeFeelingQuestion : surveyIntakeFeelingQuestion;
+  }
+
   function surveyIntakeObstaclePlaceholder(catId) {
     if (catId === "sleep-rest") {
-      return "Optional — e.g. Thoughts keep looping, shoulders tight, can't let the day go";
+      return "e.g. Thoughts keep looping — shoulders tight, can't let the day go";
     }
-    return "Optional — helps the script address what gets in your way";
+    return "Optional";
   }
 
   function surveyIntakeContextPlaceholder(catId) {
     if (catId === "sleep-rest") {
-      return "Optional — e.g. In bed, lights off, fan on, eyes closed";
+      return "e.g. In bed, lights off, fan on, eyes closed";
     }
-    return "Optional — morning, bedtime, before a game, at work…";
+    return "e.g. Before my morning standup";
   }
 
+  function surveyIntakeFeelingPlaceholder(catId) {
+    if (catId === "sleep-rest") {
+      return "e.g. Soft, heavy, safe — mind quiet";
+    }
+    return "e.g. Calm and clear in my chest";
+  }
+
+  // Matches iOS SurveyViewModel / functions CLARIFY_TURN_GOALS (positive identity first).
   var CLARIFY_TURN_GOALS = [
-    "First we'll explore what gets in the way — your inner critic, habit, or fear.",
-    "Next: when or where this matters most (morning, work, bedtime, before a game…).",
-    "Finally: one moment this was already true, or how it feels in your body at your best.",
+    "Invite the positive standard or identity you want to live — not struggle labels.",
+    "When or where this matters most (morning, before competition, bedtime, at work…).",
+    "One moment you already showed up, or how it feels in your body at your best.",
   ];
 
   function clarifyingTurnGoal(step) {
@@ -2007,8 +2030,12 @@
   function applyCategoryMediaRecommendations(categoryId, tone) {
     var rec = recommendedMediaForCategory(categoryId, tone);
     if (!rec) return null;
-    if (!accountDefaultVoiceId() && rec.voiceID) selectedVoiceId = rec.voiceID;
-    if (!accountDefaultBackgroundId() && rec.backgroundID) selectedBackgroundId = rec.backgroundID;
+    if (!accountDefaultVoiceId() && rec.voiceID) {
+      selectedVoiceId = preferredWebVoiceId(rec.voiceID);
+    }
+    if (!accountDefaultBackgroundId() && rec.backgroundID) {
+      selectedBackgroundId = preferredWebBackgroundId(rec.backgroundID);
+    }
     return rec;
   }
 
@@ -12516,26 +12543,23 @@
 
   function restoreSurveyFormFromClarifySnapshot(snap) {
     if (!snap) return;
+    homeDeepenState = {
+      displayName: snap.displayName || "",
+      cat: snap.cat,
+      q1: snap.q1 || "",
+      q2: snap.q2 || "",
+      intakeObstacle: snap.intakeObstacle || "",
+      intakeContext: snap.intakeContext || "",
+      intakeFeeling: snap.intakeFeeling || "",
+      tone: snap.tone || "Calming",
+      length: snap.length || "Medium",
+      perspective: snap.perspective || "First person",
+      useNameInScript: !!snap.useNameInScript,
+      clarifyingAnswers: snap.answers || snap.clarifyingAnswers || {},
+      followUpStep: snap.followUpStep || snap.currentIndex || 0,
+    };
     setTimeout(function () {
-      var e1 = document.getElementById("gen-q1");
-      var e2 = document.getElementById("gen-q2");
-      if (e1) e1.value = snap.q1 || "";
-      if (e2) e2.value = snap.q2 || "";
-      var toneE = document.getElementById("gen-tone");
-      if (toneE && snap.tone) toneE.value = snap.tone;
-      var lenWant = snap.length || "Medium";
-      document.querySelectorAll('input[name="gen-length"]').forEach(function (r) {
-        r.checked = r.value === lenWant;
-      });
-      var persWant = snap.perspective || "First person";
-      document.querySelectorAll('input[name="gen-perspective"]').forEach(function (r) {
-        r.checked = r.value === persWant;
-      });
-      var useE = document.getElementById("gen-use-name");
-      if (useE) useE.checked = !!snap.useNameInScript;
-      setClarifyStepperValue(snap.requested != null ? snap.requested : 0);
-      wireGenLengthHint();
-      wirePerspectiveUseNameRow();
+      fillSurveyFormFromDeepen();
     }, 0);
   }
 
@@ -13167,6 +13191,7 @@
     var intakeAnswers = {};
     if (ctx.intakeObstacle) intakeAnswers.obstacle = ctx.intakeObstacle;
     if (ctx.intakeContext) intakeAnswers.context = ctx.intakeContext;
+    if (ctx.intakeFeeling) intakeAnswers.feeling = ctx.intakeFeeling;
     return {
       categories: [
         {
@@ -13219,6 +13244,7 @@
     var q2 = (document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "";
     var obstacleEl = document.getElementById("gen-intake-obstacle");
     var contextEl = document.getElementById("gen-intake-context");
+    var feelingEl = document.getElementById("gen-intake-feeling");
     var toneEl = document.getElementById("gen-tone");
     var lenRadio = document.querySelector('input[name="gen-length"]:checked');
     var persRadio = document.querySelector('input[name="gen-perspective"]:checked');
@@ -13229,11 +13255,87 @@
       q2: q2.trim(),
       intakeObstacle: obstacleEl ? obstacleEl.value.trim() : "",
       intakeContext: contextEl ? contextEl.value.trim() : "",
+      intakeFeeling: feelingEl ? feelingEl.value.trim() : "",
       tone: (toneEl && toneEl.value) || "Calming",
       length: (lenRadio && lenRadio.value) || "Medium",
       perspective: (persRadio && persRadio.value) || "First person",
       useNameInScript: useNameEl ? !!useNameEl.checked : true,
     };
+  }
+
+  function validateRequiredIntake(ctx) {
+    var context = (ctx && ctx.intakeContext) || "";
+    var feeling = (ctx && ctx.intakeFeeling) || "";
+    if (context.trim().length < 8) {
+      generationMessage("Add when or where this matters most — a concrete place or moment.", "error");
+      return false;
+    }
+    if (feeling.trim().length < 8) {
+      generationMessage("Add how you want to feel — one clear feeling or body state.", "error");
+      return false;
+    }
+    return true;
+  }
+
+  function syncHomeDeepenFromForm(displayName) {
+    var ctx = readGenerateFormFromDom();
+    if (isWebFreeTier()) ctx.length = "Short";
+    ctx.displayName = displayName || (homeDeepenState && homeDeepenState.displayName) || "";
+    var priorAnswers =
+      homeDeepenState && homeDeepenState.cat && homeDeepenState.cat.id === ctx.cat.id
+        ? homeDeepenState.clarifyingAnswers || {}
+        : {};
+    var priorStep =
+      homeDeepenState && homeDeepenState.cat && homeDeepenState.cat.id === ctx.cat.id
+        ? homeDeepenState.followUpStep || 0
+        : 0;
+    homeDeepenState = {
+      displayName: ctx.displayName,
+      cat: ctx.cat,
+      q1: ctx.q1,
+      q2: ctx.q2,
+      intakeObstacle: ctx.intakeObstacle,
+      intakeContext: ctx.intakeContext,
+      intakeFeeling: ctx.intakeFeeling,
+      tone: ctx.tone,
+      length: ctx.length,
+      perspective: ctx.perspective,
+      useNameInScript: ctx.useNameInScript,
+      clarifyingAnswers: priorAnswers,
+      followUpStep: priorStep,
+    };
+    return homeDeepenState;
+  }
+
+  function fillSurveyFormFromDeepen() {
+    if (!homeDeepenState) return;
+    var d = homeDeepenState;
+    var q1El = document.getElementById("gen-q1");
+    var q2El = document.getElementById("gen-q2");
+    var obstacleEl = document.getElementById("gen-intake-obstacle");
+    var contextEl = document.getElementById("gen-intake-context");
+    var feelingEl = document.getElementById("gen-intake-feeling");
+    var toneEl = document.getElementById("gen-tone");
+    if (q1El) q1El.value = d.q1 || "";
+    if (q2El) q2El.value = d.q2 || "";
+    if (obstacleEl) obstacleEl.value = d.intakeObstacle || "";
+    if (contextEl) contextEl.value = d.intakeContext || "";
+    if (feelingEl) feelingEl.value = d.intakeFeeling || "";
+    if (toneEl && d.tone) toneEl.value = d.tone;
+    if (d.length) {
+      var lenRadio = document.querySelector('input[name="gen-length"][value="' + d.length + '"]');
+      if (lenRadio) lenRadio.checked = true;
+    }
+    if (d.perspective) {
+      var persRadio = document.querySelector(
+        'input[name="gen-perspective"][value="' + d.perspective + '"]'
+      );
+      if (persRadio) persRadio.checked = true;
+    }
+    var useNameEl = document.getElementById("gen-use-name");
+    if (useNameEl) useNameEl.checked = !!d.useNameInScript;
+    wirePerspectiveUseNameRow();
+    wireGenLengthHint();
   }
 
   function wirePerspectiveUseNameRow() {
@@ -13269,66 +13371,10 @@
     sync();
   }
 
-  function wireClarifyStepper() {
-    var hidden = document.getElementById("gen-clarify-count");
-    var display = document.getElementById("gen-clarify-display");
-    var minus = document.getElementById("gen-clarify-minus");
-    var plus = document.getElementById("gen-clarify-plus");
+  function followUpsRemainingWeb() {
     var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
-    function readVal() {
-      var v = parseInt((hidden && hidden.value) || "0", 10);
-      if (!isFinite(v) || v < 0) v = 0;
-      if (v > maxC) v = maxC;
-      return v;
-    }
-    function sync() {
-      var v = readVal();
-      if (hidden) hidden.value = String(v);
-      if (display) display.textContent = String(v);
-      if (minus) minus.disabled = v <= 0;
-      if (plus) plus.disabled = maxC <= 0 ? true : v >= maxC;
-      syncGenerateSubmitLabel();
-    }
-    if (minus) {
-      minus.addEventListener("click", function () {
-        var v = readVal();
-        if (v > 0 && hidden) hidden.value = String(v - 1);
-        sync();
-      });
-    }
-    if (plus) {
-      plus.addEventListener("click", function () {
-        var v = readVal();
-        if (v < maxC && hidden) hidden.value = String(v + 1);
-        sync();
-      });
-    }
-    sync();
-  }
-
-  function setClarifyStepperValue(n) {
-    var hidden = document.getElementById("gen-clarify-count");
-    var display = document.getElementById("gen-clarify-display");
-    var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
-    var v = parseInt(n, 10);
-    if (!isFinite(v) || v < 0) v = 0;
-    if (v > maxC) v = maxC;
-    if (hidden) hidden.value = String(v);
-    if (display) display.textContent = String(v);
-    var minus = document.getElementById("gen-clarify-minus");
-    var plus = document.getElementById("gen-clarify-plus");
-    if (minus) minus.disabled = v <= 0;
-    if (plus) plus.disabled = maxC <= 0 ? true : v >= maxC;
-    syncGenerateSubmitLabel();
-  }
-
-  function syncGenerateSubmitLabel() {
-    var btn = document.getElementById("gen-submit-primary");
-    if (!btn) return;
-    var hidden = document.getElementById("gen-clarify-count");
-    var n = hidden ? parseInt(hidden.value, 10) : 0;
-    if (!isFinite(n) || n < 0) n = 0;
-    btn.textContent = n > 0 ? "Next" : "Generate";
+    var used = (homeDeepenState && homeDeepenState.followUpStep) || 0;
+    return Math.max(0, maxC - used);
   }
 
   function finalizeScriptGeneration(ctx) {
@@ -13345,16 +13391,18 @@
         var title = uniqueScriptTitle(ctx.cat.name + " Script");
         var docRef = scriptCollection(currentUser.uid).doc();
         var mediaRec = recommendedMediaForCategory(ctx.cat.id, ctx.tone);
-        var saveVoiceId =
+        var saveVoiceId = preferredWebVoiceId(
           accountDefaultVoiceId() ||
-          (selectedVoiceId || "").trim() ||
-          (mediaRec && mediaRec.voiceID) ||
-          "";
-        var saveBgId =
+            (selectedVoiceId || "").trim() ||
+            (mediaRec && mediaRec.voiceID) ||
+            ""
+        );
+        var saveBgId = preferredWebBackgroundId(
           accountDefaultBackgroundId() ||
-          (selectedBackgroundId || "").trim() ||
-          (mediaRec && mediaRec.backgroundID) ||
-          "";
+            (selectedBackgroundId || "").trim() ||
+            (mediaRec && mediaRec.backgroundID) ||
+            ""
+        );
         return scriptCollection(currentUser.uid)
           .doc(docRef.id)
           .set({
@@ -13374,6 +13422,7 @@
             var now = firebase.firestore.Timestamp.now();
             generationMessage("Generated and saved as \"" + title + "\".", "success");
             homeClarifyFlow = null;
+            homeDeepenState = null;
             var q1El = document.getElementById("gen-q1");
             var q2El = document.getElementById("gen-q2");
             if (q1El) q1El.value = "";
@@ -13413,12 +13462,7 @@
     var f = homeClarifyFlow;
     generationMessage("", "");
     showScriptWorkOverlay({
-      title:
-        "Generating clarifying question " +
-        (f.currentIndex + 1) +
-        " of " +
-        f.requested +
-        "…",
+      title: "Generating follow-up " + (f.followUpStep + 1) + " of " + f.maxClarify + "…",
       detail: "This usually takes a moment.",
     });
     var ctx = {
@@ -13426,6 +13470,9 @@
       cat: f.cat,
       q1: f.q1,
       q2: f.q2,
+      intakeObstacle: f.intakeObstacle,
+      intakeContext: f.intakeContext,
+      intakeFeeling: f.intakeFeeling,
       tone: f.tone,
       length: f.length,
       perspective: f.perspective,
@@ -13457,38 +13504,67 @@
   function beginScriptGenerationFromForm(displayName) {
     if (!currentUser) return;
     if (!requireWebCreateOrTaste()) return;
-    var ctx = readGenerateFormFromDom();
-    ctx.displayName = displayName || "";
-    if (isWebFreeTier()) ctx.length = "Short";
-    if (!ctx.q1 || !ctx.q2) {
+    var deepen = syncHomeDeepenFromForm(displayName);
+    if (!deepen.q1 || !deepen.q2) {
       generationMessage("Please answer both questions first.", "error");
       return;
     }
-    var clarifyEl = document.getElementById("gen-clarify-count");
-    var clarifyReq = clarifyEl ? parseInt(clarifyEl.value, 10) : 0;
-    if (!isFinite(clarifyReq) || clarifyReq < 0) clarifyReq = 0;
-    var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
-    if (clarifyReq > maxC) clarifyReq = maxC;
+    if (!validateRequiredIntake(deepen)) return;
+    finalizeScriptGeneration({
+      displayName: deepen.displayName,
+      cat: deepen.cat,
+      q1: deepen.q1,
+      q2: deepen.q2,
+      intakeObstacle: deepen.intakeObstacle,
+      intakeContext: deepen.intakeContext,
+      intakeFeeling: deepen.intakeFeeling,
+      tone: deepen.tone,
+      length: deepen.length,
+      perspective: deepen.perspective,
+      useNameInScript: deepen.useNameInScript,
+      clarifyingAnswers: deepen.clarifyingAnswers || {},
+    });
+  }
 
-    if (clarifyReq > 0) {
-      homeClarifyFlow = {
-        displayName: ctx.displayName,
-        cat: ctx.cat,
-        q1: ctx.q1,
-        q2: ctx.q2,
-        tone: ctx.tone,
-        length: ctx.length,
-        perspective: ctx.perspective,
-        useNameInScript: ctx.useNameInScript,
-        requested: clarifyReq,
-        currentIndex: 0,
-        answers: {},
-        pendingQuestion: "",
-      };
-      requestNextClarifyingQuestion();
+  function beginFollowUpFromForm(displayName) {
+    if (!currentUser) return;
+    if (!requireWebCreateOrTaste()) return;
+    var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
+    if (maxC <= 0) {
+      generationMessage("Follow-up questions are available on Starter and Creator.", "error");
       return;
     }
-    finalizeScriptGeneration(ctx);
+    var deepen = syncHomeDeepenFromForm(displayName);
+    if (!deepen.q1 || !deepen.q2) {
+      generationMessage("Please answer both questions before asking a follow-up.", "error");
+      return;
+    }
+    if (!validateRequiredIntake(deepen)) return;
+    if ((deepen.followUpStep || 0) >= maxC) {
+      generationMessage(
+        "You've used all " + maxC + " follow-ups. Tap Generate Script when you're ready.",
+        "error"
+      );
+      return;
+    }
+    homeClarifyFlow = {
+      displayName: deepen.displayName,
+      cat: deepen.cat,
+      q1: deepen.q1,
+      q2: deepen.q2,
+      intakeObstacle: deepen.intakeObstacle,
+      intakeContext: deepen.intakeContext,
+      intakeFeeling: deepen.intakeFeeling,
+      tone: deepen.tone,
+      length: deepen.length,
+      perspective: deepen.perspective,
+      useNameInScript: deepen.useNameInScript,
+      maxClarify: maxC,
+      followUpStep: deepen.followUpStep || 0,
+      answers: deepen.clarifyingAnswers || {},
+      pendingQuestion: "",
+    };
+    requestNextClarifyingQuestion();
   }
 
   function submitClarifyAnswerAndContinue() {
@@ -13503,23 +13579,40 @@
     var q = f.pendingQuestion;
     if (!q) return;
     f.answers[q] = ans;
-    f.currentIndex += 1;
+    f.followUpStep += 1;
     delete f.pendingQuestion;
-    if (f.currentIndex < f.requested) {
-      requestNextClarifyingQuestion();
-    } else {
-      finalizeScriptGeneration({
-        displayName: f.displayName,
-        cat: f.cat,
-        q1: f.q1,
-        q2: f.q2,
-        tone: f.tone,
-        length: f.length,
-        perspective: f.perspective,
-        useNameInScript: f.useNameInScript,
-        clarifyingAnswers: f.answers,
-      });
-    }
+    homeDeepenState = {
+      displayName: f.displayName,
+      cat: f.cat,
+      q1: f.q1,
+      q2: f.q2,
+      intakeObstacle: f.intakeObstacle,
+      intakeContext: f.intakeContext,
+      intakeFeeling: f.intakeFeeling,
+      tone: f.tone,
+      length: f.length,
+      perspective: f.perspective,
+      useNameInScript: f.useNameInScript,
+      clarifyingAnswers: f.answers,
+      followUpStep: f.followUpStep,
+    };
+    homeClarifyFlow = null;
+    generationMessage(
+      "Follow-up saved (" +
+        f.followUpStep +
+        " of " +
+        f.maxClarify +
+        "). Generate when ready, or ask another follow-up.",
+      "success"
+    );
+    setHomeFlowStep("survey", f.displayName);
+  }
+
+  function cancelCurrentFollowUpQuestion() {
+    if (!homeClarifyFlow) return;
+    var displayName = homeClarifyFlow.displayName || "";
+    homeClarifyFlow = null;
+    setHomeFlowStep("survey", displayName);
   }
 
   function firstCreateHearStorageKey() {
@@ -13752,6 +13845,8 @@
         list.querySelectorAll("[data-home-category]").forEach(function (btn) {
           btn.addEventListener("click", function () {
             activeCategoryId = btn.getAttribute("data-home-category") || "confidence";
+            homeDeepenState = null;
+            homeClarifyFlow = null;
             setHomeFlowStep("survey", displayName);
           });
         });
@@ -13762,13 +13857,14 @@
       generationMessage("", "");
       var cf = homeClarifyFlow;
       var pq = cf.pendingQuestion || "";
-      var turnHint = clarifyingTurnGoal(cf.currentIndex || 0);
+      var turnHint = clarifyingTurnGoal(cf.followUpStep || 0);
+      var remainingAfter = Math.max(0, (cf.maxClarify || 3) - ((cf.followUpStep || 0) + 1));
       el.innerHTML =
         '<div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
-        '  <p class="gen-clarify-progress">Clarifying question <strong>' +
-        escapeHtml(String(cf.currentIndex + 1)) +
+        '  <p class="gen-clarify-progress">Follow-up <strong>' +
+        escapeHtml(String((cf.followUpStep || 0) + 1)) +
         "</strong> of <strong>" +
-        escapeHtml(String(cf.requested)) +
+        escapeHtml(String(cf.maxClarify || 3)) +
         "</strong></p>" +
         '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
         escapeHtml(turnHint) +
@@ -13780,11 +13876,15 @@
         '    <label for="clarify-answer">Your answer</label>' +
         '    <textarea id="clarify-answer" class="gen-survey-textarea gen-clarify-textarea" required rows="5" placeholder="Share what feels true for you…"></textarea>' +
         "  </div>" +
-        '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-top:0.85rem;">' +
-        '    <button type="button" class="app-btn app-btn-primary" id="clarify-continue">' +
-        (cf.currentIndex + 1 < cf.requested ? "Next" : "Generate") +
-        "</button>" +
+        '  <div class="gen-action-row">' +
+        '    <button type="button" class="app-btn app-btn-primary" id="clarify-continue">Save answer</button>' +
+        '    <button type="button" class="app-btn" id="clarify-cancel">Back</button>' +
         "  </div>" +
+        (remainingAfter > 0
+          ? '<p class="app-muted" style="margin:0.55rem 0 0;font-size:0.82rem;">After saving, you can generate or ask another follow-up (' +
+            remainingAfter +
+            " left).</p>"
+          : '<p class="app-muted" style="margin:0.55rem 0 0;font-size:0.82rem;">After saving, tap Generate Script — this is your last follow-up.</p>') +
         "</div>";
       var cont = document.getElementById("clarify-continue");
       if (cont) {
@@ -13792,17 +13892,28 @@
           submitClarifyAnswerAndContinue();
         });
       }
+      var cancelBtn = document.getElementById("clarify-cancel");
+      if (cancelBtn) {
+        cancelBtn.addEventListener("click", function () {
+          cancelCurrentFollowUpQuestion();
+        });
+      }
       return;
     }
     homeClarifyFlow = null;
     var tierNow = resolvedSubscriptionTier();
     var maxClar = maxClarifyForWebTier(tierNow);
+    var followLeft = followUpsRemainingWeb();
     var clarifyHint =
       maxClar > 0
-        ? "Starter and Creator: up to " +
-          maxClar +
-          " follow-up questions (same idea as the iOS app), then your script is generated."
-        : "Clarifying questions are available on Starter and Creator. You can still generate from your answers below.";
+        ? followLeft > 0
+          ? "Optional: ask up to " +
+            followLeft +
+            " more follow-up" +
+            (followLeft === 1 ? "" : "s") +
+            " to deepen the script, or generate now."
+          : "You've used all follow-ups. Generate your script when ready."
+        : "Follow-ups are available on Starter and Creator. You can still generate from your answers below.";
     var ph0 = surveyAnswerPlaceholder(cat.id, 0);
     var ph1 = surveyAnswerPlaceholder(cat.id, 1);
     var defaultTone = defaultToneForCategory(cat.id);
@@ -13849,6 +13960,12 @@
       '  <textarea id="gen-intake-context" class="gen-survey-textarea" rows="3" placeholder="' +
       escapeHtml(surveyIntakeContextPlaceholder(cat.id)) +
       '"></textarea>' +
+      '  <label for="gen-intake-feeling" style="margin-top:0.75rem;">' +
+      escapeHtml(surveyIntakeFeelingForCategory(cat.id)) +
+      "</label>" +
+      '  <textarea id="gen-intake-feeling" class="gen-survey-textarea" rows="3" placeholder="' +
+      escapeHtml(surveyIntakeFeelingPlaceholder(cat.id)) +
+      '"></textarea>' +
       '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
       '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
       '    <option value="Calming">Calming</option>' +
@@ -13893,29 +14010,22 @@
       '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
       '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
       "  </div>" +
-      '  <p class="gen-field-label" style="margin-top:0.85rem;">Clarifying questions</p>' +
-      (maxClar > 0
-        ? '  <div class="gen-stepper-row">' +
-          '    <button type="button" class="app-btn gen-stepper-btn" id="gen-clarify-minus" aria-label="Fewer questions">−</button>' +
-          '    <span id="gen-clarify-display" class="gen-stepper-value" aria-live="polite">0</span>' +
-          '    <button type="button" class="app-btn gen-stepper-btn" id="gen-clarify-plus" aria-label="More questions">+</button>' +
-          '    <input type="hidden" id="gen-clarify-count" value="0" />' +
-          "  </div>"
-        : '  <div class="gen-stepper-row gen-stepper-locked"><span id="gen-clarify-display" class="gen-stepper-value">0</span></div>' +
-          '  <input type="hidden" id="gen-clarify-count" value="0" />') +
-      '  <p class="gen-pill-hint app-muted" style="margin-top:0.35rem;">' +
+      '  <p class="app-muted" style="margin:0.75rem 0 0;font-size:0.85rem;">' +
       escapeHtml(clarifyHint) +
       "</p>" +
-      '  <div style="margin-top:0.9rem;">' +
-      '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate</button>' +
+      '  <div class="gen-action-row">' +
+      '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate Script</button>' +
+      (maxClar > 0 && followLeft > 0
+        ? '    <button type="button" class="app-btn app-btn-primary" id="gen-follow-up">Follow Up</button>'
+        : "") +
       "  </div>" +
       "</form>";
     wirePerspectiveUseNameRow();
     wireGenLengthHint();
-    wireClarifyStepper();
+    fillSurveyFormFromDeepen();
     var tonePick = document.getElementById("gen-tone");
     if (tonePick) {
-      tonePick.value = defaultTone;
+      if (!homeDeepenState || !homeDeepenState.tone) tonePick.value = defaultTone;
       tonePick.addEventListener("change", function () {
         var rec = applyCategoryMediaRecommendations(cat.id, tonePick.value);
         var hint = document.getElementById("gen-media-hint");
@@ -13934,6 +14044,12 @@
       form.addEventListener("submit", function (ev) {
         ev.preventDefault();
         beginScriptGenerationFromForm(displayName || "");
+      });
+    }
+    var followBtn = document.getElementById("gen-follow-up");
+    if (followBtn) {
+      followBtn.addEventListener("click", function () {
+        beginFollowUpFromForm(displayName || "");
       });
     }
   }
@@ -16128,6 +16244,12 @@
     YgzytRZyVmEux6PCtJYB: true,
   };
 
+  var WEB_FREE_TIER_BACKGROUND_IDS = {
+    "bg-none": true,
+    "bg-rain": true,
+    "bg-meditation": true,
+  };
+
   function isWebFreeTier() {
     return resolvedSubscriptionTier() === "free";
   }
@@ -16140,7 +16262,165 @@
   function isWebBackgroundAvailableForGeneration(backgroundID) {
     if (!isWebFreeTier()) return true;
     var id = (backgroundID || "").trim();
-    return !id || id === "bg-none";
+    if (!id) return true;
+    return !!WEB_FREE_TIER_BACKGROUND_IDS[id];
+  }
+
+  function preferredWebVoiceId(candidate) {
+    var id = (candidate || "").trim();
+    if (!isWebFreeTier()) return id;
+    if (id && isWebVoiceAvailableForGeneration(id)) return id;
+    return "lnieQLGTodpbhjpZtg1k";
+  }
+
+  function preferredWebBackgroundId(candidate) {
+    var id = (candidate || "").trim();
+    if (!isWebFreeTier()) return id || "bg-none";
+    if (id && isWebBackgroundAvailableForGeneration(id)) return id;
+    return "bg-none";
+  }
+
+  function isWebAwaitingAudioFinish() {
+    return isWebFreeTier() && !canWebStartAiTaste() && canWebGenerateAiTaste();
+  }
+
+  function webOwnUnfinishedScripts() {
+    return (currentScripts || []).filter(function (s) {
+      if (!s || scriptIsSharedListenOnly(s) || s.isPremade) return false;
+      var text = (s.text && String(s.text).trim()) || "";
+      if (!text) return false;
+      var audio = (s.audioURL && String(s.audioURL).trim()) || "";
+      return !audio;
+    });
+  }
+
+  function shouldOfferWebFinishResume() {
+    if (isWebAwaitingAudioFinish()) return true;
+    if (webOwnUnfinishedScripts().length > 0 && canWebGenerateAiTaste()) return true;
+    if (
+      !isFirstCreateHearFinishedWeb() &&
+      canWebParticipateInCreateHearPath() &&
+      isWebFreeTier() &&
+      !canWebStartAiTaste()
+    ) {
+      var own = (currentScripts || []).filter(function (s) {
+        return s && !scriptIsSharedListenOnly(s) && !s.isPremade;
+      });
+      return own.length === 0;
+    }
+    return false;
+  }
+
+  function recoverLatestGeneratedScriptIntoLibrary() {
+    if (!currentUser) return Promise.resolve(null);
+    return db
+      .collection("users")
+      .doc(currentUser.uid)
+      .collection("generatedScripts")
+      .orderBy("createdAt", "desc")
+      .limit(8)
+      .get()
+      .then(function (snap) {
+        var doc = null;
+        snap.forEach(function (d) {
+          if (doc) return;
+          var data = d.data() || {};
+          var type = data.type;
+          var content = (data.content && String(data.content).trim()) || "";
+          if (type === "script" && content && content.indexOf("[blocked") !== 0) {
+            doc = { id: d.id, data: data, content: content };
+          }
+        });
+        if (!doc) return null;
+        var voiceID = preferredWebVoiceId(
+          accountDefaultVoiceId() || (selectedVoiceId || "").trim() || ""
+        );
+        var backgroundID = preferredWebBackgroundId(
+          accountDefaultBackgroundId() || (selectedBackgroundId || "").trim() || ""
+        );
+        var now = firebase.firestore.Timestamp.now();
+        var title = uniqueScriptTitle("My Affirmation");
+        var scriptId = doc.id;
+        return scriptCollection(currentUser.uid)
+          .doc(scriptId)
+          .set(
+            {
+              title: title,
+              text: doc.content,
+              createdAt: doc.data.createdAt || now,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              audioURL: "",
+              backgroundID: backgroundID,
+              voiceID: voiceID,
+              audioCreatedAt: null,
+              categoryID: doc.data.categoryId || doc.data.categoryID || "",
+            },
+            { merge: true }
+          )
+          .then(function () {
+            upsertCurrentScript({
+              id: scriptId,
+              title: title,
+              text: doc.content,
+              audioURL: "",
+              voiceID: voiceID,
+              backgroundID: backgroundID,
+              categoryID: doc.data.categoryId || doc.data.categoryID || "",
+              createdAt: doc.data.createdAt || now,
+              updatedAt: null,
+              audioCreatedAt: null,
+              audioContentHash: "",
+              audioVoiceID: "",
+              audioBackgroundID: "",
+            });
+            return scriptId;
+          });
+      })
+      .catch(function (err) {
+        console.warn("[FreeTasteResume] recover failed", err);
+        return null;
+      });
+  }
+
+  function resumeFinishFirstAudioFromLibrary() {
+    var unfinished = webOwnUnfinishedScripts();
+    if (unfinished.length) {
+      openInlineScriptEditorForScript(unfinished[0].id, true);
+      showAppBanner(
+        "Finish your audio",
+        "Confirm voice and background, then Save and Generate.",
+        "info",
+        { duration: 5000 }
+      );
+      return;
+    }
+    showScriptWorkOverlay({
+      title: "Restoring your script…",
+      detail: "Looking up your free generated script.",
+    });
+    recoverLatestGeneratedScriptIntoLibrary()
+      .then(function (scriptId) {
+        stopScriptWorkOverlay();
+        if (scriptId) {
+          openInlineScriptEditorForScript(scriptId, true);
+          showAppBanner(
+            "Script restored",
+            "Pick a voice, then Save and Generate to finish your free audio.",
+            "success",
+            { duration: 6000 }
+          );
+          return;
+        }
+        showAppBanner(
+          "Nothing to resume",
+          "We couldn’t find a free script to finish. Start a new create if you still have taste remaining.",
+          "info",
+          { duration: 6000 }
+        );
+      })
+      .catch(function () {
+        stopScriptWorkOverlay();
+      });
   }
 
   function isWebFreeReadOnlyLibraryScript(script) {
@@ -17227,12 +17507,27 @@
   }
 
   function myLibraryEmptyStateHtml() {
+    var awaitingFinish = shouldOfferWebFinishResume();
     var canCreate = canWebStartAiTaste();
-    var primaryLabel = canCreate ? "Create my affirmation audio" : "Upgrade to create my audio";
+    var primaryLabel = awaitingFinish
+      ? "Continue finishing your free audio"
+      : canCreate
+        ? "Create my affirmation audio"
+        : "Upgrade to create my audio";
+    var heading = awaitingFinish
+      ? "Your free script is ready to finish"
+      : "Create your first personalized affirmation audio";
+    var body = awaitingFinish
+      ? "Your free script was generated, but it wasn’t finished into audio yet. Tap below to restore it, pick a voice, and generate your one free audio."
+      : "Answer a few questions and we’ll build a script for you — then turn it into audio you can listen to on repeat.";
     return (
       '<div class="app-empty-hint library-empty-create" style="padding:1.1rem 1rem;">' +
-      "  <strong style=\"display:block;font-size:1.05rem;margin-bottom:0.35rem;\">Create your first personalized affirmation audio</strong>" +
-      '  <p style="margin:0 0 0.85rem;">Answer a few questions and we’ll build a script for you — then turn it into audio you can listen to on repeat.</p>' +
+      '  <strong style="display:block;font-size:1.05rem;margin-bottom:0.35rem;">' +
+      escapeHtml(heading) +
+      "</strong>" +
+      '  <p style="margin:0 0 0.85rem;">' +
+      escapeHtml(body) +
+      "</p>" +
       '  <div style="display:flex;flex-wrap:wrap;gap:0.55rem;align-items:center;">' +
       '    <button type="button" class="app-btn app-btn-primary" id="btn-my-library-empty-create">' +
       escapeHtml(primaryLabel) +
@@ -17264,8 +17559,14 @@
   }
 
   function startPersonalizedCreateFromLibrary() {
+    if (shouldOfferWebFinishResume()) {
+      resumeFinishFirstAudioFromLibrary();
+      return;
+    }
     if (!requireWebCreateOrTaste()) return;
     var displayName = (currentUser && currentUser.displayName) || "";
+    homeDeepenState = null;
+    homeClarifyFlow = null;
     setAdminTab("home");
     setHomeFlowStep("category", displayName);
   }
@@ -17780,6 +18081,7 @@
     activeAudio.addEventListener("timeupdate", updateMiniPlayer);
     activeAudio.addEventListener("loadedmetadata", updateMiniPlayer);
     activeAudio.addEventListener("ended", function () {
+      considerFeltLikeMePrompt(activeAudioScriptId, activeAudioTitle);
       if (typeof onEnded === "function") {
         onEnded();
       } else {
@@ -17791,6 +18093,81 @@
       rerenderMyLibraryCardsIfNeeded();
       renderSelectedPlaylistDetail();
       refreshHomeDailySparkTransportIfVisible();
+    });
+  }
+
+  function feltLikeMeStorageKey() {
+    var uid = currentUser && currentUser.uid ? currentUser.uid : "";
+    return uid ? "fs_feltLikeMePromptShown_" + uid : "";
+  }
+
+  function considerFeltLikeMePrompt(scriptId, title) {
+    if (!currentUser || !scriptId) return;
+    if (String(scriptId).indexOf("incoming_") === 0) return;
+    var key = feltLikeMeStorageKey();
+    if (!key) return;
+    try {
+      if (localStorage.getItem(key) === "1") return;
+    } catch (_e) {
+      return;
+    }
+    var script = (currentScripts || []).find(function (s) {
+      return s && s.id === scriptId;
+    });
+    if (script && script.isPremade) return;
+    setTimeout(function () {
+      showFeltLikeMeDialog(scriptId, title || "");
+    }, 600);
+  }
+
+  function markFeltLikeMeShown() {
+    var key = feltLikeMeStorageKey();
+    if (!key) return;
+    try {
+      localStorage.setItem(key, "1");
+    } catch (_e2) {}
+  }
+
+  function showFeltLikeMeDialog(scriptId, title) {
+    var existing = document.getElementById("felt-like-me-backdrop");
+    if (existing) existing.remove();
+    var backdrop = document.createElement("div");
+    backdrop.id = "felt-like-me-backdrop";
+    backdrop.className = "app-modal-backdrop";
+    backdrop.setAttribute("aria-hidden", "false");
+    backdrop.innerHTML =
+      '<div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="felt-like-me-title">' +
+      '  <h3 id="felt-like-me-title" style="margin-top:0;">Felt like you?</h3>' +
+      '  <p class="app-muted" style="margin:0 0 0.85rem;">Your first listen helps us improve personalization.</p>' +
+      '  <div class="app-modal-actions" style="flex-direction:column;align-items:stretch;gap:0.45rem;">' +
+      '    <button type="button" class="app-btn app-btn-primary" data-felt-rating="yes">Yes — felt like me</button>' +
+      '    <button type="button" class="app-btn app-btn-primary" data-felt-rating="somewhat">Somewhat</button>' +
+      '    <button type="button" class="app-btn app-btn-primary" data-felt-rating="no">Not really</button>' +
+      '    <button type="button" class="app-btn" data-felt-rating="dismissed">Not now</button>' +
+      "  </div>" +
+      "</div>";
+    document.body.appendChild(backdrop);
+    lockAppBodyScroll();
+    function closeDialog() {
+      unlockAppBodyScroll();
+      backdrop.remove();
+    }
+    backdrop.querySelectorAll("[data-felt-rating]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var rating = btn.getAttribute("data-felt-rating") || "dismissed";
+        markFeltLikeMeShown();
+        try {
+          if (typeof firebase !== "undefined" && firebase.analytics) {
+            firebase.analytics().logEvent("felt_like_me", {
+              rating: rating,
+              script_id: String(scriptId || "").slice(0, 64),
+              title: String(title || "").slice(0, 80),
+            });
+          }
+        } catch (_a) {}
+        console.log("[Analytics] felt_like_me", rating, scriptId);
+        closeDialog();
+      });
     });
   }
 
