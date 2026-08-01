@@ -984,6 +984,19 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
 .account-subscription-plan-line.tier-free { color: #94a3b8; }
 .account-subscription-plan-line.tier-starter { color: #93c5fd; }
 .account-subscription-plan-line.tier-creator { color: #facc15; }
+
+.account-subscription-plan-line.tier-pro { color: #c084fc; }
+.home-dashboard-plan-pill.is-pro {
+  background: rgba(168, 85, 247, 0.18);
+  color: #c084fc;
+}
+.account-share-link-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
 .account-subscription-desc {
   margin: 0;
   font-size: 0.88rem;

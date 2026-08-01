@@ -142,12 +142,17 @@
   var adminModeEnabled = false;
   /** Premade Content Manager modal tab: working | premade | backgrounds | categories */
   var premadeContentManagerTab = "working";
-  /** Matches iOS `SubscriptionConfig.creatorOutgoingShareCap` (active outgoing share links). */
+  /** Matches iOS share / clone caps. */
   var CREATOR_OUTGOING_SHARE_CAP = 50;
+  var PRO_OUTGOING_SHARE_CAP = 100;
+  var CREATOR_SHARE_RECIPIENT_CAP = 15;
+  var PRO_SHARE_RECIPIENT_CAP = 100;
   /** Matches iOS `SubscriptionConfig.Quotas.starterMaxClonedVoices`. */
   var STARTER_MAX_CLONED_VOICES = 2;
   /** Matches iOS `SubscriptionConfig.Quotas.creatorMaxClonedVoices`. */
   var CREATOR_MAX_CLONED_VOICES = 5;
+  var PRO_MAX_CLONED_VOICES = 8;
+  var PENDING_SHARE_TOKEN_KEY = "fs_pendingShareInviteToken";
   /** Universal link base for share invites (`ShareLinkConstants` on iOS). */
   var SHARE_UNIVERSAL_LINK_ORIGIN = "https://focusshift.app/s/";
 
@@ -3783,9 +3788,15 @@
         : "";
     var tier = resolvedSubscriptionTier();
     var tierClass =
-      tier === "creator" ? "is-creator" : tier === "starter" ? "is-starter" : "is-free";
+      tier === "pro"
+        ? "is-pro"
+        : tier === "creator"
+          ? "is-creator"
+          : tier === "starter"
+            ? "is-starter"
+            : "is-free";
     var upgradeHtml =
-      tier !== "creator"
+      tier !== "pro"
         ? ' <button type="button" class="home-dashboard-upgrade-btn" id="home-dashboard-upgrade">' +
           (isWebPublicBetaActive() ? "Beta" : "Upgrade") +
           "</button>"
@@ -4689,15 +4700,15 @@
     if (isWebPublicBetaActive()) {
       return "Web subscriptions open at launch. During beta, new accounts are Free-tier testers — browse and listen in the App Library. iOS subscriptions use the App Store when the app is available.";
     }
-    return "iOS uses the App Store for mobile subscriptions. Web upgrades here use Stripe Checkout with the same Firebase account. In Stripe test mode you can use card 4242 4242 4242 4242. Live checkout needs the four STRIPE_PRICE_* env vars on your API function.";
+    return "iOS uses the App Store for mobile subscriptions. Web upgrades here use Stripe Checkout with the same Firebase account. In Stripe test mode you can use card 4242 4242 4242 4242. Live checkout needs STRIPE_PRICE_* env vars on your API function (including Pro).";
   }
 
   function devicesSharingInfoBodyWeb() {
     var tier = resolvedSubscriptionTier();
     var limit = webTierDeviceLimit(tier);
     var extra =
-      tier === "creator"
-        ? " Creator: open Shared listeners to remove listeners or deactivate share links."
+      tier === "creator" || tier === "pro"
+        ? " Creator/Pro: open Shared listeners to remove listeners or deactivate share links."
         : "";
     return (
       "Your plan allows up to " +
@@ -5113,7 +5124,7 @@
       '      <h3 id="account-sharing-title">Shared listeners</h3>' +
       '      <button type="button" class="app-btn app-btn-primary" id="account-sharing-close">Done</button>' +
       "    </div>" +
-      '    <p class="app-muted account-sheet-lede">Creator plan: manage who can listen to your shared audio and deactivate old share links.</p>' +
+      '    <p class="app-muted account-sheet-lede">Creator or Pro: manage who can listen to your shared audio and deactivate old share links.</p>' +
       '    <div id="account-sharing-modal-body" class="account-sheet-body account-sharing-management-panel"></div>' +
       "  </div>" +
       "</div>" +
@@ -5218,13 +5229,28 @@
       '                <span class="account-plan-option__price" data-stripe-plan-price="creator-year">—</span>' +
       '                <span class="account-plan-option__period">Yearly billing</span>' +
       "              </button>" +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="pro-month">' +
+      '                <span class="account-plan-option__tier">Pro</span>' +
+      '                <span class="account-plan-option__price" data-stripe-plan-price="pro-month">—</span>' +
+      '                <span class="account-plan-option__period">Monthly billing</span>' +
+      "              </button>" +
+      '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="pro-year">' +
+      '                <span class="account-plan-option__tier">Pro</span>' +
+      '                <span class="account-plan-option__price" data-stripe-plan-price="pro-year">—</span>' +
+      '                <span class="account-plan-option__period">Yearly billing</span>' +
+      "              </button>" +
       "            </div>" +
+      '            <p class="app-muted account-plans-panel-note" style="margin-top:0.75rem;">' +
+      "              <strong>Corporate</strong> — schools, clubs, and organizations. " +
+      '              <a href="mailto:support@focusshift.app?subject=Focus%20Shift%20Corporate%20Plan">Contact us for pricing</a>.' +
+      "            </p>" +
       "          </div>" +
       '          <div id="account-plans-appstore-wrap" hidden>' +
       '            <p class="app-muted account-plans-panel-note">Your subscription is managed through the <strong>App Store</strong>. Upgrades, downgrades, and cancellations must be done on iPhone or iPad — not through Stripe on the web.</p>' +
       '            <ul class="account-plans-readonly">' +
       "              <li><strong>Starter</strong> — Cloud sync, AI usage, and voice cloning (up to 2 voices).</li>" +
-      "              <li><strong>Creator</strong> — Higher limits, up to 5 cloned voices, and sharing.</li>" +
+      "              <li><strong>Creator</strong> — Higher limits, up to 5 cloned voices, and share with 15 listeners.</li>" +
+      "              <li><strong>Pro</strong> — Double creation room, up to 8 clones, share with 100 listeners.</li>" +
       "            </ul>" +
       '            <p class="app-muted account-plans-panel-note" style="margin-top:0.55rem;">Open <strong>Focus Shift</strong> on your iPhone or iPad → <strong>Account</strong> → <strong>Manage Account</strong> → <strong>Subscription &amp; Billing</strong>.</p>' +
       "          </div>" +
@@ -6002,6 +6028,8 @@
         "starter-year": ["starter", "year"],
         "creator-month": ["creator", "month"],
         "creator-year": ["creator", "year"],
+        "pro-month": ["pro", "month"],
+        "pro-year": ["pro", "year"],
       };
       var accountBackdrop = document.getElementById("account-modal-backdrop");
       if (accountBackdrop) {
@@ -9301,6 +9329,7 @@
   }
 
   function maxClonedVoicesForTier(tier) {
+    if (tier === "pro") return PRO_MAX_CLONED_VOICES;
     if (tier === "creator") return CREATOR_MAX_CLONED_VOICES;
     if (tier === "starter") return STARTER_MAX_CLONED_VOICES;
     return 0;
@@ -11637,6 +11666,7 @@
   }
 
   function webTierDeviceLimit(tier) {
+    if (tier === "pro") return 8;
     if (tier === "starter") return 3;
     if (tier === "creator") return 5;
     return 2;
@@ -11645,7 +11675,7 @@
   /** Mirrors iOS `SubscriptionGating.maxCustomBackgrounds` — null = unlimited. */
   function webTierMaxCustomBackgrounds(tier) {
     if (tier === "starter") return 5;
-    if (tier === "creator") return null;
+    if (tier === "creator" || tier === "pro") return null;
     return 0;
   }
 
@@ -11664,7 +11694,8 @@
     var tier = resolvedSubscriptionTier();
     var limit = webTierMaxCustomBackgrounds(tier);
     var count = webCustomBackgroundCount();
-    var tierName = tier === "creator" ? "Creator" : tier === "starter" ? "Starter" : "Free";
+    var tierName =
+      tier === "pro" ? "Pro" : tier === "creator" ? "Creator" : tier === "starter" ? "Starter" : "Free";
     if (limit === null) return "";
     return (
       "Your " +
@@ -11675,7 +11706,7 @@
       (limit === 1 ? "" : "s") +
       ". You have " +
       String(count) +
-      ". Delete an import or upgrade to Creator for unlimited."
+      ". Delete an import or upgrade to Creator/Pro for unlimited."
     );
   }
 
@@ -11707,6 +11738,9 @@
     }
     if (tier === "creator") {
       return { scriptsLimit: null, wordsLimit: 8000, ttsLimit: 40000 };
+    }
+    if (tier === "pro") {
+      return { scriptsLimit: null, wordsLimit: 16000, ttsLimit: 80000 };
     }
     // Free lifetime taste (matches Cloud Functions TIER_RULES.free; counters never reset).
     return { scriptsLimit: 1, wordsLimit: 400, ttsLimit: 2000 };
@@ -11801,7 +11835,7 @@
     }
 
     var tier = resolvedSubscriptionTier();
-    if (tier !== "starter" && tier !== "creator") {
+    if (tier !== "starter" && tier !== "creator" && tier !== "pro") {
       host.innerHTML = "";
       return;
     }
@@ -11871,8 +11905,8 @@
   function applyComplimentaryStepUp() {
     if (!currentUser) return Promise.reject(new Error("Sign in required."));
     var tier = resolvedSubscriptionTier();
-    if (tier !== "starter" && tier !== "creator") {
-      return Promise.reject(new Error("Usage add-ons require Starter or Creator."));
+    if (tier !== "starter" && tier !== "creator" && tier !== "pro") {
+      return Promise.reject(new Error("Usage add-ons require a paid plan."));
     }
     if (accountInsightsSnapshot.freeStepUpEnabled === false) {
       return Promise.reject(new Error("Complimentary top-ups are disabled. Use the iOS app to buy a usage add-on."));
@@ -12035,7 +12069,7 @@
   function profileIsComplimentaryManual() {
     if (!currentUserProfile) return false;
     var tier = resolvedSubscriptionTier();
-    if (tier !== "starter" && tier !== "creator") return false;
+    if (tier !== "starter" && tier !== "creator" && tier !== "pro") return false;
     var src = String(
       currentUserProfile.subscriptionTierSource || currentUserProfile.subscriptionSource || ""
     )
@@ -12106,7 +12140,7 @@
     if (!group || !el) return;
 
     var tier = resolvedSubscriptionTier();
-    if (tier !== "starter" && tier !== "creator") {
+    if (tier !== "starter" && tier !== "creator" && tier !== "pro") {
       group.hidden = true;
       el.innerHTML = "";
       return;
@@ -12240,13 +12274,17 @@
     }
 
     var sharingVal = document.getElementById("account-shared-listeners-value");
-    if (sharingBtn) sharingBtn.hidden = tier !== "creator";
+    var canShareListeners = tier === "creator" || tier === "pro";
+    if (sharingBtn) sharingBtn.hidden = !canShareListeners;
     if (sharingVal) {
-      if (tier !== "creator") sharingVal.textContent = "—";
+      if (!canShareListeners) sharingVal.textContent = "—";
       else if (accountInsightsSnapshot.loading || accountInsightsSnapshot.shareAudienceCount == null) {
         sharingVal.textContent = "—";
       } else {
-        sharingVal.textContent = formatUsageRatio(accountInsightsSnapshot.shareAudienceCount || 0, 15);
+        sharingVal.textContent = formatUsageRatio(
+          accountInsightsSnapshot.shareAudienceCount || 0,
+          webShareRecipientCap(tier) || CREATOR_SHARE_RECIPIENT_CAP
+        );
       }
     }
   }
@@ -12264,6 +12302,7 @@
     var t = resolvedSubscriptionTier();
     if (t === "starter") return "Starter";
     if (t === "creator") return "Creator";
+    if (t === "pro") return "Pro";
     return "Free";
   }
 
@@ -12277,6 +12316,9 @@
     }
     if (t === "creator") {
       return "Higher creation limits, plus share your audio with others.";
+    }
+    if (t === "pro") {
+      return "For coaches and teams — share with up to 100 listeners, with double the creation room.";
     }
     if (isWebPublicBetaActive()) {
       return "Beta tester on the Free plan — browse sample audio in the App Library. Upgrade later to create personalized audio.";
@@ -12349,7 +12391,7 @@
     if (manageSubsRow) manageSubsRow.hidden = hideSubs;
     if (manageRow) manageRow.hidden = hideBilling && hideSubs;
     if (viewPlansBtn) viewPlansBtn.hidden = complimentary;
-    if (syncCloudBtn) syncCloudBtn.hidden = tier !== "starter" && tier !== "creator";
+    if (syncCloudBtn) syncCloudBtn.hidden = !isWebPaidTier();
   }
 
   function viewPlansButtonLabelCollapsed() {
@@ -12369,6 +12411,8 @@
       "starter-year": null,
       "creator-month": "$14.99/mo",
       "creator-year": null,
+      "pro-month": "$29.99/mo",
+      "pro-year": "$299.99/yr",
     };
     document.querySelectorAll("[data-stripe-plan-price]").forEach(function (el) {
       var key = (el.getAttribute("data-stripe-plan-price") || "").trim();
@@ -12401,7 +12445,7 @@
     headlineEl.textContent = subscriptionPlanHeadlineWeb();
     descEl.textContent = subscriptionTierDescriptionWeb();
     var tier = resolvedSubscriptionTier();
-    headlineEl.classList.remove("tier-free", "tier-starter", "tier-creator");
+    headlineEl.classList.remove("tier-free", "tier-starter", "tier-creator", "tier-pro");
     headlineEl.classList.add("tier-" + tier);
     syncAccountBillingButtons();
     syncAccountPlansPanelForBilling();
@@ -12523,7 +12567,7 @@
 
   function openAccountSharingModal() {
     if (!isWebCreatorTier()) {
-      setAccountMessage("Shared listeners require the Creator plan.", "info");
+      setAccountMessage("Shared listeners require the Creator or Pro plan.", "info");
       return;
     }
     var bd = document.getElementById("account-sharing-backdrop");
@@ -12631,12 +12675,50 @@
     var raw = (currentUserProfile.subscriptionTier || "").toString().trim().toLowerCase();
     if (raw === "basic") return "starter";
     if (raw === "premium") return "creator";
-    if (raw === "starter" || raw === "creator" || raw === "free") return raw;
+    if (raw === "starter" || raw === "creator" || raw === "pro" || raw === "free") return raw;
     return "free";
   }
 
+  function isWebPaidTier() {
+    var t = resolvedSubscriptionTier();
+    return t === "starter" || t === "creator" || t === "pro";
+  }
+
+  /** Creator or Pro — can mint listen-only share links. */
   function isWebCreatorTier() {
-    return resolvedSubscriptionTier() === "creator";
+    var t = resolvedSubscriptionTier();
+    return t === "creator" || t === "pro";
+  }
+
+  function webOutgoingShareCap(tier) {
+    if (tier === "pro") return PRO_OUTGOING_SHARE_CAP;
+    if (tier === "creator") return CREATOR_OUTGOING_SHARE_CAP;
+    return 0;
+  }
+
+  function webShareRecipientCap(tier) {
+    if (tier === "pro") return PRO_SHARE_RECIPIENT_CAP;
+    if (tier === "creator") return CREATOR_SHARE_RECIPIENT_CAP;
+    return 0;
+  }
+
+  function persistPendingShareToken(token) {
+    try {
+      if (token) localStorage.setItem(PENDING_SHARE_TOKEN_KEY, String(token));
+      else localStorage.removeItem(PENDING_SHARE_TOKEN_KEY);
+    } catch (_e) {}
+  }
+
+  function readPersistedPendingShareToken() {
+    try {
+      return (localStorage.getItem(PENDING_SHARE_TOKEN_KEY) || "").trim() || null;
+    } catch (_e2) {
+      return null;
+    }
+  }
+
+  function clearPersistedPendingShareToken() {
+    persistPendingShareToken(null);
   }
 
   function parseShareTokenFromLocation() {
@@ -12666,17 +12748,20 @@
     return "Could not load this share link.";
   }
 
-  function closeShareClaimModal() {
+  function closeShareClaimModal(options) {
     var bd = document.getElementById("share-claim-backdrop");
     if (bd) bd.hidden = true;
     unlockAppBodyScroll();
     pendingShareClaimToken = null;
+    var opts = options || {};
+    if (!opts.keepPersisted) clearPersistedPendingShareToken();
   }
 
   function openShareClaimModal(token, inviteData) {
     var bd = document.getElementById("share-claim-backdrop");
     if (!bd || !token) return;
     pendingShareClaimToken = token;
+    persistPendingShareToken(token);
     var titleEl = document.getElementById("share-claim-title");
     var ledeEl = document.getElementById("share-claim-lede");
     var metaEl = document.getElementById("share-claim-meta");
@@ -12728,6 +12813,11 @@
     if (!currentUser || !token) return Promise.reject(new Error("Sign in required."));
     var recipientUid = currentUser.uid;
     var inviteRef = db.collection("shareInvites").doc(token);
+    var recipientName =
+      (typeof resolveDisplayNameForScript === "function" && resolveDisplayNameForScript("")) ||
+      (currentUser.displayName && String(currentUser.displayName).trim()) ||
+      ((currentUser.email || "").split("@")[0] || "Listener");
+    var recipientEmail = (currentUser.email && String(currentUser.email).trim()) || "";
     return inviteRef.get().then(function (inviteSnap) {
       if (!inviteSnap.exists) throw new Error(shareClaimErrorMessage("missing"));
       var data = inviteSnap.data() || {};
@@ -12737,43 +12827,68 @@
       if (creatorUid === recipientUid) throw new Error(shareClaimErrorMessage("self"));
 
       var audienceRef = db.collection("users").doc(creatorUid).collection("shareAudience").doc(recipientUid);
+      var sharingMetaRef = db.collection("users").doc(creatorUid).collection("meta").doc("sharing");
       var incomingRef = db
         .collection("users")
         .doc(recipientUid)
         .collection("incomingSharedScripts")
         .doc(token);
-      var batch = db.batch();
-      batch.set(
-        audienceRef,
-        {
+      return Promise.all([audienceRef.get(), sharingMetaRef.get()]).then(function (snaps) {
+        var audienceSnap = snaps[0];
+        var sharingSnap = snaps[1];
+        var alreadyOnRoster = audienceSnap.exists;
+        if (!alreadyOnRoster) {
+          var sharingData = sharingSnap.exists ? sharingSnap.data() || {} : {};
+          var count = Number(sharingData.listenerCount) || 0;
+          var rosterCap = Number(sharingData.listenerCap) || CREATOR_SHARE_RECIPIENT_CAP;
+          if (count >= rosterCap) {
+            throw new Error(
+              "The sender’s listener list is full. They need to remove someone before new people can join."
+            );
+          }
+        }
+        var batch = db.batch();
+        var audiencePayload = {
           claimToken: token,
-          claimedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-      batch.set(
-        incomingRef,
-        {
-          creatorUid: creatorUid,
-          creatorDisplayName: data.creatorDisplayName || "Someone",
-          sourceScriptId: data.scriptId || "",
-          title: data.title || "Shared audio",
-          text: data.text || "",
-          audioURL: data.audioURL || "",
-          voiceID: data.voiceID || "",
-          backgroundID: data.backgroundID || "",
-          claimedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          shareToken: token,
-        },
-        { merge: true }
-      );
-      return batch.commit();
+          recipientDisplayName: recipientName,
+        };
+        if (recipientEmail) audiencePayload.recipientEmail = recipientEmail;
+        if (!alreadyOnRoster) {
+          audiencePayload.claimedAt = firebase.firestore.FieldValue.serverTimestamp();
+        }
+        batch.set(audienceRef, audiencePayload, { merge: true });
+        if (!alreadyOnRoster) {
+          var sharingData2 = sharingSnap.exists ? sharingSnap.data() || {} : {};
+          var nextCount = (Number(sharingData2.listenerCount) || 0) + 1;
+          batch.set(sharingMetaRef, { listenerCount: nextCount }, { merge: true });
+        }
+        batch.set(
+          incomingRef,
+          {
+            creatorUid: creatorUid,
+            creatorDisplayName: data.creatorDisplayName || "Someone",
+            sourceScriptId: data.scriptId || "",
+            title: data.title || "Shared audio",
+            text: data.text || "",
+            audioURL: data.audioURL || "",
+            voiceID: data.voiceID || "",
+            backgroundID: data.backgroundID || "",
+            claimedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            shareToken: token,
+          },
+          { merge: true }
+        );
+        return batch.commit();
+      });
     });
   }
 
   function maybePresentPendingShareClaim() {
-    var token = parseShareTokenFromLocation();
-    if (!token || !currentUser) return;
+    var fromUrl = parseShareTokenFromLocation();
+    if (fromUrl) persistPendingShareToken(fromUrl);
+    var token = fromUrl || readPersistedPendingShareToken();
+    if (!token) return;
+    if (!currentUser) return;
     loadShareInviteForClaim(token)
       .then(function (result) {
         if (!result || result.error) {
@@ -12884,18 +12999,27 @@
                 '<div class="app-muted" style="font-size:0.78rem;word-break:break-all;">' +
                 escapeHtml(link) +
                 "</div></div>" +
+                '<div class="account-share-link-actions">' +
+                '<button type="button" class="app-btn app-btn-secondary account-share-copy" data-share-link="' +
+                escapeHtml(link) +
+                '">Copy link</button>' +
                 '<button type="button" class="app-btn app-btn-secondary account-share-deactivate" data-share-token="' +
                 escapeHtml(o.token) +
                 '">Deactivate</button>' +
+                "</div>" +
                 "</li>"
               );
             })
             .join("") +
           "</ul>";
+    var listenerCapUi = webShareRecipientCap(resolvedSubscriptionTier()) || CREATOR_SHARE_RECIPIENT_CAP;
+    var outgoingCapUi = webOutgoingShareCap(resolvedSubscriptionTier()) || CREATOR_OUTGOING_SHARE_CAP;
     panel.innerHTML =
       "<h5>Listeners (" +
       String(audience.length) +
-      " / 15)</h5>" +
+      " / " +
+      String(listenerCapUi) +
+      ")</h5>" +
       audienceHtml +
       '<details class="account-share-links-details" id="account-share-links-details"' +
       shareLinksOpenAttr +
@@ -12904,6 +13028,8 @@
       '    <span class="account-share-links-chevron" aria-hidden="true">▸</span>' +
       '    <span class="account-share-links-summary-title">Active share links (' +
       String(outgoing.length) +
+      " / " +
+      String(outgoingCapUi) +
       ")</span>" +
       "  </summary>" +
       '  <div class="account-share-links-body">' +
@@ -12939,6 +13065,19 @@
           .finally(function () {
             btn.disabled = false;
           });
+      });
+    });
+    panel.querySelectorAll(".account-share-copy").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var link = btn.getAttribute("data-share-link") || "";
+        if (!link) return;
+        if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+          navigator.clipboard.writeText(link).then(function () {
+            setAccountMessage("Link copied. Paste it anywhere to share again.", "success");
+          });
+        } else {
+          window.prompt("Copy this share link:", link);
+        }
       });
     });
     panel.querySelectorAll(".account-share-deactivate").forEach(function (btn) {
@@ -12987,6 +13126,9 @@
           audienceSnap.docs.map(function (doc) {
             var memberUid = doc.documentID;
             var claimedAt = (doc.data() || {}).claimedAt || null;
+            var ad = doc.data() || {};
+            var fromClaimName = (ad.recipientDisplayName && String(ad.recipientDisplayName).trim()) || "";
+            var fromClaimEmail = (ad.recipientEmail && String(ad.recipientEmail).trim()) || "";
             return db
               .collection("users")
               .doc(memberUid)
@@ -12996,12 +13138,17 @@
                 return {
                   recipientUid: memberUid,
                   claimedAt: claimedAt,
-                  displayName: profile.displayName || "",
-                  email: profile.email || "",
+                  displayName: fromClaimName || profile.displayName || "",
+                  email: fromClaimEmail || profile.email || "",
                 };
               })
               .catch(function () {
-                return { recipientUid: memberUid, claimedAt: claimedAt, displayName: "", email: "" };
+                return {
+                  recipientUid: memberUid,
+                  claimedAt: claimedAt,
+                  displayName: fromClaimName,
+                  email: fromClaimEmail,
+                };
               });
           })
         ).then(function (audience) {
@@ -13021,6 +13168,19 @@
             error: null,
           };
           accountInsightsSnapshot.shareAudienceCount = audience.length;
+          var listenerCapNow = webShareRecipientCap(resolvedSubscriptionTier());
+          db.collection("users")
+            .doc(uid)
+            .collection("meta")
+            .doc("sharing")
+            .set(
+              {
+                listenerCount: audience.length,
+                listenerCap: listenerCapNow || CREATOR_SHARE_RECIPIENT_CAP,
+              },
+              { merge: true }
+            )
+            .catch(function () {});
           renderShareManagementPanel();
           renderAccountInsights();
         });
@@ -13056,21 +13216,64 @@
       return;
     }
     if (!isWebCreatorTier()) {
-      setMessage("Sharing is available on the Creator plan.", "info");
+      setMessage("Sharing is available on the Creator or Pro plan.", "info");
       return;
     }
     var uid = currentUser.uid;
+    var tier = resolvedSubscriptionTier();
+    var outgoingCap = webOutgoingShareCap(tier);
+    var listenerCap = webShareRecipientCap(tier);
     var outgoingCol = db.collection("users").doc(uid).collection("outgoingShares");
     outgoingCol
       .get()
       .then(function (snap) {
-        if (snap.size >= CREATOR_OUTGOING_SHARE_CAP) {
+        var existingForScript = null;
+        snap.docs.forEach(function (doc) {
+          var d = doc.data() || {};
+          if (d.scriptId && script && script.id && d.scriptId === script.id) {
+            existingForScript = doc;
+          }
+        });
+        if (existingForScript) {
+          var existingLink = SHARE_UNIVERSAL_LINK_ORIGIN + existingForScript.id;
+          if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+            return navigator.clipboard.writeText(existingLink).then(function () {
+              setMessage(
+                "Share link copied (reused existing link for this audio).",
+                "success"
+              );
+            });
+          }
+          window.prompt("Copy this share link:", existingLink);
+          setMessage("Share link ready.", "success");
+          return;
+        }
+        if (snap.size >= outgoingCap) {
           setMessage(
             "You’ve reached the maximum number of active shares. Deactivate an old share in Account → Sharing management and try again.",
             "error"
           );
           return;
         }
+        db.collection("users")
+          .doc(uid)
+          .collection("shareAudience")
+          .get()
+          .then(function (audSnap) {
+            return db
+              .collection("users")
+              .doc(uid)
+              .collection("meta")
+              .doc("sharing")
+              .set(
+                {
+                  listenerCount: audSnap.size,
+                  listenerCap: listenerCap || CREATOR_SHARE_RECIPIENT_CAP,
+                },
+                { merge: true }
+              );
+          })
+          .catch(function () {});
         var shareAudio = (script.audioURL && String(script.audioURL).trim()) || "";
         function proceedWithAudio(url) {
           var u = (url || "").trim();
@@ -13151,7 +13354,7 @@
   }
 
   function maxClarifyForWebTier(tier) {
-    if (tier === "starter" || tier === "creator") return 3;
+    if (tier === "starter" || tier === "creator" || tier === "pro") return 3;
     return 0;
   }
 
@@ -16163,8 +16366,7 @@
   }
 
   function isWebPaidTierForAI() {
-    var tier = resolvedSubscriptionTier();
-    return tier === "starter" || tier === "creator";
+    return isWebPaidTier();
   }
 
   /** Free lifetime: 1 short AI script remaining (server-enforced; shared with iOS). */
