@@ -1670,6 +1670,9 @@
    * (matches iOS Follow Up | Generate Script UX).
    */
   var homeDeepenState = null;
+  /** getting-ready | in-the-moment | after — matches native ListenMode. */
+  var selectedListenMode = "getting-ready";
+  var listenModeForCurrentAnswers = null;
   /** Cached Daily Spark payload + playback blob URL (Starter/Creator). */
   var dailySparkState = {
     spark: null,
@@ -1685,10 +1688,10 @@
     home: {
       title: "Home",
       content:
-        "Create my affirmation audio — Tap to start the questionnaire and generate personalized affirmation audio. Free includes one short sample; Starter and Creator unlock ongoing creation and voice cloning.\n\n" +
+        "Create my affirmation audio — Choose a focus area, when you'll listen, then answer a few questions to generate personalized affirmation audio. Free includes one short sample; Starter and Creator unlock ongoing creation and voice cloning.\n\n" +
         "Daily Spark — Tap to play today's short curated affirmation (Starter and Creator).\n\n" +
         "Listen today — Tap to run your saved playlist or library shortcut. Set the target in Account → Preferences.\n\n" +
-        "Dashboard — Streak, plays (tap plays to cycle week / month / year / total), plan, last played, milestones, and reminders status. Same Firestore fields as the iOS app.\n\n" +
+        "Dashboard — Streak, plays (tap plays to cycle today / week / month / year / total), plan, last played, milestones, and reminders status. Same Firestore fields as the iOS app.\n\n" +
         "Account — Open the person icon (top right) for settings, plans, library counts, preferences, and usage.",
     },
     library: {
@@ -1770,21 +1773,6 @@
     "• Short lists can stay simple: a few words or phrases per line are fine (e.g. honor, courage, patient with myself)\n" +
     "• You don't need to type \"I am\" before every line\n\n" +
     "Your script will weave these into smooth, spoken lines and include each idea.";
-  var IAM_SURVEY_HELP_Q2 =
-    "This is what makes the script feel alive when you listen.\n\n" +
-    "Imagine your goals and what you deeply want are already done—you've arrived. What rises in you? Pride, relief, warmth, strength, quiet joy, something in your chest or gut?\n\n" +
-    "Name a few feelings or sensations. You don't need perfect words—honest fragments are enough. The script will lean on this so the listening experience matches that inner win.";
-  var SLEEP_REST_SURVEY_HELP_Q1 =
-    "When and why you listen shapes the whole script.\n\n" +
-    "• In bed trying to fall asleep — say so clearly (e.g. mind replaying the day, can't switch off)\n" +
-    "• Relaxing before bed — mention where (sofa, bath) and how long you have\n" +
-    "• Rest or a nap during the day — note if busyness or guilt makes it hard to stop\n" +
-    "• Morning renewal — describe how you want to feel when you wake\n\n" +
-    "The more specific your situation, the more personal your audio.";
-  var SLEEP_REST_SURVEY_HELP_Q2 =
-    "Sensory detail is what makes this feel tailored—not goals for tomorrow.\n\n" +
-    "Name what you want in your body and mind: heavy eyelids, unclenched jaw, slow exhale, limbs sinking into the mattress, mind quiet like still water, safe and drowsy, cool dark room, or waking light and unhurried.\n\n" +
-    "Short honest fragments are enough. The script will build from how rest actually feels for you.";
   /** Mirrors iOS `SurveyCategories.swift` + default placeholder from `SurveyQuestionCard`. */
   var surveyCategories = [
     {
@@ -1861,62 +1849,435 @@
     },
   ];
 
-  var surveyIntakeObstacleQuestion =
-    "What's the main obstacle, inner critic, or habit that gets in the way? (e.g., self-doubt before meetings, racing thoughts at night) (optional)";
-  var surveyIntakeContextQuestion =
-    "When or where does this matter most? (e.g., morning routine, before a game, bedtime, at work)";
-  var surveyIntakeFeelingQuestion =
-    "How do you want to feel in that moment? (e.g., calm and clear, confident in my chest, ready to take the next step)";
-  var sleepRestIntakeObstacleQuestion =
-    "What usually gets between you and the rest you want? (optional — e.g., mind replaying the day, body stays tense)";
-  var sleepRestIntakeContextQuestion =
-    "What's your listening setup when you'll use this audio? (e.g., already in bed in a dark room, on the couch 15 minutes before sleep, phone on do-not-disturb, fan or white noise)";
-  var sleepRestIntakeFeelingQuestion =
-    "How do you want to feel as you settle into rest? (e.g., heavy and safe, mind quiet, body soft)";
+  /** When the listener will use the audio. Present-tense scripts in all three — job, not grammar tense. */
+  var LISTEN_MODE_IDS = ["getting-ready", "in-the-moment", "after"];
+  var IAM_LISTEN_STEMS =
+    "What do you most want to believe or embody about yourself right now? Add everything — one idea per line. (e.g., I am confident, I am worthy of love, I am strong and resilient)";
 
-  function surveyIntakeSectionSubtitle(catId) {
-    return catId === "sleep-rest"
-      ? "Rest details — when/where you listen and how you want to feel (required)"
-      : "Make it yours — when/where + how you want to feel (required)";
+  function normalizeListenMode(raw) {
+    var v = String(raw || "").trim();
+    if (v === "getting-ready" || v === "in-the-moment" || v === "after") return v;
+    return "getting-ready";
   }
 
-  function surveyIntakeObstacleForCategory(catId) {
-    return catId === "sleep-rest" ? sleepRestIntakeObstacleQuestion : surveyIntakeObstacleQuestion;
+  function defaultListenMode(categoryId) {
+    var id = String(categoryId || "").trim();
+    if (id === "sleep-rest" || id === "sports-performance" || id === "health-fitness") {
+      return "in-the-moment";
+    }
+    return "getting-ready";
   }
 
-  function surveyIntakeContextForCategory(catId) {
-    return catId === "sleep-rest" ? sleepRestIntakeContextQuestion : surveyIntakeContextQuestion;
+  function listenModeTitle(mode, categoryId) {
+    var m = normalizeListenMode(mode);
+    if (categoryId === "sleep-rest") {
+      if (m === "getting-ready") return "Before bed";
+      if (m === "in-the-moment") return "While I rest or fall asleep";
+      return "When I wake";
+    }
+    if (m === "getting-ready") return "Getting ready";
+    if (m === "in-the-moment") return "In the moment";
+    return "After / winding down";
   }
 
-  function surveyIntakeFeelingForCategory(catId) {
-    return catId === "sleep-rest" ? sleepRestIntakeFeelingQuestion : surveyIntakeFeelingQuestion;
+  function listenModeHint(mode, categoryId) {
+    var m = normalizeListenMode(mode);
+    var id = String(categoryId || "").trim();
+    var byCat = {
+      "sleep-rest": {
+        "getting-ready": "Settle the day and get ready for rest — sofa, bath, or the start of bedtime.",
+        "in-the-moment": "Stay with you while you rest or fall asleep — quiet the mind, slow the body.",
+        after: "A gentle wake-up — unhurried, light, no pep talk.",
+      },
+      "health-fitness": {
+        "getting-ready": "Before a meal, a workout, the sauna, a walk, or whatever you're about to do for your body.",
+        "in-the-moment": "While you're doing it — moving, cooking, recovering, in the sauna.",
+        after: "When you're done — settle, recover, close the day.",
+      },
+      "sports-performance": {
+        "getting-ready": "Before practice, a game, or a hard session — walk-up and lock in.",
+        "in-the-moment": "During play or training — this play, this breath, this moment.",
+        after: "After you're done — reset, recover, let it complete.",
+      },
+      confidence: {
+        "getting-ready": "Before you walk in — a talk, a room, a moment that matters.",
+        "in-the-moment": "While you're in it — the conversation, the room, the decision.",
+        after: "After it's over — keep what you want, let the rest complete.",
+      },
+      relationships: {
+        "getting-ready": "Before you show up with someone — a talk, a date, a boundary, a hello.",
+        "in-the-moment": "While you're with them, or in that connection right now.",
+        after: "After the moment — settle, stay clear, be at ease with yourself.",
+      },
+      "success-prosperity": {
+        "getting-ready": "Before a work block, a pitch, or a money decision.",
+        "in-the-moment": "While you're in the work — at the desk, on the call, making the next move.",
+        after: "When you step away — complete, not still spinning.",
+      },
+      "mental-wellbeing": {
+        "getting-ready": "Before a stretch of the day where you want more steadiness.",
+        "in-the-moment": "While you're moving through it — this hour, this feeling, this stretch.",
+        after: "When you're coming down — quieter, safer, more yourself.",
+      },
+      "i-am": {
+        "getting-ready": "Before you step into the day or a moment — already being that person.",
+        "in-the-moment": "While you're in it — living these truths in this moment.",
+        after: "When the moment is done — settle into who you are.",
+      },
+    };
+    var fallback = {
+      "getting-ready": "Before you step into it — feel it and walk up.",
+      "in-the-moment": "While you're doing it — this moment, in the body.",
+      after: "When you're done — settle, recover, or close the day.",
+    };
+    var table = byCat[id] || fallback;
+    return table[m] || fallback[m];
   }
 
-  function surveyIntakeObstaclePlaceholder(catId) {
+  var LISTEN_MODE_QUESTIONS = {
+    confidence: {
+      "getting-ready": [
+        "What's coming up where you want to feel more confident walking in? (a conversation, a room, a decision)",
+        "How do you want to feel in your body as you get ready — before you step in?",
+      ],
+      "in-the-moment": [
+        "Where are you while this plays, and what are you doing? (in the meeting, on a call, walking into the room)",
+        "How do you want to feel about yourself right now, in this moment?",
+      ],
+      after: [
+        "What just happened, or what are you coming down from? (a talk, a hard moment, a long day)",
+        "How do you want to feel as you settle — what do you want to keep?",
+      ],
+    },
+    relationships: {
+      "getting-ready": [
+        "What interaction are you preparing for? (a conversation, a date, showing up, holding a boundary)",
+        "How do you want to feel as you walk into it?",
+      ],
+      "in-the-moment": [
+        "Who are you with (or thinking of) while this plays, and what's happening?",
+        "How do you want to feel and show up right now?",
+      ],
+      after: [
+        "What conversation or moment are you coming out of?",
+        "How do you want to feel as you settle — connected, clear, at ease with yourself?",
+      ],
+    },
+    "success-prosperity": {
+      "getting-ready": [
+        "What are you about to do for work, money, or a goal? (a pitch, a work block, a decision)",
+        "How do you want to feel walking into that — capable, clear, already in motion?",
+      ],
+      "in-the-moment": [
+        "What are you doing while this plays? (at the desk, on a call, making the next move)",
+        "How do you want to feel in this stretch of work?",
+      ],
+      after: [
+        "What work or goal moment are you closing out?",
+        "How do you want to feel as you step away — complete, not still spinning?",
+      ],
+    },
+    "mental-wellbeing": {
+      "getting-ready": [
+        "What part of the day are you heading into where you want more steadiness?",
+        "How do you want to feel as you start — in your body and mind?",
+      ],
+      "in-the-moment": [
+        "What's going on right now while this plays? (a busy stretch, a hard feeling, a regular afternoon)",
+        "How do you want to feel in your body in this moment?",
+      ],
+      after: [
+        "What are you coming down from? (a spike of worry, a long day, a hard conversation)",
+        "How do you want to feel as you settle — quieter, safer, more yourself?",
+      ],
+    },
+    "health-fitness": {
+      "getting-ready": [
+        "What are you about to do for your body? (a workout, a meal, the sauna, a walk, stretching)",
+        "How do you want to feel walking into it?",
+      ],
+      "in-the-moment": [
+        "What are you doing for your body while this plays? (moving, cooking, recovering, in the sauna)",
+        "How do you want to feel in your body right now?",
+      ],
+      after: [
+        "What did you just do for your body, or what are you closing out?",
+        "How do you want to feel as you recover or settle?",
+      ],
+    },
+    "sports-performance": {
+      "getting-ready": [
+        "What are you preparing for? (practice, a game, a race, a hard session)",
+        "What mindset or self-talk do you want as you walk in?",
+      ],
+      "in-the-moment": [
+        "What's happening while this plays? (training, competing, between plays)",
+        "What do you want to feel and tell yourself in this moment — this play, this breath?",
+      ],
+      after: [
+        "What session or competition are you coming out of?",
+        "How do you want to feel as you reset — what stays, what can complete?",
+      ],
+    },
+    "sleep-rest": {
+      "getting-ready": [
+        "What's still with you from the day as you start to wind down? You don't need to solve it.",
+        "How do you want your body and mind to feel as you get ready for rest?",
+      ],
+      "in-the-moment": [
+        "Where are you as you rest — in bed, on the couch, taking a nap — and what's the room like?",
+        "Describe the body and mind feeling you want: heavy, slow breath, quiet, safe, drowsy.",
+      ],
+      after: [
+        "How do mornings usually start for you, and how do you want this wake-up to feel?",
+        "What does a gentle, unhurried start feel like in your body?",
+      ],
+    },
+    "i-am": {
+      "getting-ready": [
+        IAM_LISTEN_STEMS,
+        "You're about to step into something. How would it feel in your body to already be that person walking in?",
+      ],
+      "in-the-moment": [
+        IAM_LISTEN_STEMS,
+        "You're in it right now. How does living these truths feel in your body in this moment?",
+      ],
+      after: [
+        IAM_LISTEN_STEMS,
+        "The moment is done. How do you want these truths to feel as you settle — in your body and in who you are?",
+      ],
+    },
+    other: {
+      "getting-ready": [
+        "Describe the theme, and what you're about to step into. (e.g. creativity, parenting, spirituality, recovery)",
+        "How do you want to feel getting ready?",
+      ],
+      "in-the-moment": [
+        "Describe the theme, and what you're doing while this plays.",
+        "How do you want to feel right now?",
+      ],
+      after: [
+        "Describe the theme, and what you're coming out of.",
+        "How do you want to feel as you settle?",
+      ],
+    },
+  };
+
+  function questionsForListenMode(categoryId, listenMode) {
+    var id = String(categoryId || "").trim() || "other";
+    var mode = normalizeListenMode(listenMode);
+    var byCat = LISTEN_MODE_QUESTIONS[id] || LISTEN_MODE_QUESTIONS.other;
+    return (byCat[mode] || byCat["getting-ready"] || ["Question 1", "Question 2"]).slice();
+  }
+
+  function iamSurveyHelpQ2(listenMode) {
+    var m = normalizeListenMode(listenMode);
+    if (m === "in-the-moment") {
+      return "Name how these truths feel in your body right now — not someday. Honest fragments are enough.";
+    }
+    if (m === "after") {
+      return "Name how you want these truths to feel as you settle — after the moment, still you.";
+    }
+    return "Name how it feels in your body to already be that person before you walk in — chest, breath, posture, warmth.";
+  }
+
+  function sleepRestSurveyHelpDetail(questionIndex, listenMode) {
+    var m = normalizeListenMode(listenMode);
+    var idx = questionIndex | 0;
+    if (m === "getting-ready") {
+      return idx === 0
+        ? "You don't need to solve the day. Name what's still with you in a few words so the script can help you set it down."
+        : "Sensory detail: jaw, shoulders, breath, the room. How rest starts to feel as you get ready.";
+    }
+    if (m === "after") {
+      return idx === 0
+        ? "Mornings vary. Say how you usually wake and how you want this one to feel — unhurried, not a rally."
+        : "Gentle body detail: light, breath, no rush. Waking, not winding down.";
+    }
+    return idx === 0
+      ? "Where you are matters — bed, couch, nap. Mention light, sound, and whether your eyes are closed."
+      : "Name what you want in your body and mind: heavy eyelids, unclenched jaw, slow exhale, limbs sinking, mind quiet like still water.";
+  }
+
+  function surveyQuestionHelpDetail(catId, questionIndex, listenMode) {
+    if (catId === "i-am") {
+      if (questionIndex === 0) return IAM_SURVEY_HELP_Q1;
+      if (questionIndex === 1) return iamSurveyHelpQ2(listenMode);
+      return null;
+    }
     if (catId === "sleep-rest") {
-      return "e.g. Thoughts keep looping — shoulders tight, can't let the day go";
+      return sleepRestSurveyHelpDetail(questionIndex, listenMode);
+    }
+    return null;
+  }
+
+  function surveyQuestionHelpPlaceholder(catId, questionIndex, listenMode) {
+    var m = normalizeListenMode(listenMode);
+    if (catId === "i-am") {
+      if (questionIndex === 0) {
+        return "Share as much as you like—the more specific, the better your script.";
+      }
+      if (m === "in-the-moment") return "e.g. Warm, grounded, these words true in my body right now";
+      if (m === "after") return "e.g. Quiet pride, still myself, the moment complete";
+      return "e.g. Steady in my chest, shoulders back, already belonging as I walk in";
+    }
+    if (catId === "sleep-rest") {
+      if (m === "getting-ready") {
+        return questionIndex === 0
+          ? "e.g. Work still looping, body tense, I want to start letting the day complete"
+          : "e.g. Shoulders dropping, breath slower, room getting quieter";
+      }
+      if (m === "after") {
+        return questionIndex === 0
+          ? "e.g. I usually wake already rushing — I want a slower first ten minutes"
+          : "e.g. Soft light, unhurried breath, body waking without a jolt";
+      }
+      return questionIndex === 0
+        ? "e.g. In bed, lights off, fan on, eyes closed"
+        : "e.g. Slow breath, shoulders dropped, legs heavy, mind finally quiet and safe";
+    }
+    return null;
+  }
+
+  function surveyIntakeSectionSubtitle(catId, listenMode) {
+    var m = normalizeListenMode(listenMode);
+    if (catId === "sleep-rest") {
+      if (m === "getting-ready") return "Rest details — your wind-down setup and how you want to feel (required)";
+      if (m === "in-the-moment") return "Rest details — the room you're in and how you want to feel (required)";
+      return "Morning details — how you wake and how you want to feel (required)";
+    }
+    if (m === "getting-ready") return "Make it yours — the scene you're walking into + how you want to feel (required)";
+    if (m === "in-the-moment") return "Make it yours — where you are now + how you want to feel (required)";
+    return "Make it yours — where you are after + how you want to settle (required)";
+  }
+
+  function surveyIntakeObstacleForCategory(catId, listenMode) {
+    var m = normalizeListenMode(listenMode);
+    if (catId === "sleep-rest") {
+      if (m === "getting-ready") {
+        return "What usually gets between you and winding down? (optional — e.g., mind still on the day, body stays tense)";
+      }
+      if (m === "in-the-moment") {
+        return "What usually keeps rest from coming? (optional — e.g., thoughts looping, jaw tight)";
+      }
+      return "What usually makes mornings hard? (optional — e.g., waking already rushed)";
+    }
+    if (m === "getting-ready") return "What usually gets in the way before you start? (optional)";
+    if (m === "in-the-moment") return "What usually pulls you out of this moment? (optional)";
+    return "What are you still carrying now that it's done? (optional)";
+  }
+
+  function surveyIntakeContextForCategory(catId, listenMode) {
+    var m = normalizeListenMode(listenMode);
+    if (catId === "sleep-rest") {
+      if (m === "getting-ready") {
+        return "What's your setup as you start to wind down? (e.g., on the couch, lights dim, phone away)";
+      }
+      if (m === "in-the-moment") {
+        return "What's the room like as you rest? (e.g., in bed, lights off, fan on, eyes closed)";
+      }
+      return "What's the morning like as you wake? (e.g., still in bed, blinds cracked, phone not yet)";
+    }
+    if (m === "getting-ready") {
+      return "Where are you, and what's about to happen? (e.g., in the car before a meeting, kitchen before a meal)";
+    }
+    if (m === "in-the-moment") {
+      return "Where are you and what are you doing while this plays? (e.g., at my desk, on a walk, in the sauna)";
+    }
+    return "Where are you now that it's done? (e.g., walking to the car, on the couch, closing out the day)";
+  }
+
+  function surveyIntakeFeelingForCategory(catId, listenMode) {
+    var m = normalizeListenMode(listenMode);
+    if (catId === "sleep-rest") {
+      if (m === "getting-ready") {
+        return "How do you want to feel as rest starts? (e.g., shoulders dropping, breath slower)";
+      }
+      if (m === "in-the-moment") {
+        return "How do you want to feel as you settle into rest? (e.g., heavy and safe, mind quiet, body soft)";
+      }
+      return "How do you want to feel as you wake? (e.g., unhurried, light, no jolt)";
+    }
+    if (m === "getting-ready") {
+      return "How do you want to feel walking into it? (e.g., steady in my chest, clear, ready)";
+    }
+    if (m === "in-the-moment") {
+      return "How do you want to feel in your body right now? (e.g., grounded, strong, calm and clear)";
+    }
+    return "How do you want to feel as you settle? (e.g., complete, quiet pride, body soft)";
+  }
+
+  function surveyIntakeObstaclePlaceholder(catId, listenMode) {
+    if (catId === "sleep-rest") {
+      return normalizeListenMode(listenMode) === "after"
+        ? "e.g. I wake already rushing"
+        : "e.g. Thoughts keep looping — shoulders tight";
     }
     return "Optional";
   }
 
-  function surveyIntakeContextPlaceholder(catId) {
+  function surveyIntakeContextPlaceholder(catId, listenMode) {
+    var m = normalizeListenMode(listenMode);
     if (catId === "sleep-rest") {
-      return "e.g. In bed, lights off, fan on, eyes closed";
+      if (m === "getting-ready") return "e.g. On the couch, lights dim, phone in the other room";
+      if (m === "in-the-moment") return "e.g. In bed, lights off, fan on, eyes closed";
+      return "e.g. Still in bed, blinds cracked, no alarm panic";
     }
-    return "e.g. Before my morning standup";
+    if (m === "getting-ready") return "e.g. In the car before I walk in";
+    if (m === "in-the-moment") return "e.g. At my desk, this call, this set";
+    return "e.g. Walking to the car after";
   }
 
-  function surveyIntakeFeelingPlaceholder(catId) {
+  function surveyIntakeFeelingPlaceholder(catId, listenMode) {
+    var m = normalizeListenMode(listenMode);
     if (catId === "sleep-rest") {
-      return "e.g. Soft, heavy, safe — mind quiet";
+      if (m === "getting-ready") return "e.g. Shoulders dropping, breath slower";
+      if (m === "in-the-moment") return "e.g. Soft, heavy, safe — mind quiet";
+      return "e.g. Unhurried, light, no jolt";
     }
-    return "e.g. Calm and clear in my chest";
+    if (m === "getting-ready") return "e.g. Steady in my chest, ready to walk in";
+    if (m === "in-the-moment") return "e.g. Calm and clear in my chest";
+    return "e.g. Complete, quiet, still myself";
+  }
+
+  function intakeContextMissingMessage(listenMode) {
+    var m = normalizeListenMode(listenMode);
+    if (m === "in-the-moment") {
+      return "Add where you are while this plays — a concrete place or moment.";
+    }
+    if (m === "after") {
+      return "Add where you are now that it's done — a concrete place or moment.";
+    }
+    return "Add where you are and what's about to happen — a concrete place or moment.";
+  }
+
+  function clearCreateAnswersForListenModeChange() {
+    if (homeDeepenState) {
+      homeDeepenState.q1 = "";
+      homeDeepenState.q2 = "";
+      homeDeepenState.intakeObstacle = "";
+      homeDeepenState.intakeContext = "";
+      homeDeepenState.intakeFeeling = "";
+      homeDeepenState.clarifyingAnswers = {};
+      homeDeepenState.followUpStep = 0;
+      homeDeepenState.listenMode = selectedListenMode;
+    }
+    homeClarifyFlow = null;
+  }
+
+  function confirmListenModeAndStartSurvey(displayName) {
+    if (listenModeForCurrentAnswers && listenModeForCurrentAnswers !== selectedListenMode) {
+      clearCreateAnswersForListenModeChange();
+    }
+    listenModeForCurrentAnswers = selectedListenMode;
+    if (homeDeepenState) homeDeepenState.listenMode = selectedListenMode;
+    setHomeFlowStep("survey", displayName);
   }
 
   // Matches iOS SurveyViewModel / functions CLARIFY_TURN_GOALS (positive identity first).
   var CLARIFY_TURN_GOALS = [
     "Invite the positive standard or identity you want to live — not struggle labels.",
-    "When or where this matters most (morning, before competition, bedtime, at work…).",
+    "Next: a concrete scene for this listen — where they are and what's happening.",
     "One moment you already showed up, or how it feels in your body at your best.",
   ];
 
@@ -2048,28 +2409,15 @@
     return rec;
   }
 
-  function surveyAnswerPlaceholder(catId, questionIndex) {
-    if (catId === "sleep-rest") {
-      if (questionIndex === 0) {
-        return "e.g. In bed around 11pm, mind replaying work — I need help feeling heavy and ready for sleep";
-      }
-      if (questionIndex === 1) {
-        return "e.g. Slow breath, shoulders dropped, legs heavy, mind finally quiet and safe";
-      }
-    }
-    if (catId === "i-am") {
-      return "Share as much as you like—the more specific, the better your script.";
-    }
-    return "Share as much as you like—the more specific, the better your script.";
+  function surveyAnswerPlaceholder(catId, questionIndex, listenMode) {
+    return (
+      surveyQuestionHelpPlaceholder(catId, questionIndex, listenMode) ||
+      "Share as much as you like—the more specific, the better your script."
+    );
   }
 
-  function surveyIamHelpDetailsHtml(catId, questionIndex) {
-    var body = null;
-    if (catId === "i-am") {
-      body = questionIndex === 0 ? IAM_SURVEY_HELP_Q1 : IAM_SURVEY_HELP_Q2;
-    } else if (catId === "sleep-rest") {
-      body = questionIndex === 0 ? SLEEP_REST_SURVEY_HELP_Q1 : SLEEP_REST_SURVEY_HELP_Q2;
-    }
+  function surveyIamHelpDetailsHtml(catId, questionIndex, listenMode) {
+    var body = surveyQuestionHelpDetail(catId, questionIndex, listenMode);
     if (!body) return "";
     return (
       '<details class="gen-iam-help">' +
@@ -2711,6 +3059,11 @@
     if (period === "total") return total;
     var stamps = stats.playDateStamps || [];
     var now = new Date();
+    if (period === "today" || period === "day") {
+      var d0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+      var d1 = d0 + 86400;
+      return countPlaysInRangeSec(stamps, d0, d1);
+    }
     if (period === "week") {
       var w0 = startOfWeekMondayMs(now) / 1000;
       var w1 = w0 + 7 * 86400;
@@ -2732,16 +3085,18 @@
   function readHomePlaysPeriod() {
     try {
       var v = localStorage.getItem(PREF_HOME_PLAYS_PERIOD_KEY);
-      if (v === "week" || v === "month" || v === "year" || v === "total") return v;
+      if (v === "today" || v === "day" || v === "week" || v === "month" || v === "year" || v === "total") {
+        return v === "day" ? "today" : v;
+      }
     } catch (_e) {}
-    return "total";
+    return "today";
   }
 
   function cycleHomePlaysPeriod() {
-    var order = ["week", "month", "year", "total"];
+    var order = ["today", "week", "month", "year", "total"];
     var cur = readHomePlaysPeriod();
     var i = order.indexOf(cur);
-    var next = order[(i + 1) % order.length];
+    var next = order[(i < 0 ? 0 : i + 1) % order.length];
     try {
       localStorage.setItem(PREF_HOME_PLAYS_PERIOD_KEY, next);
     } catch (_e) {}
@@ -2749,6 +3104,7 @@
   }
 
   function homePlaysPeriodParen(period) {
+    if (period === "today" || period === "day") return "(D)";
     if (period === "week") return "(W)";
     if (period === "month") return "(M)";
     if (period === "year") return "(Y)";
@@ -2769,7 +3125,7 @@
   }
 
   function homePlaysStatsRowHtml(ls) {
-    var periods = ["week", "month", "year", "total"];
+    var periods = ["today", "week", "month", "year", "total"];
     var period = readHomePlaysPeriod();
     var expandedItems = periods
       .map(function (p) {
@@ -2785,7 +3141,7 @@
       '<div class="home-dashboard-plays-expanded" aria-label="Play counts by period">' +
       expandedItems +
       "</div>" +
-      '<button type="button" class="home-dashboard-inline-stat home-dashboard-plays-btn home-dashboard-plays-compact tone-purple" id="home-plays-period" title="Tap to cycle: week → month → year → all time">' +
+      '<button type="button" class="home-dashboard-inline-stat home-dashboard-plays-btn home-dashboard-plays-compact tone-purple" id="home-plays-period" title="Tap to cycle: today → week → month → year → all time">' +
       homePlaysStatChipInnerHtml(ls, period) +
       "</button>" +
       "</div>"
@@ -3596,8 +3952,14 @@
 
   function highestPlayMilestone(playCount) {
     var n = Math.max(0, intFromFirestoreListening(playCount));
+    if (n >= 250) {
+      return { title: "Legend", subtitle: "250 plays", category: "Total listens", tone: "indigo", icon: "crown" };
+    }
     if (n >= 100) {
       return { title: "Centurion", subtitle: "100 plays", category: "Total listens", tone: "gold", icon: "star" };
+    }
+    if (n >= 50) {
+      return { title: "Committed", subtitle: "50 plays", category: "Total listens", tone: "teal", icon: "seal" };
     }
     if (n >= 25) {
       return { title: "Devotee", subtitle: "25 plays", category: "Total listens", tone: "pink", icon: "heart" };
@@ -3622,6 +3984,15 @@
 
   function highestStreakMilestone(streak) {
     var s = Math.max(0, intFromFirestoreListening(streak));
+    if (s >= 60) {
+      return {
+        title: "60-Day Streak",
+        subtitle: "60 days in a row",
+        category: "Consecutive days",
+        tone: "purple",
+        icon: "flame",
+      };
+    }
     if (s >= 30) {
       return {
         title: "30-Day Streak",
@@ -3680,6 +4051,12 @@
           "<svg" +
           common +
           ' fill="currentColor"><path d="M3 8l3 4 3-6 3 6 3-4 3 6v4H3V8z"/></svg>'
+        );
+      case "seal":
+        return (
+          "<svg" +
+          common +
+          ' fill="currentColor"><path d="M12 2l2.2 2.2L17 3.5l.7 2.8L20.5 7l-.7 2.8L22 12l-2.2 2.2.7 2.8-2.8.7-.7 2.8-2.8-.7L12 22l-2.2-2.2-2.8.7-.7-2.8-2.8-.7.7-2.8L2 12l2.2-2.2L3.5 7l2.8-.7L7 3.5l2.8.7L12 2zm-1.2 12.6l5.3-5.3-1.4-1.4-3.9 3.9-1.9-1.9-1.4 1.4 3.3 3.3z"/></svg>'
         );
       case "play":
         return (
@@ -12593,6 +12970,7 @@
 
   function restoreSurveyFormFromClarifySnapshot(snap) {
     if (!snap) return;
+    if (snap.listenMode) selectedListenMode = normalizeListenMode(snap.listenMode);
     homeDeepenState = {
       displayName: snap.displayName || "",
       cat: snap.cat,
@@ -12605,6 +12983,7 @@
       length: snap.length || "Medium",
       perspective: snap.perspective || "First person",
       useNameInScript: !!snap.useNameInScript,
+      listenMode: selectedListenMode,
       clarifyingAnswers: snap.answers || snap.clarifyingAnswers || {},
       followUpStep: snap.followUpStep || snap.currentIndex || 0,
     };
@@ -12648,11 +13027,19 @@
       back.addEventListener("click", function () {
         setHomeFlowStep("landing", displayName);
       });
-    } else if (homeFlowStep === "survey") {
+    } else if (homeFlowStep === "listen") {
       back.setAttribute("aria-label", "Back to categories");
-      titleEl.hidden = true;
+      titleEl.hidden = false;
+      titleEl.textContent = "When you'll listen";
       back.addEventListener("click", function () {
         setHomeFlowStep("category", displayName);
+      });
+    } else if (homeFlowStep === "survey") {
+      back.setAttribute("aria-label", "Back to when you'll listen");
+      titleEl.hidden = true;
+      back.addEventListener("click", function () {
+        syncHomeDeepenFromForm(displayName);
+        setHomeFlowStep("listen", displayName);
       });
     } else if (homeFlowStep === "clarify") {
       back.setAttribute("aria-label", "Back to questions");
@@ -13394,6 +13781,7 @@
 
   function buildScriptGeneratePayload(ctx, clarifyCount) {
     var cat = ctx.cat;
+    var listenMode = normalizeListenMode(ctx.listenMode || selectedListenMode);
     var third = (ctx.perspective || "").toLowerCase().indexOf("third") !== -1;
     var answersMap = {};
     answersMap[cat.id] = [ctx.q1, ctx.q2];
@@ -13406,12 +13794,13 @@
         {
           id: cat.id,
           name: cat.name,
-          questions: cat.questions,
+          questions: questionsForListenMode(cat.id, listenMode),
         },
       ],
       answers: answersMap,
       clarifyingAnswers: ctx.clarifyingAnswers || {},
       intakeAnswers: intakeAnswers,
+      listenMode: listenMode,
       tone: ctx.tone || "Calming",
       length: ctx.length || "Medium",
       clarifyCount: clarifyCount,
@@ -13469,6 +13858,7 @@
       length: (lenRadio && lenRadio.value) || "Medium",
       perspective: (persRadio && persRadio.value) || "First person",
       useNameInScript: useNameEl ? !!useNameEl.checked : true,
+      listenMode: selectedListenMode,
     };
   }
 
@@ -13476,7 +13866,7 @@
     var context = (ctx && ctx.intakeContext) || "";
     var feeling = (ctx && ctx.intakeFeeling) || "";
     if (context.trim().length < 8) {
-      generationMessage("Add when or where this matters most — a concrete place or moment.", "error");
+      generationMessage(intakeContextMissingMessage(ctx && ctx.listenMode), "error");
       return false;
     }
     if (feeling.trim().length < 8) {
@@ -13510,6 +13900,7 @@
       length: ctx.length,
       perspective: ctx.perspective,
       useNameInScript: ctx.useNameInScript,
+      listenMode: ctx.listenMode || selectedListenMode,
       clarifyingAnswers: priorAnswers,
       followUpStep: priorStep,
     };
@@ -13519,6 +13910,7 @@
   function fillSurveyFormFromDeepen() {
     if (!homeDeepenState) return;
     var d = homeDeepenState;
+    if (d.listenMode) selectedListenMode = normalizeListenMode(d.listenMode);
     var q1El = document.getElementById("gen-q1");
     var q2El = document.getElementById("gen-q2");
     var obstacleEl = document.getElementById("gen-intake-obstacle");
@@ -13634,6 +14026,7 @@
           generationMessage("Generated and saved as \"" + title + "\".", "success");
           homeClarifyFlow = null;
           homeDeepenState = null;
+          listenModeForCurrentAnswers = null;
           var q1El = document.getElementById("gen-q1");
           var q2El = document.getElementById("gen-q2");
           if (q1El) q1El.value = "";
@@ -13712,6 +14105,7 @@
       length: f.length,
       perspective: f.perspective,
       useNameInScript: f.useNameInScript,
+      listenMode: f.listenMode || selectedListenMode,
       clarifyingAnswers: f.answers,
     };
     var payload = buildScriptGeneratePayload(ctx, 1);
@@ -13757,6 +14151,7 @@
       length: deepen.length,
       perspective: deepen.perspective,
       useNameInScript: deepen.useNameInScript,
+      listenMode: deepen.listenMode || selectedListenMode,
       clarifyingAnswers: deepen.clarifyingAnswers || {},
     });
   }
@@ -13794,6 +14189,7 @@
       length: deepen.length,
       perspective: deepen.perspective,
       useNameInScript: deepen.useNameInScript,
+      listenMode: deepen.listenMode || selectedListenMode,
       maxClarify: maxC,
       followUpStep: deepen.followUpStep || 0,
       answers: deepen.clarifyingAnswers || {},
@@ -13828,6 +14224,7 @@
       length: f.length,
       perspective: f.perspective,
       useNameInScript: f.useNameInScript,
+      listenMode: f.listenMode || selectedListenMode,
       clarifyingAnswers: f.answers,
       followUpStep: f.followUpStep,
     };
@@ -13960,7 +14357,7 @@
         '    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">' +
         "      <div>" +
         '        <strong style="font-size:1rem;">Create my affirmation audio</strong>' +
-        '        <p class="app-muted" style="margin:0.25rem 0 0;">Follow category selection, then answer your survey questions.</p>' +
+        '        <p class="app-muted" style="margin:0.25rem 0 0;">Choose a focus area, when you\'ll listen, then answer a few questions.</p>' +
         "      </div>" +
         "    </div>" +
         '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create my affirmation audio</button></div>' +
@@ -14079,11 +14476,68 @@
           .join("");
         list.querySelectorAll("[data-home-category]").forEach(function (btn) {
           btn.addEventListener("click", function () {
-            activeCategoryId = btn.getAttribute("data-home-category") || "confidence";
-            homeDeepenState = null;
-            homeClarifyFlow = null;
-            setHomeFlowStep("survey", displayName);
+            var newId = btn.getAttribute("data-home-category") || "confidence";
+            if (newId !== activeCategoryId) {
+              homeDeepenState = null;
+              homeClarifyFlow = null;
+              listenModeForCurrentAnswers = null;
+            }
+            activeCategoryId = newId;
+            if (!listenModeForCurrentAnswers) {
+              selectedListenMode = defaultListenMode(activeCategoryId);
+            }
+            setHomeFlowStep("listen", displayName);
           });
+        });
+      }
+      return;
+    }
+    if (homeFlowStep === "listen") {
+      if (homeDeepenState && homeDeepenState.listenMode && homeDeepenState.cat && homeDeepenState.cat.id === cat.id) {
+        selectedListenMode = normalizeListenMode(homeDeepenState.listenMode);
+      }
+      el.innerHTML =
+        '<div class="home-listen-mode">' +
+        '  <p class="app-muted" style="margin:0 0 0.35rem;">' +
+        escapeHtml(cat.name) +
+        "</p>" +
+        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.88rem;">This shapes the questions and the script — still spoken in the present.</p>' +
+        '  <div class="home-listen-mode-list" role="listbox" aria-label="When you\'ll listen">' +
+        LISTEN_MODE_IDS.map(function (mode) {
+          var selected = selectedListenMode === mode;
+          return (
+            '<button type="button" class="home-listen-mode-card' +
+            (selected ? " is-selected" : "") +
+            '" data-listen-mode="' +
+            escapeHtml(mode) +
+            '" role="option" aria-selected="' +
+            (selected ? "true" : "false") +
+            '">' +
+            '<span class="home-listen-mode-copy">' +
+            '<span class="home-listen-mode-title">' +
+            escapeHtml(listenModeTitle(mode, cat.id)) +
+            "</span>" +
+            '<span class="home-listen-mode-hint">' +
+            escapeHtml(listenModeHint(mode, cat.id)) +
+            "</span>" +
+            "</span>" +
+            (selected ? '<span class="home-listen-mode-check">Selected</span>' : "") +
+            "</button>"
+          );
+        }).join("") +
+        "  </div>" +
+        '  <button type="button" class="app-btn app-btn-primary" id="home-listen-continue" style="margin-top:0.85rem;width:100%;">Continue</button>' +
+        "</div>";
+      el.querySelectorAll("[data-listen-mode]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          selectedListenMode = normalizeListenMode(btn.getAttribute("data-listen-mode"));
+          renderHomeFlow(displayName);
+        });
+      });
+      var listenContinue = document.getElementById("home-listen-continue");
+      if (listenContinue) {
+        listenContinue.addEventListener("click", function () {
+          confirmListenModeAndStartSurvey(displayName);
         });
       }
       return;
@@ -14136,6 +14590,9 @@
       return;
     }
     homeClarifyFlow = null;
+    if (homeDeepenState && homeDeepenState.listenMode) {
+      selectedListenMode = normalizeListenMode(homeDeepenState.listenMode);
+    }
     var tierNow = resolvedSubscriptionTier();
     var maxClar = maxClarifyForWebTier(tierNow);
     var followLeft = followUpsRemainingWeb();
@@ -14149,15 +14606,18 @@
             " to deepen the script, or generate now."
           : "You've used all follow-ups. Generate your script when ready."
         : "Follow-ups are available on Starter and Creator. You can still generate from your answers below.";
-    var ph0 = surveyAnswerPlaceholder(cat.id, 0);
-    var ph1 = surveyAnswerPlaceholder(cat.id, 1);
+    var listenQs = questionsForListenMode(cat.id, selectedListenMode);
+    var ph0 = surveyAnswerPlaceholder(cat.id, 0, selectedListenMode);
+    var ph1 = surveyAnswerPlaceholder(cat.id, 1, selectedListenMode);
     var defaultTone = defaultToneForCategory(cat.id);
     var mediaRec = recommendedMediaForCategory(cat.id, defaultTone);
     el.innerHTML =
       '<form id="generate-form" class="app-form" style="margin:0;">' +
       '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
       escapeHtml(cat.name) +
-      "</strong></p>" +
+      "</strong> · " +
+      escapeHtml(listenModeTitle(selectedListenMode, cat.id)) +
+      "</p>" +
       (mediaRec
         ? '  <p class="app-muted" id="gen-media-hint" style="margin:0 0 0.5rem;font-size:0.85rem;">Listen match: <strong>' +
           escapeHtml(mediaRec.voiceName) +
@@ -14166,40 +14626,40 @@
           "</strong> (updates when you change tone; confirm in My Library after save)</p>"
         : "") +
       '  <label id="gen-q1-label" for="gen-q1" style="margin-top:0.2rem;">' +
-      escapeHtml(cat.questions[0] || "Question 1") +
+      escapeHtml(listenQs[0] || "Question 1") +
       "</label>" +
-      surveyIamHelpDetailsHtml(cat.id, 0) +
+      surveyIamHelpDetailsHtml(cat.id, 0, selectedListenMode) +
       '  <textarea id="gen-q1" class="gen-survey-textarea" required rows="6" placeholder="' +
       escapeHtml(ph0) +
       '"></textarea>' +
       '  <label id="gen-q2-label" for="gen-q2" style="margin-top:0.75rem;">' +
-      escapeHtml(cat.questions[1] || "Question 2") +
+      escapeHtml(listenQs[1] || "Question 2") +
       "</label>" +
-      surveyIamHelpDetailsHtml(cat.id, 1) +
+      surveyIamHelpDetailsHtml(cat.id, 1, selectedListenMode) +
       '  <textarea id="gen-q2" class="gen-survey-textarea" required rows="6" placeholder="' +
       escapeHtml(ph1) +
       '"></textarea>' +
       '  <p class="gen-field-label" style="margin-top:0.95rem;margin-bottom:0.15rem;">Personalization</p>' +
       '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
-      escapeHtml(surveyIntakeSectionSubtitle(cat.id)) +
+      escapeHtml(surveyIntakeSectionSubtitle(cat.id, selectedListenMode)) +
       "</p>" +
       '  <label for="gen-intake-obstacle" style="margin-top:0.2rem;">' +
-      escapeHtml(surveyIntakeObstacleForCategory(cat.id)) +
+      escapeHtml(surveyIntakeObstacleForCategory(cat.id, selectedListenMode)) +
       "</label>" +
       '  <textarea id="gen-intake-obstacle" class="gen-survey-textarea" rows="3" placeholder="' +
-      escapeHtml(surveyIntakeObstaclePlaceholder(cat.id)) +
+      escapeHtml(surveyIntakeObstaclePlaceholder(cat.id, selectedListenMode)) +
       '"></textarea>' +
       '  <label for="gen-intake-context" style="margin-top:0.75rem;">' +
-      escapeHtml(surveyIntakeContextForCategory(cat.id)) +
+      escapeHtml(surveyIntakeContextForCategory(cat.id, selectedListenMode)) +
       "</label>" +
       '  <textarea id="gen-intake-context" class="gen-survey-textarea" rows="3" placeholder="' +
-      escapeHtml(surveyIntakeContextPlaceholder(cat.id)) +
+      escapeHtml(surveyIntakeContextPlaceholder(cat.id, selectedListenMode)) +
       '"></textarea>' +
       '  <label for="gen-intake-feeling" style="margin-top:0.75rem;">' +
-      escapeHtml(surveyIntakeFeelingForCategory(cat.id)) +
+      escapeHtml(surveyIntakeFeelingForCategory(cat.id, selectedListenMode)) +
       "</label>" +
       '  <textarea id="gen-intake-feeling" class="gen-survey-textarea" rows="3" placeholder="' +
-      escapeHtml(surveyIntakeFeelingPlaceholder(cat.id)) +
+      escapeHtml(surveyIntakeFeelingPlaceholder(cat.id, selectedListenMode)) +
       '"></textarea>' +
       '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
       '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
@@ -17849,6 +18309,7 @@
     var displayName = (currentUser && currentUser.displayName) || "";
     homeDeepenState = null;
     homeClarifyFlow = null;
+    listenModeForCurrentAnswers = null;
     setAdminTab("home");
     setHomeFlowStep("category", displayName);
   }
