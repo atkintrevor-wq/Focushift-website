@@ -2021,7 +2021,7 @@
     },
     "sleep-rest": {
       "getting-ready": [
-        "What's still with you from the day as you start to wind down? You don't need to solve it.",
+        "What's still with you from the day, and what's your wind-down setup? (couch, lights, phone away — you don't need to solve the day)",
         "How do you want your body and mind to feel as you get ready for rest?",
       ],
       "in-the-moment": [
@@ -2040,7 +2040,7 @@
       ],
       "in-the-moment": [
         IAM_LISTEN_STEMS,
-        "You're in it right now. How does living these truths feel in your body in this moment?",
+        "You're in it right now. Where are you, and how does living these truths feel in your body in this moment?",
       ],
       after: [
         IAM_LISTEN_STEMS,
@@ -2117,14 +2117,14 @@
       if (questionIndex === 0) {
         return "Share as much as you like—the more specific, the better your script.";
       }
-      if (m === "in-the-moment") return "e.g. Warm, grounded, these words true in my body right now";
+      if (m === "in-the-moment") return "e.g. At my desk — warm, grounded, these words true in my body right now";
       if (m === "after") return "e.g. Quiet pride, still myself, the moment complete";
       return "e.g. Steady in my chest, shoulders back, already belonging as I walk in";
     }
     if (catId === "sleep-rest") {
       if (m === "getting-ready") {
         return questionIndex === 0
-          ? "e.g. Work still looping, body tense, I want to start letting the day complete"
+          ? "e.g. Work still looping; on the couch, lights dim, phone in the other room"
           : "e.g. Shoulders dropping, breath slower, room getting quieter";
       }
       if (m === "after") {
@@ -2140,15 +2140,7 @@
   }
 
   function surveyIntakeSectionSubtitle(catId, listenMode) {
-    var m = normalizeListenMode(listenMode);
-    if (catId === "sleep-rest") {
-      if (m === "getting-ready") return "Rest details — your wind-down setup and how you want to feel (required)";
-      if (m === "in-the-moment") return "Rest details — the room you're in and how you want to feel (required)";
-      return "Morning details — how you wake and how you want to feel (required)";
-    }
-    if (m === "getting-ready") return "Make it yours — the scene you're walking into + how you want to feel (required)";
-    if (m === "in-the-moment") return "Make it yours — where you are now + how you want to feel (required)";
-    return "Make it yours — where you are after + how you want to settle (required)";
+    return "Optional — what usually gets in the way (the script won’t repeat those words)";
   }
 
   function surveyIntakeObstacleForCategory(catId, listenMode) {
@@ -13841,8 +13833,6 @@
     var q1 = (document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "";
     var q2 = (document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "";
     var obstacleEl = document.getElementById("gen-intake-obstacle");
-    var contextEl = document.getElementById("gen-intake-context");
-    var feelingEl = document.getElementById("gen-intake-feeling");
     var toneEl = document.getElementById("gen-tone");
     var lenRadio = document.querySelector('input[name="gen-length"]:checked');
     var persRadio = document.querySelector('input[name="gen-perspective"]:checked');
@@ -13852,8 +13842,8 @@
       q1: q1.trim(),
       q2: q2.trim(),
       intakeObstacle: obstacleEl ? obstacleEl.value.trim() : "",
-      intakeContext: contextEl ? contextEl.value.trim() : "",
-      intakeFeeling: feelingEl ? feelingEl.value.trim() : "",
+      intakeContext: q1.trim(),
+      intakeFeeling: q2.trim(),
       tone: (toneEl && toneEl.value) || "Calming",
       length: (lenRadio && lenRadio.value) || "Medium",
       perspective: (persRadio && persRadio.value) || "First person",
@@ -13863,8 +13853,8 @@
   }
 
   function validateRequiredIntake(ctx) {
-    var context = (ctx && ctx.intakeContext) || "";
-    var feeling = (ctx && ctx.intakeFeeling) || "";
+    var context = (ctx && ctx.q1) || "";
+    var feeling = (ctx && ctx.q2) || "";
     if (context.trim().length < 8) {
       generationMessage(intakeContextMissingMessage(ctx && ctx.listenMode), "error");
       return false;
@@ -13914,14 +13904,10 @@
     var q1El = document.getElementById("gen-q1");
     var q2El = document.getElementById("gen-q2");
     var obstacleEl = document.getElementById("gen-intake-obstacle");
-    var contextEl = document.getElementById("gen-intake-context");
-    var feelingEl = document.getElementById("gen-intake-feeling");
     var toneEl = document.getElementById("gen-tone");
-    if (q1El) q1El.value = d.q1 || "";
-    if (q2El) q2El.value = d.q2 || "";
+    if (q1El) q1El.value = d.q1 || d.intakeContext || "";
+    if (q2El) q2El.value = d.q2 || d.intakeFeeling || "";
     if (obstacleEl) obstacleEl.value = d.intakeObstacle || "";
-    if (contextEl) contextEl.value = d.intakeContext || "";
-    if (feelingEl) feelingEl.value = d.intakeFeeling || "";
     if (toneEl && d.tone) toneEl.value = d.tone;
     if (d.length) {
       var lenRadio = document.querySelector('input[name="gen-length"][value="' + d.length + '"]');
@@ -14639,8 +14625,7 @@
       '  <textarea id="gen-q2" class="gen-survey-textarea" required rows="6" placeholder="' +
       escapeHtml(ph1) +
       '"></textarea>' +
-      '  <p class="gen-field-label" style="margin-top:0.95rem;margin-bottom:0.15rem;">Personalization</p>' +
-      '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
+      '  <p class="app-muted" style="margin:0.95rem 0 0.5rem;font-size:0.85rem;">' +
       escapeHtml(surveyIntakeSectionSubtitle(cat.id, selectedListenMode)) +
       "</p>" +
       '  <label for="gen-intake-obstacle" style="margin-top:0.2rem;">' +
@@ -14648,18 +14633,6 @@
       "</label>" +
       '  <textarea id="gen-intake-obstacle" class="gen-survey-textarea" rows="3" placeholder="' +
       escapeHtml(surveyIntakeObstaclePlaceholder(cat.id, selectedListenMode)) +
-      '"></textarea>' +
-      '  <label for="gen-intake-context" style="margin-top:0.75rem;">' +
-      escapeHtml(surveyIntakeContextForCategory(cat.id, selectedListenMode)) +
-      "</label>" +
-      '  <textarea id="gen-intake-context" class="gen-survey-textarea" rows="3" placeholder="' +
-      escapeHtml(surveyIntakeContextPlaceholder(cat.id, selectedListenMode)) +
-      '"></textarea>' +
-      '  <label for="gen-intake-feeling" style="margin-top:0.75rem;">' +
-      escapeHtml(surveyIntakeFeelingForCategory(cat.id, selectedListenMode)) +
-      "</label>" +
-      '  <textarea id="gen-intake-feeling" class="gen-survey-textarea" rows="3" placeholder="' +
-      escapeHtml(surveyIntakeFeelingPlaceholder(cat.id, selectedListenMode)) +
       '"></textarea>' +
       '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
       '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
