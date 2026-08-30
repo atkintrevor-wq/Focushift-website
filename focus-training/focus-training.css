@@ -1,0 +1,123 @@
+.ft-page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.ft-status {
+  color: var(--muted);
+}
+
+.ft-header {
+  margin-bottom: 1.25rem;
+}
+
+.ft-kicker {
+  margin: 0 0 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ft-header h1,
+.ft-card h1,
+.ft-card h2 {
+  margin: 0 0 0.5rem;
+}
+
+.ft-lede,
+.ft-empty,
+.ft-card p {
+  color: var(--muted);
+}
+
+.ft-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1.15rem 1.2rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.ft-size-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 1rem;
+}
+
+.ft-tab,
+.ft-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.45rem 0.85rem;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ft-tab.is-active,
+.ft-btn {
+  background: var(--accent);
+  border-color: transparent;
+  color: #fff;
+}
+
+.ft-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ft-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ft-list li:last-child {
+  border-bottom: 0;
+}
+
+.ft-rank {
+  color: var(--muted);
+  min-width: 1.5rem;
+}
+
+.ft-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ft-form label {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.ft-form input {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  border-radius: 10px;
+  padding: 0.65rem 0.75rem;
+  font: inherit;
+}
+
+.ft-message {
+  min-height: 1.2em;
+  margin: 0.75rem 0 0;
+}
+
+.ft-btn {
+  justify-self: start;
+  text-decoration: none;
+  display: inline-block;
+}

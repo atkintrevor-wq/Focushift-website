@@ -3,3 +3,6 @@
 
 /.well-known/apple-app-site-association
   Content-Type: application/json
+
+/focus-training/*
+  X-Robots-Tag: noindex, nofollow

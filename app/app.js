@@ -5670,6 +5670,10 @@
       '            <span class="account-ios-row__label">Premade Content Manager</span>' +
       '            <span class="account-ios-row__chev" aria-hidden="true">›</span>' +
       "          </button>" +
+      '          <button type="button" class="account-ios-row account-ios-row--nav" id="account-open-focus-training">' +
+      '            <span class="account-ios-row__label">Focus Training</span>' +
+      '            <span class="account-ios-row__chev" aria-hidden="true">›</span>' +
+      "          </button>" +
       "        </div>" +
       "      </section>" +
       "      </div>" +
@@ -6647,6 +6651,12 @@
       pcmOpen.addEventListener("click", function () {
         if (!adminModeEnabled) return;
         openPremadeContentManager("working");
+      });
+    }
+    var focusTrainingOpen = document.getElementById("account-open-focus-training");
+    if (focusTrainingOpen) {
+      focusTrainingOpen.addEventListener("click", function () {
+        window.location.href = "/focus-training/";
       });
     }
     var pcmClose = document.getElementById("pcm-close");

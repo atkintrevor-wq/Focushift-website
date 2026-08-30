@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Focus Training — Focus Shift</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#0b1220" />
+  <link rel="icon" href="../images/logo.png?v=8" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../styles.css?v=16" />
+  <link rel="stylesheet" href="focus-training.css?v=1" />
+</head>
+<body>
+  <nav class="site-top" aria-label="Site">
+    <div class="site-top-inner site-top-inner--wide">
+      <a class="site-top-home" href="/app/">
+        <img class="site-top-app-brand" src="../images/focus-shift-app-brand.png?v=8" alt="Focus Shift" width="1174" height="417" decoding="async" />
+      </a>
+      <div class="site-top-links">
+        <a href="/app/">Back to app</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="main" class="ft-page">
+    <p id="ft-status" class="ft-status">Loading…</p>
+
+    <div id="ft-unavailable" class="ft-card" hidden>
+      <h1>This page isn’t available</h1>
+      <p>Head back to Focus Shift to keep going.</p>
+      <a class="ft-btn" href="/app/">Open Focus Shift</a>
+    </div>
+
+    <div id="ft-board" hidden>
+      <header class="ft-header">
+        <p class="ft-kicker">Admin preview</p>
+        <h1>Focus Training</h1>
+        <p class="ft-lede">Times posted from the app show up here. This page stays off the public site until we are ready for teams.</p>
+      </header>
+
+      <div class="ft-size-tabs" role="tablist" aria-label="Grid size">
+        <button type="button" class="ft-tab is-active" data-size="5">5×5</button>
+        <button type="button" class="ft-tab" data-size="6">6×6</button>
+        <button type="button" class="ft-tab" data-size="7">7×7</button>
+        <button type="button" class="ft-tab" data-size="8">8×8</button>
+        <button type="button" class="ft-tab" data-size="9">9×9</button>
+        <button type="button" class="ft-tab" data-size="10">10×10</button>
+      </div>
+
+      <section class="ft-card">
+        <h2 id="ft-list-title">5×5</h2>
+        <p id="ft-list-empty" class="ft-empty">No times yet for this size.</p>
+        <ol id="ft-list" class="ft-list"></ol>
+      </section>
+
+      <section class="ft-card">
+        <h2>Post a test time</h2>
+        <p class="ft-lede">Use this to confirm the board before players start submitting from the app.</p>
+        <form id="ft-test-form" class="ft-form">
+          <label>
+            Name
+            <input id="ft-test-name" type="text" maxlength="24" required autocomplete="nickname" />
+          </label>
+          <label>
+            Time (seconds)
+            <input id="ft-test-time" type="number" min="0.01" step="0.01" required />
+          </label>
+          <button type="submit" class="ft-btn">Post to this board</button>
+        </form>
+        <p id="ft-test-message" class="ft-message" role="status"></p>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+  <script src="../js/firebase-config.js"></script>
+  <script src="focus-training.js?v=1"></script>
+</body>
+</html>
