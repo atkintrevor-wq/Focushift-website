@@ -1673,6 +1673,10 @@
   /** getting-ready | in-the-moment | after — matches native ListenMode. */
   var selectedListenMode = "getting-ready";
   var listenModeForCurrentAnswers = null;
+  /** full | quickStart — matches native CreatePath. */
+  var selectedCreatePath = "full";
+  var quickStartAnswers = ["", "", "", ""];
+  var quickStartPageIndex = 0;
   /** Cached Daily Spark payload + playback blob URL (Starter/Creator). */
   var dailySparkState = {
     spark: null,
@@ -1878,6 +1882,31 @@
     if (m === "getting-ready") return "Getting ready";
     if (m === "in-the-moment") return "In the moment";
     return "After / winding down";
+  }
+
+  function listenModeQuickStartTitle(mode, categoryId) {
+    if (categoryId === "sleep-rest") return listenModeTitle(mode, categoryId);
+    var m = normalizeListenMode(mode);
+    if (m === "in-the-moment") return "During";
+    if (m === "after") return "After";
+    return "Before";
+  }
+
+  function listenModeQuickStartHint(mode, categoryId) {
+    if (categoryId === "sleep-rest") return listenModeHint(mode, categoryId);
+    var m = normalizeListenMode(mode);
+    if (m === "in-the-moment") return "You'll press play while you're in it. Next we'll ask what that is.";
+    if (m === "after") return "You'll press play afterward, or as you come down. Next we'll ask what that is.";
+    return "You'll press play first — then go into whatever this is for. Next we'll ask what that is.";
+  }
+
+  function isQuickStartPath() {
+    return selectedCreatePath === "quickStart";
+  }
+
+  function resetQuickStartAnswers() {
+    quickStartAnswers = ["", "", "", ""];
+    quickStartPageIndex = 0;
   }
 
   function listenModeHint(mode, categoryId) {
@@ -2255,6 +2284,7 @@
       homeDeepenState.listenMode = selectedListenMode;
     }
     homeClarifyFlow = null;
+    resetQuickStartAnswers();
   }
 
   function confirmListenModeAndStartSurvey(displayName) {
@@ -2263,6 +2293,10 @@
     }
     listenModeForCurrentAnswers = selectedListenMode;
     if (homeDeepenState) homeDeepenState.listenMode = selectedListenMode;
+    if (isQuickStartPath()) {
+      setHomeFlowStep("quickstart", displayName);
+      return;
+    }
     setHomeFlowStep("survey", displayName);
   }
 
@@ -13101,12 +13135,19 @@
     back.className = "playlist-back-arrow-btn home-flow-back-btn";
     back.textContent = "←";
 
-    if (homeFlowStep === "category") {
+    if (homeFlowStep === "path") {
       back.setAttribute("aria-label", "Back to home");
+      titleEl.hidden = false;
+      titleEl.textContent = "Create";
+      back.addEventListener("click", function () {
+        setHomeFlowStep("landing", displayName);
+      });
+    } else if (homeFlowStep === "category") {
+      back.setAttribute("aria-label", "Back to create options");
       titleEl.hidden = false;
       titleEl.textContent = "Choose a category";
       back.addEventListener("click", function () {
-        setHomeFlowStep("landing", displayName);
+        setHomeFlowStep("path", displayName);
       });
     } else if (homeFlowStep === "listen") {
       back.setAttribute("aria-label", "Back to categories");
@@ -13115,10 +13156,26 @@
       back.addEventListener("click", function () {
         setHomeFlowStep("category", displayName);
       });
+    } else if (homeFlowStep === "quickstart") {
+      back.setAttribute("aria-label", quickStartPageIndex > 0 ? "Previous question" : "Back to when you'll listen");
+      titleEl.hidden = false;
+      titleEl.textContent = "Quick start";
+      back.addEventListener("click", function () {
+        if (quickStartPageIndex > 0) {
+          quickStartPageIndex -= 1;
+          renderHomeFlow(displayName);
+          return;
+        }
+        setHomeFlowStep("listen", displayName);
+      });
     } else if (homeFlowStep === "survey") {
       back.setAttribute("aria-label", "Back to when you'll listen");
       titleEl.hidden = true;
       back.addEventListener("click", function () {
+        if (isQuickStartPath()) {
+          setHomeFlowStep("quickstart", displayName);
+          return;
+        }
         syncHomeDeepenFromForm(displayName);
         setHomeFlowStep("listen", displayName);
       });
@@ -13870,12 +13927,31 @@
     if (ctx.intakeObstacle) intakeAnswers.obstacle = ctx.intakeObstacle;
     if (ctx.intakeContext) intakeAnswers.context = ctx.intakeContext;
     if (ctx.intakeFeeling) intakeAnswers.feeling = ctx.intakeFeeling;
+    var quickQuestions =
+      typeof QuickStartChips !== "undefined" ? QuickStartChips.questions(cat.id, listenMode) : [];
+    if (isQuickStartPath()) {
+      intakeAnswers.createPath = "quickStart";
+      if (quickStartAnswers[0]) intakeAnswers.topic = quickStartAnswers[0];
+      if (quickStartAnswers[1]) intakeAnswers.context = quickStartAnswers[1];
+      if (quickStartAnswers[2]) intakeAnswers.feeling = quickStartAnswers[2];
+      if (quickStartAnswers[3]) intakeAnswers.scriptJob = quickStartAnswers[3];
+      answersMap[cat.id] = quickQuestions
+        .map(function (q, idx) {
+          var value = String(quickStartAnswers[idx] || "").trim();
+          return value ? q.shortLabel + ": " + value : "";
+        })
+        .filter(Boolean);
+    }
     return {
       categories: [
         {
           id: cat.id,
           name: cat.name,
-          questions: questionsForListenMode(cat.id, listenMode),
+          questions: isQuickStartPath()
+            ? quickQuestions.map(function (q) {
+                return q.prompt;
+              })
+            : questionsForListenMode(cat.id, listenMode),
         },
       ],
       answers: answersMap,
@@ -13919,8 +13995,12 @@
 
   function readGenerateFormFromDom() {
     var cat = selectedCategory();
-    var q1 = (document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "";
-    var q2 = (document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "";
+    var q1 = isQuickStartPath()
+      ? String(quickStartAnswers[0] || "").trim()
+      : (document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "";
+    var q2 = isQuickStartPath()
+      ? String(quickStartAnswers[2] || quickStartAnswers[1] || "").trim()
+      : (document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "";
     var obstacleEl = document.getElementById("gen-intake-obstacle");
     var toneEl = document.getElementById("gen-tone");
     var lenRadio = document.querySelector('input[name="gen-length"]:checked');
@@ -13942,6 +14022,16 @@
   }
 
   function validateRequiredIntake(ctx) {
+    if (isQuickStartPath()) {
+      var missing = quickStartAnswers.some(function (a) {
+        return !String(a || "").trim();
+      });
+      if (missing) {
+        generationMessage("Tap an option for each Quick start question.", "error");
+        return false;
+      }
+      return true;
+    }
     var context = (ctx && ctx.q1) || "";
     var feeling = (ctx && ctx.q2) || "";
     if (context.trim().length < 8) {
@@ -14233,6 +14323,10 @@
 
   function beginFollowUpFromForm(displayName) {
     if (!currentUser) return;
+    if (isQuickStartPath()) {
+      generationMessage("Quick start skips follow-ups. Generate your script, or write your own answers.", "info");
+      return;
+    }
     if (!requireWebCreateOrTaste()) return;
     var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
     if (maxC <= 0) {
@@ -14389,7 +14483,7 @@
     if (start) {
       start.addEventListener("click", function () {
         if (!requireWebCreateOrTaste()) return;
-        setHomeFlowStep("category", displayName);
+        setHomeFlowStep("path", displayName);
       });
     }
     var upgrade = document.getElementById("home-first-create-upgrade");
@@ -14432,7 +14526,7 @@
         '    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:0.6rem;flex-wrap:wrap;">' +
         "      <div>" +
         '        <strong style="font-size:1rem;">Create my affirmation audio</strong>' +
-        '        <p class="app-muted" style="margin:0.25rem 0 0;">Choose a focus area, when you\'ll listen, then answer a few questions.</p>' +
+        '        <p class="app-muted" style="margin:0.25rem 0 0;">Quick start with taps, or write your own answers. You\'ll choose when you listen — before, during, or after.</p>' +
         "      </div>" +
         "    </div>" +
         '    <div style="margin-top:0.75rem;"><button type="button" class="app-btn app-btn-primary" id="home-start-create">Create my affirmation audio</button></div>' +
@@ -14474,7 +14568,7 @@
       if (startBtn) {
         startBtn.addEventListener("click", function () {
           if (!requireWebCreateOrTaste()) return;
-          setHomeFlowStep("category", displayName);
+          setHomeFlowStep("path", displayName);
         });
       }
       if (isWebPaidTierForAI()) {
@@ -14530,6 +14624,47 @@
       }
       return;
     }
+    if (homeFlowStep === "path") {
+      var freePath = isWebFreeTier();
+      el.innerHTML =
+        '<div class="home-create-path">' +
+        '  <p class="app-muted" style="margin:0 0 0.35rem;">Create your affirmation script</p>' +
+        '  <p class="app-muted" style="margin:0 0 0.85rem;font-size:0.88rem;">Choose how you\'d like to create your personalized affirmation audio.</p>' +
+        '  <button type="button" class="home-listen-mode-card" id="home-path-quick">' +
+        '    <span class="home-listen-mode-copy">' +
+        '      <span class="home-listen-mode-title">Quick start</span>' +
+        '      <span class="home-listen-mode-hint">' +
+        (freePath
+          ? "One free short script — tap through a few choices, about two minutes"
+          : "Tap through a few choices. About two minutes.") +
+        "</span></span></button>" +
+        '  <button type="button" class="home-listen-mode-card" id="home-path-full" style="margin-top:0.55rem;">' +
+        '    <span class="home-listen-mode-copy">' +
+        '      <span class="home-listen-mode-title">More personal</span>' +
+        '      <span class="home-listen-mode-hint">' +
+        (freePath
+          ? "Answer in your own words for a deeper free sample"
+          : "Answer in your own words for a deeper, category-tuned script") +
+        "</span></span></button>" +
+        "</div>";
+      var quickBtn = document.getElementById("home-path-quick");
+      var fullBtn = document.getElementById("home-path-full");
+      if (quickBtn) {
+        quickBtn.addEventListener("click", function () {
+          selectedCreatePath = "quickStart";
+          resetQuickStartAnswers();
+          setHomeFlowStep("category", displayName);
+        });
+      }
+      if (fullBtn) {
+        fullBtn.addEventListener("click", function () {
+          selectedCreatePath = "full";
+          resetQuickStartAnswers();
+          setHomeFlowStep("category", displayName);
+        });
+      }
+      return;
+    }
     if (homeFlowStep === "category") {
       el.innerHTML =
         '<div style="display:flex;flex-direction:column;gap:0.65rem;">' +
@@ -14576,10 +14711,16 @@
         '  <p class="app-muted" style="margin:0 0 0.35rem;">' +
         escapeHtml(cat.name) +
         "</p>" +
-        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.88rem;">This shapes the questions and the script — still spoken in the present.</p>' +
+        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.88rem;">This shapes the questions and the script — still spoken in the present. Choose before, during, or after.</p>' +
         '  <div class="home-listen-mode-list" role="listbox" aria-label="When you\'ll listen">' +
         LISTEN_MODE_IDS.map(function (mode) {
           var selected = selectedListenMode === mode;
+          var title = isQuickStartPath()
+            ? listenModeQuickStartTitle(mode, cat.id)
+            : listenModeTitle(mode, cat.id);
+          var hint = isQuickStartPath()
+            ? listenModeQuickStartHint(mode, cat.id)
+            : listenModeHint(mode, cat.id);
           return (
             '<button type="button" class="home-listen-mode-card' +
             (selected ? " is-selected" : "") +
@@ -14590,10 +14731,10 @@
             '">' +
             '<span class="home-listen-mode-copy">' +
             '<span class="home-listen-mode-title">' +
-            escapeHtml(listenModeTitle(mode, cat.id)) +
+            escapeHtml(title) +
             "</span>" +
             '<span class="home-listen-mode-hint">' +
-            escapeHtml(listenModeHint(mode, cat.id)) +
+            escapeHtml(hint) +
             "</span>" +
             "</span>" +
             (selected ? '<span class="home-listen-mode-check">Selected</span>' : "") +
@@ -14613,6 +14754,106 @@
       if (listenContinue) {
         listenContinue.addEventListener("click", function () {
           confirmListenModeAndStartSurvey(displayName);
+        });
+      }
+      return;
+    }
+    if (homeFlowStep === "quickstart") {
+      var chipsApi = typeof QuickStartChips !== "undefined" ? QuickStartChips : null;
+      var qs = chipsApi ? chipsApi.questions(cat.id, selectedListenMode) : [];
+      var qIndex = Math.max(0, Math.min(quickStartPageIndex, Math.max(0, qs.length - 1)));
+      var question = qs[qIndex];
+      var selectedChip = String(quickStartAnswers[qIndex] || "").trim();
+      el.innerHTML =
+        '<div class="home-quick-start">' +
+        '  <p class="app-muted" style="margin:0 0 0.35rem;">' +
+        escapeHtml(cat.name) +
+        " · " +
+        escapeHtml(listenModeQuickStartTitle(selectedListenMode, cat.id)) +
+        "</p>" +
+        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.85rem;">' +
+        escapeHtml(String(qIndex + 1) + " of " + qs.length) +
+        "</p>" +
+        (question
+          ? '  <p style="margin:0 0 0.75rem;font-weight:600;">' +
+            escapeHtml(question.prompt) +
+            "</p>" +
+            '  <div class="home-quick-start-chips">' +
+            question.chips
+              .map(function (chip) {
+                var on = selectedChip === chip;
+                return (
+                  '<button type="button" class="home-listen-mode-card' +
+                  (on ? " is-selected" : "") +
+                  '" data-quick-chip="' +
+                  escapeHtml(chip) +
+                  '"><span class="home-listen-mode-copy">' +
+                  escapeHtml(chip) +
+                  "</span>" +
+                  (on ? '<span class="home-listen-mode-check">Selected</span>' : "") +
+                  "</button>"
+                );
+              })
+              .join("") +
+            "</div>" +
+            '  <label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type your own</label>' +
+            '  <input id="home-quick-own" type="text" value="' +
+            escapeHtml(selectedChip) +
+            '" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:10px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />'
+          : "") +
+        '  <button type="button" class="app-btn app-btn-primary" id="home-quick-next" style="margin-top:0.9rem;width:100%;">Next</button>' +
+        '  <button type="button" class="app-btn" id="home-quick-switch" style="margin-top:0.45rem;width:100%;">Write my own answers</button>' +
+        "</div>";
+      el.querySelectorAll("[data-quick-chip]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          quickStartAnswers[qIndex] = btn.getAttribute("data-quick-chip") || "";
+          renderHomeFlow(displayName);
+        });
+      });
+      var own = document.getElementById("home-quick-own");
+      if (own) {
+        own.addEventListener("input", function () {
+          quickStartAnswers[qIndex] = own.value;
+        });
+      }
+      var next = document.getElementById("home-quick-next");
+      if (next) {
+        next.addEventListener("click", function () {
+          if (!String(quickStartAnswers[qIndex] || "").trim()) {
+            generationMessage("Choose a tap or type your own.", "error");
+            return;
+          }
+          if (qIndex < qs.length - 1) {
+            quickStartPageIndex = qIndex + 1;
+            generationMessage("", "");
+            renderHomeFlow(displayName);
+            return;
+          }
+          generationMessage("", "");
+          setHomeFlowStep("survey", displayName);
+        });
+      }
+      var switchBtn = document.getElementById("home-quick-switch");
+      if (switchBtn) {
+        switchBtn.addEventListener("click", function () {
+          selectedCreatePath = "full";
+          homeDeepenState = {
+            displayName: displayName || "",
+            cat: cat,
+            q1: quickStartAnswers[0] || quickStartAnswers[1] || "",
+            q2: quickStartAnswers[2] || "",
+            intakeObstacle: "",
+            intakeContext: quickStartAnswers[1] || "",
+            intakeFeeling: quickStartAnswers[2] || "",
+            tone: defaultToneForCategory(cat.id),
+            length: isWebFreeTier() ? "Short" : "Medium",
+            perspective: "First person",
+            useNameInScript: true,
+            listenMode: selectedListenMode,
+            clarifyingAnswers: {},
+            followUpStep: 0,
+          };
+          setHomeFlowStep("survey", displayName);
         });
       }
       return;
@@ -14686,6 +14927,93 @@
     var ph1 = surveyAnswerPlaceholder(cat.id, 1, selectedListenMode);
     var defaultTone = defaultToneForCategory(cat.id);
     var mediaRec = recommendedMediaForCategory(cat.id, defaultTone);
+    var lengthPills = isWebFreeTier()
+      ? '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
+        '    <span class="gen-pill-item">' +
+        '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" checked />' +
+        '      <label for="gen-length-short" class="gen-pill-label">Short (free sample)</label>' +
+        "    </span>" +
+        "  </div>"
+      : '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
+        '    <span class="gen-pill-item">' +
+        '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" />' +
+        '      <label for="gen-length-short" class="gen-pill-label">Short</label>' +
+        "    </span>" +
+        '    <span class="gen-pill-item">' +
+        '      <input type="radio" name="gen-length" id="gen-length-medium" value="Medium" class="gen-pill-input" checked />' +
+        '      <label for="gen-length-medium" class="gen-pill-label">Medium</label>' +
+        "    </span>" +
+        '    <span class="gen-pill-item">' +
+        '      <input type="radio" name="gen-length" id="gen-length-long" value="Long" class="gen-pill-input" />' +
+        '      <label for="gen-length-long" class="gen-pill-label">Long</label>' +
+        "    </span>" +
+        "  </div>";
+    var styleFields =
+      '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
+      '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
+      '    <option value="Calming">Calming</option>' +
+      '    <option value="Motivational">Motivational</option>' +
+      '    <option value="Compassionate">Compassionate</option>' +
+      '    <option value="Assertive">Assertive</option>' +
+      "  </select>" +
+      '  <p class="gen-field-label" style="margin-top:0.85rem;">Length</p>' +
+      lengthPills +
+      '  <p id="gen-length-hint" class="gen-pill-hint app-muted"></p>' +
+      '  <p class="gen-field-label" style="margin-top:0.75rem;">Perspective</p>' +
+      '  <div class="gen-pill-row" role="radiogroup" aria-label="Narration perspective">' +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-perspective" id="gen-perspective-first" value="First person" class="gen-pill-input" checked />' +
+      '      <label for="gen-perspective-first" class="gen-pill-label">First person</label>' +
+      "    </span>" +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-perspective" id="gen-perspective-third" value="Third person" class="gen-pill-input" />' +
+      '      <label for="gen-perspective-third" class="gen-pill-label">Third person</label>' +
+      "    </span>" +
+      "  </div>" +
+      '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
+      '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
+      "  </div>";
+    if (isQuickStartPath()) {
+      var tapSummary = ["What this is about", "When this plays", "How they want to feel", "What the audio should do"]
+        .map(function (label, idx) {
+          return (
+            "<li><strong>" +
+            escapeHtml(label) +
+            ":</strong> " +
+            escapeHtml(quickStartAnswers[idx] || "—") +
+            "</li>"
+          );
+        })
+        .join("");
+      el.innerHTML =
+        '<form id="generate-form" class="app-form" style="margin:0;">' +
+        '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
+        escapeHtml(cat.name) +
+        "</strong> · " +
+        escapeHtml(listenModeQuickStartTitle(selectedListenMode, cat.id)) +
+        "</p>" +
+        '  <ul class="app-muted" style="margin:0 0 0.85rem;padding-left:1.1rem;font-size:0.88rem;">' +
+        tapSummary +
+        "</ul>" +
+        styleFields +
+        '  <div class="gen-action-row">' +
+        '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate Script</button>' +
+        "  </div>" +
+        "</form>";
+      wirePerspectiveUseNameRow();
+      wireGenLengthHint();
+      fillSurveyFormFromDeepen();
+      var tonePickQuick = document.getElementById("gen-tone");
+      if (tonePickQuick && (!homeDeepenState || !homeDeepenState.tone)) tonePickQuick.value = defaultTone;
+      var formQuick = document.getElementById("generate-form");
+      if (formQuick) {
+        formQuick.addEventListener("submit", function (ev) {
+          ev.preventDefault();
+          beginScriptGenerationFromForm(displayName || "");
+        });
+      }
+      return;
+    }
     el.innerHTML =
       '<form id="generate-form" class="app-form" style="margin:0;">' +
       '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
@@ -18372,8 +18700,10 @@
     homeDeepenState = null;
     homeClarifyFlow = null;
     listenModeForCurrentAnswers = null;
+    selectedCreatePath = "full";
+    resetQuickStartAnswers();
     setAdminTab("home");
-    setHomeFlowStep("category", displayName);
+    setHomeFlowStep("path", displayName);
   }
 
   function freeAppLibrarySamplesBannerHtml() {

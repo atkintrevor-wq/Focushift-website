@@ -5224,6 +5224,11 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
   line-height: 1.45;
   margin: 0.35rem 0 0;
 }
+.home-quick-start-chips {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
 .home-listen-mode-list {
   display: flex;
   flex-direction: column;
