@@ -38,8 +38,13 @@
       <header class="ft-header">
         <p class="ft-kicker">Admin preview</p>
         <h1>Focus Training</h1>
-        <p class="ft-lede">Times posted from the app show up here. This page stays off the public site until we are ready for teams.</p>
+        <p class="ft-lede">Times posted from the app show up here. Today’s grid is the shared puzzle for this UTC day.</p>
       </header>
+
+      <div class="ft-size-tabs" role="tablist" aria-label="Board type">
+        <button type="button" class="ft-tab is-active" data-filter="daily">Today’s grid</button>
+        <button type="button" class="ft-tab" data-filter="all">All times</button>
+      </div>
 
       <div class="ft-size-tabs" role="tablist" aria-label="Grid size">
         <button type="button" class="ft-tab is-active" data-size="5">5×5</button>
@@ -79,6 +84,6 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="../js/firebase-config.js"></script>
-  <script src="focus-training.js?v=1"></script>
+  <script src="focus-training.js?v=2"></script>
 </body>
 </html>

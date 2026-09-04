@@ -10,6 +10,7 @@
   var testForm = document.getElementById("ft-test-form");
   var testMessage = document.getElementById("ft-test-message");
   var selectedSize = 5;
+  var boardFilter = "daily";
   var allScores = [];
   var currentUser = null;
   var db = null;
@@ -26,17 +27,26 @@
     return minutes + ":" + remainder.toFixed(2).padStart(5, "0");
   }
 
+  function todayKey() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
   function renderList() {
     var rows = allScores
       .filter(function (row) {
-        return row.gridSize === selectedSize;
+        if (row.gridSize !== selectedSize) return false;
+        if (boardFilter === "daily") {
+          return row.mode === "daily" && row.dateKey === todayKey();
+        }
+        return true;
       })
       .sort(function (a, b) {
         return a.timeSeconds - b.timeSeconds;
       })
       .slice(0, 25);
 
-    listTitleEl.textContent = selectedSize + "×" + selectedSize;
+    listTitleEl.textContent =
+      selectedSize + "×" + selectedSize + (boardFilter === "daily" ? " · Today" : "");
     listEl.innerHTML = "";
     emptyEl.hidden = rows.length > 0;
 
@@ -80,6 +90,8 @@
             displayName: data.displayName || "Player",
             gridSize: Number(data.gridSize) || 0,
             timeSeconds: Number(data.timeSeconds) || 0,
+            mode: data.mode || "practice",
+            dateKey: data.dateKey || "",
           };
         });
         renderList();
@@ -88,10 +100,17 @@
 
   document.querySelectorAll(".ft-tab").forEach(function (button) {
     button.addEventListener("click", function () {
-      selectedSize = Number(button.getAttribute("data-size")) || 5;
-      document.querySelectorAll(".ft-tab").forEach(function (tab) {
-        tab.classList.toggle("is-active", tab === button);
-      });
+      if (button.hasAttribute("data-filter")) {
+        boardFilter = button.getAttribute("data-filter") || "daily";
+        document.querySelectorAll("[data-filter]").forEach(function (tab) {
+          tab.classList.toggle("is-active", tab === button);
+        });
+      } else {
+        selectedSize = Number(button.getAttribute("data-size")) || 5;
+        document.querySelectorAll("[data-size]").forEach(function (tab) {
+          tab.classList.toggle("is-active", tab === button);
+        });
+      }
       renderList();
     });
   });
@@ -115,6 +134,7 @@
         timeSeconds: timeSeconds,
         uid: currentUser.uid,
         source: "web-admin",
+        mode: boardFilter === "daily" ? "daily" : "practice",
         dateKey: new Date().toISOString().slice(0, 10),
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       })

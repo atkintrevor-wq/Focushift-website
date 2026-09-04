@@ -5577,6 +5577,14 @@
       "          </div>" +
       '          <div id="account-plans-stripe-wrap">' +
       '            <p class="app-muted account-plans-panel-note">Choose a billing period. You will be redirected to Stripe Checkout.</p>' +
+      '            <div id="account-promo-box" class="account-plans-panel-note" style="margin:0.75rem 0;padding:0.75rem;border:1px solid rgba(255,255,255,0.12);border-radius:12px;">' +
+      '              <p style="margin:0 0 0.45rem;font-weight:600;">Have a creator code?</p>' +
+      '              <p id="account-promo-applied" hidden style="margin:0;"></p>' +
+      '              <div id="account-promo-form" style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:center;">' +
+      '                <input id="account-promo-input" type="text" maxlength="20" autocomplete="off" placeholder="Code" style="flex:1;min-width:8rem;padding:0.45rem 0.6rem;border-radius:8px;border:1px solid rgba(255,255,255,0.2);background:transparent;color:inherit;" />' +
+      '                <button type="button" class="app-btn app-btn-secondary" id="account-promo-apply">Apply</button>' +
+      "              </div>" +
+      "            </div>" +
       '            <div class="account-plans-grid">' +
       '              <button type="button" class="app-btn app-btn-primary account-plan-option" data-stripe-plan="starter-month">' +
       '                <span class="account-plan-option__tier">Starter</span>' +
@@ -6423,6 +6431,13 @@
             }
             return;
           }
+          var promoBtn = ev.target && ev.target.closest && ev.target.closest("#account-promo-apply");
+          if (promoBtn && accountBackdrop.contains(promoBtn)) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            redeemAccountPromoCode();
+            return;
+          }
           var btn = ev.target && ev.target.closest && ev.target.closest("button[data-stripe-plan]");
           if (!btn || !accountBackdrop.contains(btn)) return;
           var key = (btn.getAttribute("data-stripe-plan") || "").trim();
@@ -6440,6 +6455,10 @@
             return;
           }
           if (guardWebBetaStripeCheckout()) return;
+          if (appliedPromoFromProfile() && pair[0] === "starter" && pair[1] !== "month") {
+            setAccountMessage("This code is a 1-month free trial of Starter. Choose monthly billing to redeem it.", "error");
+            return;
+          }
           postStripeCheckoutTier(pair[0], pair[1]);
         });
       }
@@ -12796,8 +12815,67 @@
     document.querySelectorAll("[data-stripe-plan-price]").forEach(function (el) {
       var key = (el.getAttribute("data-stripe-plan-price") || "").trim();
       var label = prices[key] || fallbacks[key] || "—";
-      el.textContent = label;
+      if (key === "starter-month" && appliedPromoFromProfile()) {
+        el.textContent = "1 month free, then " + label;
+      } else {
+        el.textContent = label;
+      }
     });
+  }
+
+  function appliedPromoFromProfile() {
+    var profile = currentUserProfile || {};
+    if (profile.promoConvertedAt) return "";
+    return String(profile.promoCode || "").trim().toUpperCase();
+  }
+
+  function syncAccountPromoCodeUI() {
+    var appliedEl = document.getElementById("account-promo-applied");
+    var formEl = document.getElementById("account-promo-form");
+    var code = appliedPromoFromProfile();
+    var label = String((currentUserProfile && currentUserProfile.promoOfferLabel) || "1 month free of Starter");
+    if (appliedEl) {
+      appliedEl.hidden = !code;
+      appliedEl.textContent = code ? code + " applied. " + label + "." : "";
+    }
+    if (formEl) formEl.hidden = !!code;
+  }
+
+  function redeemAccountPromoCode() {
+    if (!currentUser) return;
+    var input = document.getElementById("account-promo-input");
+    var code = input ? String(input.value || "").trim() : "";
+    if (!code) {
+      setAccountMessage("Enter a code.", "error");
+      return;
+    }
+    setAccountMessage("Applying code…", "");
+    currentUser
+      .getIdToken(true)
+      .then(function (token) {
+        return backendRequest("/promo/redeem", token, { code: code, platform: "web" });
+      })
+      .then(function (json) {
+        if (!json || !json.ok) {
+          throw new Error((json && json.error) || "Could not apply that code.");
+        }
+        currentUserProfile = Object.assign({}, currentUserProfile || {}, {
+          promoCode: json.code,
+          promoOfferLabel: json.offerLabel || "1 month free of Starter",
+          promoConvertedAt: null,
+        });
+        if (input) input.value = "";
+        syncAccountPromoCodeUI();
+        syncAccountPlanPriceLabels();
+        setAccountMessage(
+          (json.already ? json.code + " is already applied. " : json.code + " applied. ") +
+            (json.offerLabel || "1 month free of Starter"),
+          "success"
+        );
+      })
+      .catch(function (err) {
+        setAccountMessage(err.message || "Could not apply that code.", "error");
+      });
   }
 
   function syncAccountPlansPanelForBilling() {
@@ -12815,6 +12893,7 @@
       btn.textContent = viewPlansButtonLabelCollapsed();
     }
     syncAccountPlanPriceLabels();
+    syncAccountPromoCodeUI();
   }
 
   function syncAccountSubscriptionHeadline() {
