@@ -55,6 +55,13 @@
   var scriptWorkshopIsNewDraft = false;
   var scriptWorkshopIsPremadeEditor = false;
   var scriptWorkshopPremadeId = null;
+  var listenMatchVoicePref = "Either";
+  var listenMatchEnergy = "Relaxed";
+  var listenMatchDidSeed = false;
+  var listenMixVoiceAudio = null;
+  var listenMixBedAudio = null;
+  var listenMixKey = "";
+  var listenMixTimerId = null;
   /** 1s timer for bottom generation overlay (App Library premade only). */
   var generationOverlayTimerId = null;
   var generationOverlayStartedAt = 0;
@@ -2328,7 +2335,7 @@
     confidence: {
       Calming: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE"],
       Motivational: ["xctasy8XvGp2cVO9HL9k", "rJ9XoWu8gbUhVKZnKY8X"],
-      Compassionate: ["l32B8XDoylOsZKiSdfhE", "BpjGufoPiobT79j2vtj4"],
+      Compassionate: ["l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ"],
       Assertive: ["lnieQLGTodpbhjpZtg1k", "87tjwokZlpNU7QL3HaLP"],
     },
     "sports-performance": {
@@ -2339,7 +2346,7 @@
     },
     "sleep-rest": {
       Calming: ["8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE"],
-      Motivational: ["8LVfoRdkh4zgjr8v5ObE", "BpjGufoPiobT79j2vtj4"],
+      Motivational: ["8LVfoRdkh4zgjr8v5ObE", "1wGbFxmAM3Fgw63G1zZJ"],
       Compassionate: ["8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE"],
       Assertive: ["dPah2VEoifKnZT37774q", "lnieQLGTodpbhjpZtg1k"],
     },
@@ -2382,7 +2389,7 @@
     confidence: { voiceID: "rJ9XoWu8gbUhVKZnKY8X", backgroundID: "bg-calm-groove", voiceName: "Lori", backgroundName: "Calm Groove" },
     relationships: { voiceID: "l32B8XDoylOsZKiSdfhE", backgroundID: "bg-warm-melody", voiceName: "Carla", backgroundName: "Warm Melody" },
     "success-prosperity": { voiceID: "xctasy8XvGp2cVO9HL9k", backgroundID: "bg-momentum-desire", voiceName: "Samantha", backgroundName: "Momentum Desire" },
-    "mental-wellbeing": { voiceID: "BpjGufoPiobT79j2vtj4", backgroundID: "bg-inner-calm", voiceName: "Priyanka", backgroundName: "Inner Calm" },
+    "mental-wellbeing": { voiceID: "l32B8XDoylOsZKiSdfhE", backgroundID: "bg-inner-calm", voiceName: "Carla", backgroundName: "Inner Calm" },
     "health-fitness": { voiceID: "l32B8XDoylOsZKiSdfhE", backgroundID: "bg-recovery-glow", voiceName: "Carla", backgroundName: "Recovery Glow" },
     "sports-performance": { voiceID: "87tjwokZlpNU7QL3HaLP", backgroundID: "bg-relentless-edge-surge", voiceName: "Zane", backgroundName: "Relentless Edge Surge" },
     "sleep-rest": { voiceID: "8LVfoRdkh4zgjr8v5ObE", backgroundID: "bg-theta-peace-drift", voiceName: "Clara", backgroundName: "Theta Peace Drift" },
@@ -2433,6 +2440,528 @@
       selectedBackgroundId = preferredWebBackgroundId(rec.backgroundID);
     }
     return rec;
+  }
+
+  var LISTEN_MATCH_NOT_FEATURED_VOICE_IDS = {
+    BpjGufoPiobT79j2vtj4: true,
+  };
+
+  function listenEnergyFromTone(tone) {
+    return tone === "Motivational" || tone === "Assertive" ? "Upbeat" : "Relaxed";
+  }
+
+  function primaryToneForListenEnergy(energy, categoryId) {
+    var id = String(categoryId || "").trim();
+    if (id === "sleep-rest") return "Calming";
+    if (energy === "Upbeat") {
+      return id === "success-prosperity" || id === "sports-performance" ? "Assertive" : "Motivational";
+    }
+    return id === "relationships" || id === "mental-wellbeing" ? "Compassionate" : "Calming";
+  }
+
+  function inferredListenVoicePreference(voiceID) {
+    var voice = availableVoices.find(function (v) {
+      return v.id === voiceID;
+    });
+    if (!voice || !voice.gender) return "Either";
+    if (voice.gender === "female") return "Woman";
+    if (voice.gender === "male") return "Man";
+    return "Either";
+  }
+
+  function inferredListenEnergy(categoryID, toneRaw, backgroundID) {
+    if (String(categoryID || "").trim() === "sleep-rest") return "Relaxed";
+    if (toneRaw) return listenEnergyFromTone(toneRaw);
+    var bed = backgroundTrackById(backgroundID);
+    if (bed && bed.categoryID === "bg-upbeat") return "Upbeat";
+    return listenEnergyFromTone(defaultToneForCategory(categoryID));
+  }
+
+  function listenMatchVoiceMatches(voice, preference) {
+    if (!voice) return false;
+    if (preference === "Woman") return voice.gender === "female";
+    if (preference === "Man") return voice.gender === "male";
+    return true;
+  }
+
+  function listenMatchCardsFromPairs(pairs) {
+    return (pairs || [])
+      .map(function (pair) {
+        var voice = availableVoices.find(function (v) {
+          return v.id === pair[0];
+        });
+        if (!voice) return null;
+        return {
+          voiceID: pair[0],
+          backgroundID: pair[1],
+          voiceName: voice.name,
+          backgroundName: backgroundNameById(pair[1]),
+          voiceDescription: voice.description || "",
+          badge: pair[2],
+          id: pair[0] + "|" + pair[1],
+        };
+      })
+      .filter(Boolean);
+  }
+
+  function listenMatchFreeCards(energy, preference) {
+    var bill = "lnieQLGTodpbhjpZtg1k";
+    var clara = "8LVfoRdkh4zgjr8v5ObE";
+    var ivanna = "YgzytRZyVmEux6PCtJYB";
+    var key = preference + "|" + energy;
+    var pairs;
+    if (key === "Woman|Relaxed") {
+      pairs = [
+        [clara, "bg-meditation", "Suggested"],
+        [ivanna, "bg-rain", "Also fits"],
+        [clara, "bg-none", "Voice only"],
+      ];
+    } else if (key === "Woman|Upbeat") {
+      pairs = [
+        [ivanna, "bg-rain", "Suggested"],
+        [clara, "bg-rain", "Also fits"],
+        [ivanna, "bg-none", "Voice only"],
+      ];
+    } else if (key === "Man|Relaxed") {
+      pairs = [
+        [bill, "bg-meditation", "Suggested"],
+        [bill, "bg-rain", "Also fits"],
+        [bill, "bg-none", "Voice only"],
+      ];
+    } else if (key === "Man|Upbeat") {
+      pairs = [
+        [bill, "bg-rain", "Suggested"],
+        [bill, "bg-none", "Voice only"],
+        [bill, "bg-meditation", "Also fits"],
+      ];
+    } else if (key === "Either|Relaxed") {
+      pairs = [
+        [clara, "bg-meditation", "Suggested"],
+        [bill, "bg-meditation", "Also fits"],
+        [ivanna, "bg-rain", "Another match"],
+      ];
+    } else {
+      pairs = [
+        [bill, "bg-rain", "Suggested"],
+        [ivanna, "bg-none", "Voice only"],
+        [clara, "bg-rain", "Also fits"],
+      ];
+    }
+    return listenMatchCardsFromPairs(pairs);
+  }
+
+  function listenMatchHeroCards(categoryID, energy, preference) {
+    if (energy !== "Relaxed" || String(categoryID || "") === "sleep-rest") return null;
+    var carla = "l32B8XDoylOsZKiSdfhE";
+    var clara = "8LVfoRdkh4zgjr8v5ObE";
+    var allison = "1wGbFxmAM3Fgw63G1zZJ";
+    var jon = "MFZUKuGQUsGJPQjTS4wC";
+    var pairs;
+    if (preference === "Woman") {
+      pairs = [
+        [carla, "bg-inner-calm", "Suggested"],
+        [clara, "bg-meditation", "Also fits"],
+        [allison, "bg-none", "Voice only"],
+      ];
+    } else if (preference === "Either") {
+      pairs = [
+        [carla, "bg-inner-calm", "Suggested"],
+        [jon, "bg-meditation", "Also fits"],
+        [clara, "bg-none", "Voice only"],
+      ];
+    } else {
+      return null;
+    }
+    var cards = listenMatchCardsFromPairs(pairs).filter(function (card) {
+      return (
+        isWebVoiceAvailableForGeneration(card.voiceID) &&
+        isWebBackgroundAvailableForGeneration(card.backgroundID)
+      );
+    });
+    return cards.length >= 2 ? cards : null;
+  }
+
+  function listenMatchRankedVoices(energy, preference) {
+    var ids;
+    var key = preference + "|" + energy;
+    if (key === "Woman|Relaxed") {
+      ids = ["l32B8XDoylOsZKiSdfhE", "8LVfoRdkh4zgjr8v5ObE", "1wGbFxmAM3Fgw63G1zZJ", "rJ9XoWu8gbUhVKZnKY8X", "NtS6nEHDYMQC9QczMQuq"];
+    } else if (key === "Woman|Upbeat") {
+      ids = ["xctasy8XvGp2cVO9HL9k", "lxYfHSkYm1EzQzGhdbfc", "YZHSTqsq1isdXNsFLzBw", "rJ9XoWu8gbUhVKZnKY8X", "7dEuJHhweR5AFXA4INkB"];
+    } else if (key === "Man|Relaxed") {
+      ids = ["MFZUKuGQUsGJPQjTS4wC", "lnieQLGTodpbhjpZtg1k", "dPah2VEoifKnZT37774q", "gUABw7pXQjhjt0kNFBTF", "kqVT88a5QfII1HNAEPTJ"];
+    } else if (key === "Man|Upbeat") {
+      ids = ["uju3wxzG5OhpWcoi3SMy", "87tjwokZlpNU7QL3HaLP", "EkK5I93UQWFDigLMpZcX", "ZthjuvLPty3kTMaNKVKb", "5F6a8n4ijdCrImoXgxM9"];
+    } else if (key === "Either|Relaxed") {
+      ids = ["l32B8XDoylOsZKiSdfhE", "MFZUKuGQUsGJPQjTS4wC", "8LVfoRdkh4zgjr8v5ObE", "lnieQLGTodpbhjpZtg1k", "1wGbFxmAM3Fgw63G1zZJ"];
+    } else {
+      ids = ["xctasy8XvGp2cVO9HL9k", "uju3wxzG5OhpWcoi3SMy", "87tjwokZlpNU7QL3HaLP", "lxYfHSkYm1EzQzGhdbfc", "lnieQLGTodpbhjpZtg1k"];
+    }
+    var byId = {};
+    availableVoices.forEach(function (v) {
+      byId[v.id] = v;
+    });
+    var out = ids
+      .map(function (id) {
+        return byId[id];
+      })
+      .filter(function (voice) {
+        return voice && listenMatchVoiceMatches(voice, preference) && !LISTEN_MATCH_NOT_FEATURED_VOICE_IDS[voice.id];
+      });
+    availableVoices.forEach(function (voice) {
+      if (
+        listenMatchVoiceMatches(voice, preference) &&
+        !LISTEN_MATCH_NOT_FEATURED_VOICE_IDS[voice.id] &&
+        !out.some(function (existing) {
+          return existing.id === voice.id;
+        })
+      ) {
+        out.push(voice);
+      }
+    });
+    return out;
+  }
+
+  function listenMatchRankedBeds(categoryID, energy) {
+    var ids;
+    if (String(categoryID || "") === "sleep-rest") {
+      ids = ["bg-theta-peace-drift", "bg-inner-calm", "bg-meditation", "bg-rain", "bg-none"];
+    } else if (energy === "Relaxed") {
+      ids = [
+        "bg-meditation",
+        "bg-inner-calm",
+        "bg-warm-melody",
+        "bg-kindness-melody",
+        "bg-theta-peace-drift",
+        "bg-rain",
+        "bg-piano",
+        "bg-calm-soft",
+        "bg-none",
+      ];
+    } else {
+      ids = [
+        "bg-momentum-desire",
+        "bg-purpose-pulse",
+        "bg-recovery-glow",
+        "bg-calm-groove",
+        "bg-growth-glow",
+        "bg-none",
+      ];
+    }
+    return ids.filter(function (id) {
+      return isWebBackgroundAvailableForGeneration(id);
+    });
+  }
+
+  function listenMatchPaidCards(categoryID, energy, preference) {
+    var voices = listenMatchRankedVoices(energy, preference);
+    var beds = listenMatchRankedBeds(categoryID, energy);
+    var pairs = [];
+    function append(voiceID, backgroundID, badge) {
+      var key = voiceID + "|" + backgroundID;
+      if (
+        pairs.some(function (p) {
+          return p[0] + "|" + p[1] === key;
+        })
+      ) {
+        return;
+      }
+      if (!isWebVoiceAvailableForGeneration(voiceID)) return;
+      if (!isWebBackgroundAvailableForGeneration(backgroundID)) return;
+      pairs.push([voiceID, backgroundID, badge]);
+    }
+    if (voices[0]) append(voices[0].id, beds[0] || "bg-none", "Suggested");
+    if (voices[1]) append(voices[1].id, beds[1] || "bg-none", "Also fits");
+    if (voices[2]) append(voices[2].id, "bg-none", "Voice only");
+    if (pairs.length < 3) {
+      for (var i = 0; i < voices.length && pairs.length < 3; i++) {
+        var bedsPlusNone = beds.concat(["bg-none"]);
+        for (var j = 0; j < bedsPlusNone.length && pairs.length < 3; j++) {
+          append(voices[i].id, bedsPlusNone[j], pairs.length ? "Also fits" : "Suggested");
+        }
+      }
+    }
+    return listenMatchCardsFromPairs(pairs.slice(0, 3));
+  }
+
+  function listenMatchCards(categoryID, energy, preference) {
+    if (isWebFreeTier()) return listenMatchFreeCards(energy, preference);
+    var hero = listenMatchHeroCards(categoryID, energy, preference);
+    if (hero) return hero;
+    return listenMatchPaidCards(categoryID, energy, preference);
+  }
+
+  function currentListenMatchCategoryId(script) {
+    return (
+      (script && script.categoryID) ||
+      (scriptWorkshopDraft && scriptWorkshopDraft.categoryID) ||
+      ""
+    );
+  }
+
+  function seedListenMatchFilters(script) {
+    if (listenMatchDidSeed) return;
+    listenMatchDidSeed = true;
+    var categoryID = currentListenMatchCategoryId(script);
+    var toneRaw = script && script.generationContext && script.generationContext.tone;
+    var backgroundID = (scriptWorkshopDraft && scriptWorkshopDraft.backgroundID) || "";
+    var voiceID = (scriptWorkshopDraft && scriptWorkshopDraft.voiceID) || "";
+    listenMatchEnergy = inferredListenEnergy(categoryID, toneRaw, backgroundID);
+    listenMatchVoicePref = scriptWorkshopIsNewDraft ? "Either" : inferredListenVoicePreference(voiceID);
+    applyFirstListenMatchCard(scriptWorkshopIsNewDraft || !voiceID);
+  }
+
+  function applyFirstListenMatchCard(force) {
+    if (!scriptWorkshopDraft) return;
+    var cards = listenMatchCards(
+      currentListenMatchCategoryId(getScriptWorkshopContextScript()),
+      listenMatchEnergy,
+      listenMatchVoicePref
+    );
+    if (!cards.length) return;
+    var currentVoice = String(scriptWorkshopDraft.voiceID || "").trim();
+    var currentBed = String(scriptWorkshopDraft.backgroundID || "").trim() || "bg-none";
+    var inList = cards.some(function (card) {
+      return card.voiceID === currentVoice && card.backgroundID === currentBed;
+    });
+    if (inList) return;
+    if (force || scriptWorkshopIsNewDraft || !currentVoice) {
+      applyListenMatchCard(cards[0], false);
+    }
+  }
+
+  function applyListenMatchCard(card, rerender) {
+    if (!scriptWorkshopDraft || !card) return;
+    scriptWorkshopDraft.voiceID = card.voiceID;
+    scriptWorkshopDraft.backgroundID = card.backgroundID === "bg-none" ? "bg-none" : card.backgroundID;
+    if (rerender) renderScriptWorkshop();
+  }
+
+  function listenMatchVoiceSampleUrl(voiceID) {
+    var voice = availableVoices.find(function (v) {
+      return v.id === voiceID;
+    });
+    var file = voice && voice.file && String(voice.file).trim();
+    return file ? voiceSampleAssetUrl(file) : "";
+  }
+
+  function listenMatchBedUrl(backgroundID) {
+    var bid = String(backgroundID || "").trim();
+    if (!bid || bid === "bg-none") return "";
+    var entry = backgroundEntryById(bid);
+    if (!entry) return "";
+    if (entry.audioURL && String(entry.audioURL).trim()) return String(entry.audioURL).trim();
+    if (entry.file && String(entry.file).trim()) return backgroundTrackAssetUrl(entry.file);
+    return "";
+  }
+
+  function stopListenMixPreview() {
+    if (listenMixTimerId) {
+      clearTimeout(listenMixTimerId);
+      listenMixTimerId = null;
+    }
+    [listenMixVoiceAudio, listenMixBedAudio].forEach(function (audio) {
+      if (!audio) return;
+      try {
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+      } catch (_e) {}
+    });
+    listenMixVoiceAudio = null;
+    listenMixBedAudio = null;
+    listenMixKey = "";
+    refreshListenMatchPlayingState();
+  }
+
+  function isListenMixPlaying(voiceID, backgroundID) {
+    return listenMixKey === voiceID + "|" + backgroundID && listenMixVoiceAudio && !listenMixVoiceAudio.paused;
+  }
+
+  function toggleListenMixPreview(voiceID, backgroundID) {
+    var key = voiceID + "|" + backgroundID;
+    if (listenMixKey === key && listenMixVoiceAudio && !listenMixVoiceAudio.paused) {
+      stopListenMixPreview();
+      return;
+    }
+    var voiceUrl = listenMatchVoiceSampleUrl(voiceID);
+    if (!voiceUrl) return;
+    stopListenMixPreview();
+    stopBackgroundPreview();
+    if (typeof stopActiveAudio === "function") {
+      try {
+        stopActiveAudio(false);
+      } catch (_e) {}
+    }
+    var voiceAudio = new Audio(voiceUrl);
+    voiceAudio.volume = 1;
+    listenMixVoiceAudio = voiceAudio;
+    listenMixKey = key;
+    var bedUrl = listenMatchBedUrl(backgroundID);
+    if (bedUrl) {
+      var bedAudio = new Audio(bedUrl);
+      bedAudio.loop = true;
+      bedAudio.volume = 0.28;
+      listenMixBedAudio = bedAudio;
+      bedAudio.play().catch(function () {
+        listenMixBedAudio = null;
+      });
+    }
+    voiceAudio.addEventListener("ended", function () {
+      if (listenMixKey === key) stopListenMixPreview();
+    });
+    voiceAudio
+      .play()
+      .then(function () {
+        listenMixTimerId = setTimeout(function () {
+          if (listenMixKey === key) stopListenMixPreview();
+        }, 10000);
+        refreshListenMatchPlayingState();
+      })
+      .catch(function () {
+        stopListenMixPreview();
+      });
+    refreshListenMatchPlayingState();
+  }
+
+  function refreshListenMatchPlayingState() {
+    document.querySelectorAll("[data-listen-mix-preview]").forEach(function (btn) {
+      var voiceID = btn.getAttribute("data-voice-id") || "";
+      var backgroundID = btn.getAttribute("data-background-id") || "";
+      var playing = isListenMixPlaying(voiceID, backgroundID);
+      btn.classList.toggle("is-playing", playing);
+      btn.setAttribute("aria-label", playing ? "Stop preview" : "Preview mix");
+      btn.textContent = playing ? "■" : "▶";
+    });
+  }
+
+  function listenMatchSetupHtml(script) {
+    seedListenMatchFilters(script);
+    var categoryID = currentListenMatchCategoryId(script);
+    var cards = listenMatchCards(categoryID, listenMatchEnergy, listenMatchVoicePref);
+    var currentVoice = String((scriptWorkshopDraft && scriptWorkshopDraft.voiceID) || "").trim();
+    var currentBed = String((scriptWorkshopDraft && scriptWorkshopDraft.backgroundID) || "").trim() || "bg-none";
+    function filterBtn(group, value, selected) {
+      return (
+        '<button type="button" class="listen-match-filter-btn' +
+        (selected ? " is-selected" : "") +
+        '" data-listen-filter="' +
+        escapeHtml(group) +
+        '" data-listen-value="' +
+        escapeHtml(value) +
+        '">' +
+        escapeHtml(value) +
+        "</button>"
+      );
+    }
+    var cardsHtml = cards
+      .map(function (card) {
+        var selected = card.voiceID === currentVoice && card.backgroundID === currentBed;
+        var playing = isListenMixPlaying(card.voiceID, card.backgroundID);
+        return (
+          '<div class="listen-match-card' +
+          (selected ? " is-selected" : "") +
+          '" data-listen-card="' +
+          escapeHtml(card.id) +
+          '">' +
+          '<button type="button" class="listen-match-card-main" data-listen-apply="' +
+          escapeHtml(card.id) +
+          '">' +
+          '<span class="listen-match-badge">' +
+          escapeHtml(card.badge) +
+          "</span>" +
+          '<span class="listen-match-title">' +
+          escapeHtml(card.voiceName + " · " + card.backgroundName) +
+          "</span>" +
+          (card.voiceDescription
+            ? '<span class="listen-match-desc">' + escapeHtml(card.voiceDescription) + "</span>"
+            : "") +
+          "</button>" +
+          '<button type="button" class="listen-match-preview' +
+          (playing ? " is-playing" : "") +
+          '" data-listen-mix-preview data-voice-id="' +
+          escapeHtml(card.voiceID) +
+          '" data-background-id="' +
+          escapeHtml(card.backgroundID) +
+          '" aria-label="' +
+          (playing ? "Stop preview" : "Preview mix") +
+          '">' +
+          (playing ? "■" : "▶") +
+          "</button>" +
+          "</div>"
+        );
+      })
+      .join("");
+    return (
+      '<div class="listen-match">' +
+      '<p class="script-workshop-section-label">How you\'ll listen</p>' +
+      '<p class="listen-match-hint">Hear a 10-second mix — this doesn’t use a credit. Then generate the full script in that voice.</p>' +
+      '<p class="listen-match-filter-label">Voice</p>' +
+      '<div class="listen-match-filters" role="group" aria-label="Voice preference">' +
+      filterBtn("voice", "Woman", listenMatchVoicePref === "Woman") +
+      filterBtn("voice", "Man", listenMatchVoicePref === "Man") +
+      filterBtn("voice", "Either", listenMatchVoicePref === "Either") +
+      "</div>" +
+      '<p class="listen-match-filter-label">Feel</p>' +
+      '<div class="listen-match-filters" role="group" aria-label="Listen feel">' +
+      filterBtn("feel", "Relaxed", listenMatchEnergy === "Relaxed") +
+      filterBtn("feel", "Upbeat", listenMatchEnergy === "Upbeat") +
+      "</div>" +
+      (categoryID === "sleep-rest" && listenMatchEnergy === "Upbeat"
+        ? '<p class="listen-match-hint">Sleep usually works better relaxed. Try the quieter mix if this feels too bright.</p>'
+        : "") +
+      '<div class="listen-match-cards">' +
+      cardsHtml +
+      "</div>" +
+      '<p class="listen-match-selected-label">Selected for this script</p>' +
+      '<p class="listen-match-hint">Tap a suggestion above, or open the libraries to pick any voice or background.</p>' +
+      "</div>"
+    );
+  }
+
+  function bindListenMatchSetup(script) {
+    var cards = listenMatchCards(currentListenMatchCategoryId(script), listenMatchEnergy, listenMatchVoicePref);
+    document.querySelectorAll("[data-listen-filter]").forEach(function (btn) {
+      btn.onclick = function () {
+        var group = btn.getAttribute("data-listen-filter");
+        var value = btn.getAttribute("data-listen-value");
+        if (group === "voice") listenMatchVoicePref = value;
+        if (group === "feel") listenMatchEnergy = value;
+        stopListenMixPreview();
+        applyFirstListenMatchCard(true);
+        renderScriptWorkshop();
+      };
+    });
+    document.querySelectorAll("[data-listen-apply]").forEach(function (btn) {
+      btn.onclick = function () {
+        var id = btn.getAttribute("data-listen-apply");
+        var card = cards.find(function (c) {
+          return c.id === id;
+        });
+        if (!card) return;
+        applyListenMatchCard(card, true);
+      };
+    });
+    document.querySelectorAll("[data-listen-mix-preview]").forEach(function (btn) {
+      btn.onclick = function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        var voiceID = btn.getAttribute("data-voice-id") || "";
+        var backgroundID = btn.getAttribute("data-background-id") || "";
+        var card = cards.find(function (c) {
+          return c.voiceID === voiceID && c.backgroundID === backgroundID;
+        });
+        if (card) applyListenMatchCard(card, false);
+        toggleListenMixPreview(voiceID, backgroundID);
+        var voiceBtn = document.getElementById("script-workshop-voice");
+        var bgBtn = document.getElementById("script-workshop-background");
+        if (voiceBtn) voiceBtn.textContent = "Voice: " + workshopVoiceLabelFromDraft(scriptWorkshopDraft);
+        if (bgBtn) bgBtn.textContent = "Background: " + workshopBackgroundLabelFromDraft(scriptWorkshopDraft);
+        document.querySelectorAll(".listen-match-card").forEach(function (el) {
+          el.classList.toggle("is-selected", el.getAttribute("data-listen-card") === voiceID + "|" + backgroundID);
+        });
+      };
+    });
   }
 
   function surveyAnswerPlaceholder(catId, questionIndex, listenMode) {
@@ -10732,6 +11261,7 @@
   }
 
   function startVoicePreviewPlayback(audioUrl, voice, isBlobURL) {
+    stopListenMixPreview();
     if (activePreviewBlobURL) {
       try { URL.revokeObjectURL(activePreviewBlobURL); } catch (_e) {}
       activePreviewBlobURL = null;
@@ -14119,6 +14649,23 @@
     sync();
   }
 
+  function wireGenFeelPills(categoryId) {
+    var toneEl = document.getElementById("gen-tone");
+    var pills = document.querySelectorAll('input[name="gen-feel"]');
+    if (!toneEl || !pills.length) return;
+    function syncToneFromFeel() {
+      var checked = document.querySelector('input[name="gen-feel"]:checked');
+      var energy = (checked && checked.value) || "Relaxed";
+      toneEl.value = primaryToneForListenEnergy(energy, categoryId);
+    }
+    var current = listenEnergyFromTone(toneEl.value || defaultToneForCategory(categoryId));
+    pills.forEach(function (p) {
+      p.checked = p.value === current;
+      p.addEventListener("change", syncToneFromFeel);
+    });
+    syncToneFromFeel();
+  }
+
   function wireGenLengthHint() {
     var hint = document.getElementById("gen-length-hint");
     var labels = {
@@ -14948,9 +15495,25 @@
         '      <label for="gen-length-long" class="gen-pill-label">Long</label>' +
         "    </span>" +
         "  </div>";
+    var defaultFeel = listenEnergyFromTone(defaultTone);
     var styleFields =
-      '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
-      '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
+      '  <p class="gen-field-label" style="margin-top:0.2rem;">Feel</p>' +
+      '  <p class="app-muted" style="margin:0 0 0.45rem;font-size:0.82rem;">How the script should sound. You’ll pick a voice and hear mixes after it writes.</p>' +
+      '  <div class="gen-pill-row" role="radiogroup" aria-label="Script feel">' +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-feel" id="gen-feel-relaxed" value="Relaxed" class="gen-pill-input"' +
+      (defaultFeel === "Relaxed" ? " checked" : "") +
+      " />" +
+      '      <label for="gen-feel-relaxed" class="gen-pill-label">Relaxed</label>' +
+      "    </span>" +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-feel" id="gen-feel-upbeat" value="Upbeat" class="gen-pill-input"' +
+      (defaultFeel === "Upbeat" ? " checked" : "") +
+      " />" +
+      '      <label for="gen-feel-upbeat" class="gen-pill-label">Upbeat</label>' +
+      "    </span>" +
+      "  </div>" +
+      '  <select id="gen-tone" hidden>' +
       '    <option value="Calming">Calming</option>' +
       '    <option value="Motivational">Motivational</option>' +
       '    <option value="Compassionate">Compassionate</option>' +
@@ -15005,6 +15568,7 @@
       fillSurveyFormFromDeepen();
       var tonePickQuick = document.getElementById("gen-tone");
       if (tonePickQuick && (!homeDeepenState || !homeDeepenState.tone)) tonePickQuick.value = defaultTone;
+      wireGenFeelPills(cat.id);
       var formQuick = document.getElementById("generate-form");
       if (formQuick) {
         formQuick.addEventListener("submit", function (ev) {
@@ -16194,6 +16758,7 @@
     scriptWorkshopIsNewDraft = false;
     scriptWorkshopIsPremadeEditor = true;
     scriptWorkshopPremadeId = premade.id;
+    listenMatchDidSeed = false;
     scriptWorkshopDraft = premadeMyLibraryDraftFromPremade(premade);
     scriptWorkshopSnapshot = JSON.parse(JSON.stringify(scriptWorkshopDraft));
     if (!showScriptWorkshopBackdrop()) {
@@ -16253,6 +16818,8 @@
     scriptWorkshopIsNewDraft = false;
     scriptWorkshopIsPremadeEditor = false;
     scriptWorkshopPremadeId = null;
+    listenMatchDidSeed = false;
+    stopListenMixPreview();
     var backdrop = document.getElementById("script-workshop-backdrop");
     if (backdrop) {
       backdrop.hidden = true;
@@ -16442,7 +17009,13 @@
         "fs_voiceCloneNudgeDismissed_" + ((currentUser && currentUser.uid) || "anon");
       var cloneNudgeDismissed = localStorage.getItem(cloneNudgeKey) === "1";
       var hasClones = Array.isArray(currentClonedVoices) && currentClonedVoices.length > 0;
-      if (isWebPaidTierForAI() && !cloneNudgeDismissed && !hasClones) {
+      if (
+        isWebPaidTierForAI() &&
+        !cloneNudgeDismissed &&
+        !hasClones &&
+        !scriptWorkshopIsNewDraft &&
+        scriptHasPlayableAudio(script)
+      ) {
         cloneNudgeHtml =
           '<div class="app-empty-hint" id="script-workshop-clone-nudge" style="margin:0 0 0.75rem;padding:0.75rem 0.85rem;">' +
           "  <strong>Hear this in your voice</strong>" +
@@ -16456,7 +17029,7 @@
     } catch (_cloneNudgeErr) {}
 
     body.innerHTML =
-      '<p class="script-workshop-section-label">How you\'ll listen</p>' +
+      listenMatchSetupHtml(script) +
       cloneNudgeHtml +
       '<div class="script-workshop-media-row">' +
       '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-voice">Voice: ' +
@@ -16510,10 +17083,13 @@
         renderScriptWorkshop();
       };
     }
+    bindListenMatchSetup(script);
     document.getElementById("script-workshop-voice").onclick = function () {
+      stopListenMixPreview();
       openMediaPicker({ kind: "workshop", field: "voice" });
     };
     document.getElementById("script-workshop-background").onclick = function () {
+      stopListenMixPreview();
       openMediaPicker({ kind: "workshop", field: "background" });
     };
     var cloneCta = document.getElementById("script-workshop-clone-cta");
@@ -16590,6 +17166,7 @@
     scriptWorkshopIsNewDraft = !!isNewDraft;
     scriptWorkshopIsPremadeEditor = false;
     scriptWorkshopPremadeId = null;
+    listenMatchDidSeed = false;
     scriptWorkshopDraft = {
       title: script.title || "",
       text: script.text || "",
@@ -18256,6 +18833,7 @@
   }
 
   function openMediaPicker(target) {
+    stopListenMixPreview();
     mediaPickerTarget = target || null;
     if (
       mediaPickerTarget &&
@@ -19013,6 +19591,7 @@
   }
 
   function stopActiveAudio(resetQueue) {
+    stopListenMixPreview();
     if (typeof resetQueue === "undefined") resetQueue = true;
     if (activeAudio) {
       try {
