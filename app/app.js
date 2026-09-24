@@ -58,6 +58,7 @@
   var listenMatchVoicePref = "Either";
   var listenMatchEnergy = "Relaxed";
   var listenMatchDidSeed = false;
+  var listenMatchSheetOpen = false;
   var listenMixVoiceAudio = null;
   var listenMixBedAudio = null;
   var listenMixKey = "";
@@ -1892,19 +1893,11 @@
   }
 
   function listenModeQuickStartTitle(mode, categoryId) {
-    if (categoryId === "sleep-rest") return listenModeTitle(mode, categoryId);
-    var m = normalizeListenMode(mode);
-    if (m === "in-the-moment") return "During";
-    if (m === "after") return "After";
-    return "Before";
+    return listenModeTitle(mode, categoryId);
   }
 
   function listenModeQuickStartHint(mode, categoryId) {
-    if (categoryId === "sleep-rest") return listenModeHint(mode, categoryId);
-    var m = normalizeListenMode(mode);
-    if (m === "in-the-moment") return "You'll press play while you're in it. Next we'll ask what that is.";
-    if (m === "after") return "You'll press play afterward, or as you come down. Next we'll ask what that is.";
-    return "You'll press play first — then go into whatever this is for. Next we'll ask what that is.";
+    return listenModeHint(mode, categoryId);
   }
 
   function isQuickStartPath() {
@@ -2797,30 +2790,40 @@
     voiceAudio.volume = 1;
     listenMixVoiceAudio = voiceAudio;
     listenMixKey = key;
+    voiceAudio.addEventListener("ended", function () {
+      if (listenMixKey === key) stopListenMixPreview();
+    });
+    function startVoice() {
+      if (listenMixKey !== key || listenMixVoiceAudio !== voiceAudio) return;
+      voiceAudio
+        .play()
+        .then(function () {
+          if (listenMixKey !== key) return;
+          listenMixTimerId = setTimeout(function () {
+            if (listenMixKey === key) stopListenMixPreview();
+          }, 10000);
+          refreshListenMatchPlayingState();
+        })
+        .catch(function () {
+          if (listenMixKey === key) stopListenMixPreview();
+        });
+    }
     var bedUrl = listenMatchBedUrl(backgroundID);
     if (bedUrl) {
       var bedAudio = new Audio(bedUrl);
       bedAudio.loop = true;
       bedAudio.volume = 0.28;
       listenMixBedAudio = bedAudio;
-      bedAudio.play().catch(function () {
-        listenMixBedAudio = null;
-      });
+      bedAudio
+        .play()
+        .then(startVoice)
+        .catch(function () {
+          if (listenMixBedAudio === bedAudio) listenMixBedAudio = null;
+          startVoice();
+        });
+    } else {
+      startVoice();
     }
-    voiceAudio.addEventListener("ended", function () {
-      if (listenMixKey === key) stopListenMixPreview();
-    });
-    voiceAudio
-      .play()
-      .then(function () {
-        listenMixTimerId = setTimeout(function () {
-          if (listenMixKey === key) stopListenMixPreview();
-        }, 10000);
-        refreshListenMatchPlayingState();
-      })
-      .catch(function () {
-        stopListenMixPreview();
-      });
     refreshListenMatchPlayingState();
   }
 
@@ -2894,8 +2897,7 @@
       .join("");
     return (
       '<div class="listen-match">' +
-      '<p class="script-workshop-section-label">How you\'ll listen</p>' +
-      '<p class="listen-match-hint">Hear a 10-second mix — this doesn’t use a credit. Then generate the full script in that voice.</p>' +
+      '<p class="listen-match-hint">Hear a 10-second mix — this doesn’t use a credit. Choosing one sets the voice and background for this script.</p>' +
       '<p class="listen-match-filter-label">Voice</p>' +
       '<div class="listen-match-filters" role="group" aria-label="Voice preference">' +
       filterBtn("voice", "Woman", listenMatchVoicePref === "Woman") +
@@ -2913,10 +2915,34 @@
       '<div class="listen-match-cards">' +
       cardsHtml +
       "</div>" +
-      '<p class="listen-match-selected-label">Selected for this script</p>' +
-      '<p class="listen-match-hint">Tap a suggestion above, or open the libraries to pick any voice or background.</p>' +
       "</div>"
     );
+  }
+
+  function syncListenMatchSheet(script) {
+    var sheet = document.getElementById("listen-match-sheet");
+    var sheetBody = document.getElementById("listen-match-sheet-body");
+    if (!sheet || !sheetBody) return;
+    sheetBody.innerHTML = listenMatchSetupHtml(script);
+    var open = !!listenMatchSheetOpen;
+    sheet.hidden = !open;
+    sheet.setAttribute("aria-hidden", open ? "false" : "true");
+  }
+
+  function closeListenMatchSheet() {
+    listenMatchSheetOpen = false;
+    stopListenMixPreview();
+    var script = scriptWorkshopDraft ? getScriptWorkshopContextScript() : null;
+    if (script) {
+      syncListenMatchSheet(script);
+      bindListenMatchSetup(script);
+      return;
+    }
+    var sheet = document.getElementById("listen-match-sheet");
+    if (sheet) {
+      sheet.hidden = true;
+      sheet.setAttribute("aria-hidden", "true");
+    }
   }
 
   function bindListenMatchSetup(script) {
@@ -2962,6 +2988,24 @@
         });
       };
     });
+    var hear = document.getElementById("script-workshop-hear-mixes");
+    if (hear) {
+      hear.onclick = function () {
+        listenMatchSheetOpen = true;
+        var sheet = document.getElementById("listen-match-sheet");
+        if (!sheet) return;
+        sheet.hidden = false;
+        sheet.setAttribute("aria-hidden", "false");
+      };
+    }
+    var done = document.getElementById("listen-match-sheet-done");
+    if (done) done.onclick = closeListenMatchSheet;
+    var sheet = document.getElementById("listen-match-sheet");
+    if (sheet) {
+      sheet.onclick = function (ev) {
+        if (ev.target === sheet) closeListenMatchSheet();
+      };
+    }
   }
 
   function surveyAnswerPlaceholder(catId, questionIndex, listenMode) {
@@ -5933,6 +5977,15 @@
       "    </div>" +
       '    <div id="script-workshop-body" class="script-workshop-body"></div>' +
       '    <div id="script-workshop-footer" class="script-workshop-footer"></div>' +
+      "  </div>" +
+      "</div>" +
+      '<div id="listen-match-sheet" class="app-modal-backdrop" hidden aria-hidden="true">' +
+      '  <div class="app-modal listen-match-sheet-panel" role="dialog" aria-modal="true" aria-labelledby="listen-match-sheet-title">' +
+      '    <div class="listen-match-sheet-head">' +
+      '      <h3 id="listen-match-sheet-title">Suggested mixes</h3>' +
+      '      <button type="button" class="app-btn" id="listen-match-sheet-done">Done</button>' +
+      "    </div>" +
+      '    <div id="listen-match-sheet-body"></div>' +
       "  </div>" +
       "</div>" +
       '<div id="script-save-as-backdrop" class="app-modal-backdrop" hidden aria-hidden="true">' +
@@ -14498,6 +14551,132 @@
     };
   }
 
+  function postScriptJob(payload) {
+    if (!currentUser) return Promise.reject(new Error("Not signed in."));
+    return currentUser.getIdToken(true).then(function (token) {
+      return fetch(backendBaseURL() + "/script-jobs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify(payload),
+      }).then(function (resp) {
+        return resp.json().then(function (json) {
+          if (!resp.ok || !json || json.ok !== true || !json.jobId) {
+            throw new Error((json && json.error) || "Could not start script generation.");
+          }
+          return json.jobId;
+        });
+      });
+    });
+  }
+
+  function waitForScriptJob(jobId) {
+    return new Promise(function (resolve, reject) {
+      var settled = false;
+      var unsub = function () {};
+      var timeout = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        unsub();
+        reject(new Error("Your script is still being written. It will show up in My Library when it is ready."));
+      }, 360000);
+      unsub = db.collection("users").doc(currentUser.uid).collection("scriptJobs").doc(jobId).onSnapshot(
+        function (snap) {
+          var data = snap.data() || {};
+          if (data.status !== "completed" && data.status !== "failed") return;
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          unsub();
+          if (data.status === "failed") {
+            reject(new Error(data.error || "Could not generate script."));
+            return;
+          }
+          data.jobId = jobId;
+          resolve(data);
+        },
+        function (err) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          reject(err);
+        }
+      );
+    });
+  }
+
+  function acknowledgeScriptJob(jobId) {
+    if (!currentUser || !jobId) return Promise.resolve();
+    var uid = currentUser.uid;
+    var jobRef = db.collection("users").doc(uid).collection("scriptJobs").doc(jobId);
+    var lockRef = db.collection("users").doc(uid).collection("meta").doc("activeScriptJob");
+    return jobRef.delete().catch(function () {}).then(function () {
+      return lockRef.get().then(function (snap) {
+        if (snap.exists && snap.get("jobId") === jobId) return lockRef.delete();
+      });
+    }).catch(function () {});
+  }
+
+  function applyCompletedScriptJob(data) {
+    var scriptId = data.scriptId;
+    var title = (data.title && String(data.title).trim()) || "My Affirmation";
+    var scriptText = String(data.content || "").trim();
+    if (!scriptId || !scriptText) return Promise.resolve(null);
+    var now = firebase.firestore.Timestamp.now();
+    var entry = {
+      id: scriptId,
+      title: title,
+      text: scriptText,
+      audioURL: "",
+      voiceID: data.voiceID || "",
+      backgroundID: data.backgroundID || "",
+      categoryID: data.categoryId || "",
+      createdAt: now,
+      updatedAt: null,
+      audioCreatedAt: null,
+      audioContentHash: "",
+      audioVoiceID: "",
+      audioBackgroundID: "",
+    };
+    if (data.savedToCloud) {
+      upsertCurrentScript(entry);
+      return acknowledgeScriptJob(data.jobId).then(function () { return entry; });
+    }
+    upsertFreeLocalScript(currentUser.uid, {
+      id: entry.id,
+      title: entry.title,
+      text: entry.text,
+      audioURL: "",
+      voiceID: entry.voiceID,
+      backgroundID: entry.backgroundID,
+      categoryID: entry.categoryID,
+      createdAt: new Date().toISOString(),
+      updatedAt: null,
+      audioCreatedAt: null,
+    });
+    upsertCurrentScript(entry);
+    return acknowledgeScriptJob(data.jobId).then(function () { return entry; });
+  }
+
+  function reconcileCompletedScriptJobs() {
+    if (!currentUser) return Promise.resolve();
+    return db.collection("users").doc(currentUser.uid).collection("scriptJobs")
+      .where("status", "==", "completed")
+      .get()
+      .then(function (snap) {
+        var chain = Promise.resolve();
+        snap.forEach(function (doc) {
+          var data = doc.data() || {};
+          data.jobId = doc.id;
+          chain = chain.then(function () { return applyCompletedScriptJob(data); });
+        });
+        return chain;
+      })
+      .catch(function () {});
+  }
+
   function postGenerateScriptRequest(payload) {
     if (!currentUser) return Promise.reject(new Error("Not signed in."));
     return currentUser.getIdToken(true).then(function (token) {
@@ -14669,9 +14848,9 @@
   function wireGenLengthHint() {
     var hint = document.getElementById("gen-length-hint");
     var labels = {
-      Short: "Short — about 1 min of spoken audio (~150 words).",
-      Medium: "Medium — about 2.5 min (~400 words).",
-      Long: "Long — about 4 min (~800 words).",
+      Short: "Short — about 150 words (~1 min).",
+      Medium: "Medium — about 400 words (~2.5 min).",
+      Long: "Long — about 800 words (~4 min).",
     };
     function sync() {
       var checked = document.querySelector('input[name="gen-length"]:checked');
@@ -14693,100 +14872,56 @@
   function finalizeScriptGeneration(ctx) {
     if (!currentUser) return;
     var payload = buildScriptGeneratePayload(ctx, 0);
+    var mediaRec = recommendedMediaForCategory(ctx.cat.id, ctx.tone);
+    var saveVoiceId = preferredWebVoiceId(
+      accountDefaultVoiceId() ||
+        (selectedVoiceId || "").trim() ||
+        (mediaRec && mediaRec.voiceID) ||
+        ""
+    );
+    var saveBgId = preferredWebBackgroundId(
+      accountDefaultBackgroundId() ||
+        (selectedBackgroundId || "").trim() ||
+        (mediaRec && mediaRec.backgroundID) ||
+        ""
+    );
+    payload.library = {
+      categoryId: ctx.cat.id,
+      voiceID: saveVoiceId,
+      backgroundID: saveBgId,
+    };
     generationMessage("", "");
     showScriptWorkOverlay({
       title: "Generating your script...",
-      detail: "Long scripts can take up to 5 minutes.",
+      detail: "You can leave this page or lock your phone. The script will be in My Library when it is ready.",
     });
-    postGenerateScriptRequest(payload)
-      .then(function (json) {
-        if (!json.content) throw new Error("Empty script response.");
-        var title = uniqueScriptTitle(ctx.cat.name + " Script");
-        var newScriptId = db.collection("users").doc(currentUser.uid).collection("scripts").doc().id;
-        var mediaRec = recommendedMediaForCategory(ctx.cat.id, ctx.tone);
-        var saveVoiceId = preferredWebVoiceId(
-          accountDefaultVoiceId() ||
-            (selectedVoiceId || "").trim() ||
-            (mediaRec && mediaRec.voiceID) ||
-            ""
+    postScriptJob(payload)
+      .then(function (jobId) {
+        return waitForScriptJob(jobId);
+      })
+      .then(function (data) {
+        if (!data.content) throw new Error("Empty script response.");
+        return applyCompletedScriptJob(data);
+      })
+      .then(function (entry) {
+        if (!entry) throw new Error("Empty script response.");
+        generationMessage("Generated and saved as \"" + entry.title + "\".", "success");
+        homeClarifyFlow = null;
+        homeDeepenState = null;
+        listenModeForCurrentAnswers = null;
+        var q1El = document.getElementById("gen-q1");
+        var q2El = document.getElementById("gen-q2");
+        if (q1El) q1El.value = "";
+        if (q2El) q2El.value = "";
+        seedInlineScriptDraft(entry.id, entry.title, entry.text);
+        setMessage(
+          isWebFreeTier()
+            ? "Saved on this device — Free samples stay local (not synced). Pick a voice and generate audio."
+            : "Saved to My Library — edit the title or script below.",
+          "success"
         );
-        var saveBgId = preferredWebBackgroundId(
-          accountDefaultBackgroundId() ||
-            (selectedBackgroundId || "").trim() ||
-            (mediaRec && mediaRec.backgroundID) ||
-            ""
-        );
-        var scriptText = String(json.content).trim();
-        var now = firebase.firestore.Timestamp.now();
-        var entry = {
-          id: newScriptId,
-          title: title,
-          text: scriptText,
-          audioURL: "",
-          voiceID: saveVoiceId,
-          backgroundID: saveBgId,
-          categoryID: ctx.cat.id,
-          createdAt: now,
-          updatedAt: null,
-          audioCreatedAt: null,
-          audioContentHash: "",
-          audioVoiceID: "",
-          audioBackgroundID: "",
-        };
-
-        function afterSaved() {
-          generationMessage("Generated and saved as \"" + title + "\".", "success");
-          homeClarifyFlow = null;
-          homeDeepenState = null;
-          listenModeForCurrentAnswers = null;
-          var q1El = document.getElementById("gen-q1");
-          var q2El = document.getElementById("gen-q2");
-          if (q1El) q1El.value = "";
-          if (q2El) q2El.value = "";
-          upsertCurrentScript(entry);
-          seedInlineScriptDraft(newScriptId, title, scriptText);
-          setMessage(
-            isWebFreeTier()
-              ? "Saved on this device — Free samples stay local (not synced). Pick a voice and generate audio."
-              : "Saved to My Library — edit the title or script below.",
-            "success"
-          );
-          setHomeFlowStep("landing", ctx.displayName || "");
-          openInlineScriptEditorForScript(newScriptId, true);
-        }
-
-        // Free: device-local only. Taste counters live in shared meta/usage (server).
-        if (isWebFreeTier()) {
-          upsertFreeLocalScript(currentUser.uid, {
-            id: entry.id,
-            title: entry.title,
-            text: entry.text,
-            audioURL: "",
-            voiceID: entry.voiceID,
-            backgroundID: entry.backgroundID,
-            categoryID: entry.categoryID,
-            createdAt: entry.createdAt && entry.createdAt.toDate ? entry.createdAt.toDate().toISOString() : new Date().toISOString(),
-            updatedAt: null,
-            audioCreatedAt: null,
-          });
-          afterSaved();
-          return;
-        }
-
-        return scriptCollection(currentUser.uid)
-          .doc(newScriptId)
-          .set({
-            title: title,
-            text: scriptText,
-            createdAt: now,
-            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            audioURL: "",
-            backgroundID: saveBgId,
-            voiceID: saveVoiceId,
-            audioCreatedAt: null,
-            categoryID: ctx.cat.id,
-          })
-          .then(afterSaved);
+        setHomeFlowStep("landing", ctx.displayName || "");
+        openInlineScriptEditorForScript(entry.id, true);
       })
       .catch(function (e) {
         var msg = e.message || "Could not generate script.";
@@ -15258,7 +15393,7 @@
         '  <p class="app-muted" style="margin:0 0 0.35rem;">' +
         escapeHtml(cat.name) +
         "</p>" +
-        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.88rem;">This shapes the questions and the script — still spoken in the present. Choose before, during, or after.</p>' +
+        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.88rem;">When will you press play? We\'ll ask about that moment next.</p>' +
         '  <div class="home-listen-mode-list" role="listbox" aria-label="When you\'ll listen">' +
         LISTEN_MODE_IDS.map(function (mode) {
           var selected = selectedListenMode === mode;
@@ -16819,7 +16954,13 @@
     scriptWorkshopIsPremadeEditor = false;
     scriptWorkshopPremadeId = null;
     listenMatchDidSeed = false;
+    listenMatchSheetOpen = false;
     stopListenMixPreview();
+    var mixSheet = document.getElementById("listen-match-sheet");
+    if (mixSheet) {
+      mixSheet.hidden = true;
+      mixSheet.setAttribute("aria-hidden", "true");
+    }
     var backdrop = document.getElementById("script-workshop-backdrop");
     if (backdrop) {
       backdrop.hidden = true;
@@ -17029,8 +17170,10 @@
     } catch (_cloneNudgeErr) {}
 
     body.innerHTML =
-      listenMatchSetupHtml(script) +
-      cloneNudgeHtml +
+      '<label class="script-inline-field-label" for="script-workshop-title">Title</label>' +
+      '<input type="text" id="script-workshop-title" class="script-workshop-title-input" maxlength="120" value="' +
+      escapeHtml(scriptWorkshopDraft.title || "") +
+      '">' +
       '<div class="script-workshop-media-row">' +
       '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-voice">Voice: ' +
       escapeHtml(workshopVoiceLabelFromDraft(scriptWorkshopDraft)) +
@@ -17039,10 +17182,11 @@
       escapeHtml(workshopBackgroundLabelFromDraft(scriptWorkshopDraft)) +
       "</button>" +
       "</div>" +
-      '<label class="script-inline-field-label" for="script-workshop-title">Title</label>' +
-      '<input type="text" id="script-workshop-title" class="script-workshop-title-input" maxlength="120" value="' +
-      escapeHtml(scriptWorkshopDraft.title || "") +
-      '">' +
+      '<button type="button" class="listen-match-open" id="script-workshop-hear-mixes">' +
+      "<span>Hear suggested mixes</span>" +
+      '<span class="listen-match-open-chevron" aria-hidden="true">›</span>' +
+      "</button>" +
+      cloneNudgeHtml +
       '<div class="script-workshop-toolbar">' +
       formatToggleHtml +
       '<button type="button" class="app-btn app-btn-secondary" id="script-workshop-ai-edit">✨ Edit with AI</button>' +
@@ -17083,6 +17227,7 @@
         renderScriptWorkshop();
       };
     }
+    syncListenMatchSheet(script);
     bindListenMatchSetup(script);
     document.getElementById("script-workshop-voice").onclick = function () {
       stopListenMixPreview();
@@ -22253,12 +22398,16 @@
     ownedScripts = [];
     scriptsSnapshotReceived = false;
     if (isWebFreeTier()) {
-      ownedScripts = loadFreeLocalScripts(uid);
-      scriptsSnapshotReceived = true;
-      rebuildCurrentScriptsFromSources();
-      subscribeIncomingSharedScripts(uid);
+      reconcileCompletedScriptJobs().then(function () {
+        if (!currentUser || currentUser.uid !== uid) return;
+        ownedScripts = loadFreeLocalScripts(uid);
+        scriptsSnapshotReceived = true;
+        rebuildCurrentScriptsFromSources();
+        subscribeIncomingSharedScripts(uid);
+      });
       return;
     }
+    reconcileCompletedScriptJobs();
     scriptsUnsubscribe = scriptCollection(uid)
       .orderBy("createdAt", "desc")
       .onSnapshot(

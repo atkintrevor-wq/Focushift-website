@@ -2559,6 +2559,53 @@ html.fs-app[data-app-theme="light"] .script-card-voice-bg-readonly .script-card-
   gap: 0.5rem;
   margin-bottom: 0.85rem;
 }
+.listen-match-open {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin: 0.7rem 0 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border: none;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--accent, #2563eb);
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+  text-align: left;
+}
+.listen-match-open-chevron {
+  margin-left: auto;
+  opacity: 0.65;
+}
+#listen-match-sheet {
+  z-index: 13150;
+  align-items: flex-end;
+}
+#listen-match-sheet .listen-match-sheet-panel {
+  max-width: 560px;
+  max-height: min(86vh, 760px);
+  overflow: auto;
+}
+.listen-match-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: 0.35rem;
+}
+.listen-match-sheet-head h3 {
+  margin: 0;
+}
+.listen-match-library {
+  margin: 0 0 0.85rem;
+}
+.listen-match-library summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin-bottom: 0.65rem;
+}
 .listen-match {
   margin: 0 0 0.85rem;
 }
