@@ -2768,7 +2768,7 @@
   }
 
   function isListenMixPlaying(voiceID, backgroundID) {
-    return listenMixKey === voiceID + "|" + backgroundID && listenMixVoiceAudio && !listenMixVoiceAudio.paused;
+    return listenMixKey === voiceID + "|" + backgroundID;
   }
 
   function toggleListenMixPreview(voiceID, backgroundID) {
@@ -2791,7 +2791,7 @@
     listenMixVoiceAudio = voiceAudio;
     listenMixKey = key;
     voiceAudio.addEventListener("ended", function () {
-      if (listenMixKey === key) stopListenMixPreview();
+      if (listenMixKey === key && !listenMixBedAudio) stopListenMixPreview();
     });
     function startVoice() {
       if (listenMixKey !== key || listenMixVoiceAudio !== voiceAudio) return;
@@ -2799,6 +2799,7 @@
         .play()
         .then(function () {
           if (listenMixKey !== key) return;
+          if (listenMixTimerId) clearTimeout(listenMixTimerId);
           listenMixTimerId = setTimeout(function () {
             if (listenMixKey === key) stopListenMixPreview();
           }, 10000);
@@ -2811,16 +2812,33 @@
     var bedUrl = listenMatchBedUrl(backgroundID);
     if (bedUrl) {
       var bedAudio = new Audio(bedUrl);
+      var leadStarted = false;
       bedAudio.loop = true;
-      bedAudio.volume = 0.28;
+      bedAudio.volume = 0.6;
       listenMixBedAudio = bedAudio;
-      bedAudio
-        .play()
-        .then(startVoice)
-        .catch(function () {
-          if (listenMixBedAudio === bedAudio) listenMixBedAudio = null;
+      function beginLeadIn() {
+        if (leadStarted || listenMixKey !== key || listenMixBedAudio !== bedAudio) return;
+        leadStarted = true;
+        if (listenMixTimerId) clearTimeout(listenMixTimerId);
+        listenMixTimerId = setTimeout(function () {
+          if (listenMixKey !== key || listenMixBedAudio !== bedAudio) return;
+          bedAudio.volume = 0.4;
           startVoice();
-        });
+        }, 2000);
+        refreshListenMatchPlayingState();
+      }
+      bedAudio.addEventListener("playing", beginLeadIn);
+      var bedWaitId = setTimeout(function () {
+        if (!leadStarted && listenMixKey === key) beginLeadIn();
+      }, 4000);
+      bedAudio.play().catch(function () {
+        clearTimeout(bedWaitId);
+        if (listenMixBedAudio === bedAudio) listenMixBedAudio = null;
+        startVoice();
+      });
+      bedAudio.addEventListener("playing", function () {
+        clearTimeout(bedWaitId);
+      });
     } else {
       startVoice();
     }
