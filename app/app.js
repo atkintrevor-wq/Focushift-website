@@ -226,15 +226,6 @@
     activeAudioGainNode = null;
   }
 
-  function resumePlaybackAudioContext() {
-    if (!playbackAudioContext) return Promise.resolve();
-    if (playbackAudioContext.state === "running") return Promise.resolve();
-    try {
-      return playbackAudioContext.resume().catch(function () {});
-    } catch (_e) {
-      return Promise.resolve();
-    }
-  }
 
   /** Route through Web Audio only when paid tier needs volume above 100% at load time. */
   function ensureActiveAudioWebAudio(audioEl) {
@@ -2188,45 +2179,6 @@
     return "What are you still carrying now that it's done? (optional)";
   }
 
-  function surveyIntakeContextForCategory(catId, listenMode) {
-    var m = normalizeListenMode(listenMode);
-    if (catId === "sleep-rest") {
-      if (m === "getting-ready") {
-        return "What's your setup as you start to wind down? (e.g., on the couch, lights dim, phone away)";
-      }
-      if (m === "in-the-moment") {
-        return "What's the room like as you rest? (e.g., in bed, lights off, fan on, eyes closed)";
-      }
-      return "What's the morning like as you wake? (e.g., still in bed, blinds cracked, phone not yet)";
-    }
-    if (m === "getting-ready") {
-      return "Where are you, and what's about to happen? (e.g., in the car before a meeting, kitchen before a meal)";
-    }
-    if (m === "in-the-moment") {
-      return "Where are you and what are you doing while this plays? (e.g., at my desk, on a walk, in the sauna)";
-    }
-    return "Where are you now that it's done? (e.g., walking to the car, on the couch, closing out the day)";
-  }
-
-  function surveyIntakeFeelingForCategory(catId, listenMode) {
-    var m = normalizeListenMode(listenMode);
-    if (catId === "sleep-rest") {
-      if (m === "getting-ready") {
-        return "How do you want to feel as rest starts? (e.g., shoulders dropping, breath slower)";
-      }
-      if (m === "in-the-moment") {
-        return "How do you want to feel as you settle into rest? (e.g., heavy and safe, mind quiet, body soft)";
-      }
-      return "How do you want to feel as you wake? (e.g., unhurried, light, no jolt)";
-    }
-    if (m === "getting-ready") {
-      return "How do you want to feel walking into it? (e.g., steady in my chest, clear, ready)";
-    }
-    if (m === "in-the-moment") {
-      return "How do you want to feel in your body right now? (e.g., grounded, strong, calm and clear)";
-    }
-    return "How do you want to feel as you settle? (e.g., complete, quiet pride, body soft)";
-  }
 
   function surveyIntakeObstaclePlaceholder(catId, listenMode) {
     if (catId === "sleep-rest") {
@@ -2237,29 +2189,6 @@
     return "Optional";
   }
 
-  function surveyIntakeContextPlaceholder(catId, listenMode) {
-    var m = normalizeListenMode(listenMode);
-    if (catId === "sleep-rest") {
-      if (m === "getting-ready") return "e.g. On the couch, lights dim, phone in the other room";
-      if (m === "in-the-moment") return "e.g. In bed, lights off, fan on, eyes closed";
-      return "e.g. Still in bed, blinds cracked, no alarm panic";
-    }
-    if (m === "getting-ready") return "e.g. In the car before I walk in";
-    if (m === "in-the-moment") return "e.g. At my desk, this call, this set";
-    return "e.g. Walking to the car after";
-  }
-
-  function surveyIntakeFeelingPlaceholder(catId, listenMode) {
-    var m = normalizeListenMode(listenMode);
-    if (catId === "sleep-rest") {
-      if (m === "getting-ready") return "e.g. Shoulders dropping, breath slower";
-      if (m === "in-the-moment") return "e.g. Soft, heavy, safe — mind quiet";
-      return "e.g. Unhurried, light, no jolt";
-    }
-    if (m === "getting-ready") return "e.g. Steady in my chest, ready to walk in";
-    if (m === "in-the-moment") return "e.g. Calm and clear in my chest";
-    return "e.g. Complete, quiet, still myself";
-  }
 
   function intakeContextMissingMessage(listenMode) {
     var m = normalizeListenMode(listenMode);
@@ -5284,45 +5213,6 @@
     redirectLogin();
   }
 
-  function renderNonAdmin(email, displayName) {
-    hasVoiceCloneConsent = false;
-    stopVoiceRecording();
-    stopVoiceRecorderStream();
-    setVoiceRecordingGuideVisible(false);
-    closeVoiceProcessingModal();
-    closeVoiceAdjustModal();
-    closeVoiceCompleteModal();
-    closeVoiceMicHelpModal();
-    stopUsageDocListener();
-    teardownScriptsListener();
-    teardownPlaylistsListener();
-    teardownPremadeListener();
-    teardownBackgroundCatalogListener();
-    teardownCatalogCategoriesListener();
-    teardownClonedVoicesListener();
-    teardownListeningListener();
-    teardownUserProfileListener();
-    if (typeof userBackgroundsUnsubscribe === "function") {
-      userBackgroundsUnsubscribe();
-      userBackgroundsUnsubscribe = null;
-    }
-    currentCloudUserBackgrounds = [];
-    root.innerHTML =
-      "<h1>You're signed in</h1>" +
-      "<p class=\"app-muted\">Hi " +
-      escapeHtml(displayName || email || "there") +
-      ". Full Focus Shift tools on the web are <strong>coming soon</strong>. For now, use the iOS app for playlists, audio generation, and your full library.</p>" +
-      (email && email.indexOf("@privaterelay.appleid.com") !== -1
-        ? '<p class="app-muted">This looks like a <strong>new</strong> Apple sign-in (Hide My Email). If you already have an account with email on iOS or web, sign out and sign in with that email instead.</p>'
-        : "") +
-      "<p class=\"app-muted\">Signed in as <strong>" +
-      escapeHtml(email || "") +
-      "</strong></p>" +
-      '<p style="margin-top:2rem"><button type="button" class="auth-btn auth-btn-primary" id="btn-out">Sign out</button></p>';
-    document.getElementById("btn-out").addEventListener("click", function () {
-      auth.signOut().then(redirectLogin);
-    });
-  }
 
   function screenHelpIconSvg() {
     return (
@@ -5395,18 +5285,6 @@
     });
   }
 
-  function filteredPremadesForDisplay(premades) {
-    var tierFiltered = filterPremadesByCatalogAccess(premades);
-    var q = normalizeSectionSearchQuery(sectionSearchQuery.library);
-    if (!q || activeLibraryTab !== "app-library") return tierFiltered;
-    return tierFiltered.filter(function (p) {
-      return (
-        textMatchesSectionSearch(p.title, q) ||
-        textMatchesSectionSearch(p.scriptText, q) ||
-        textMatchesSectionSearch(p.description, q)
-      );
-    });
-  }
 
   function filteredPlaylistsForDisplay(playlists) {
     var q = normalizeSectionSearchQuery(sectionSearchQuery.playlists);
@@ -5461,13 +5339,6 @@
     );
   }
 
-  function filteredBackgroundsForDisplay(backgrounds) {
-    var q = normalizeSectionSearchQuery(sectionSearchQuery.audio);
-    if (!q) return backgrounds;
-    return backgrounds.filter(function (b) {
-      return textMatchesSectionSearch(b.name, q);
-    });
-  }
 
   function syncSectionSearchUi(section) {
     var wrap = document.getElementById("section-search-wrap-" + section);
@@ -9307,21 +9178,6 @@
     return ((title && String(title).trim()) || "").toLowerCase();
   }
 
-  function mergeCloudAndStaticPremades(cloudPremade) {
-    var cloud = Array.isArray(cloudPremade) ? cloudPremade.slice() : [];
-    var staticRows = buildStaticPremadeFallbackList();
-    var seen = {};
-    cloud.forEach(function (p) {
-      var key = ((p.categoryID || "").trim() || "") + "::" + normalizePremadeTitleKey(p.title);
-      seen[key] = true;
-    });
-    staticRows.forEach(function (p) {
-      var key = ((p.categoryID || "").trim() || "") + "::" + normalizePremadeTitleKey(p.title);
-      if (seen[key]) return;
-      cloud.push(p);
-    });
-    return cloud;
-  }
 
   /** App Library browse: Free = built-in static premades; Paid = cloud `premadeAudio` only. */
   function premadesForAppLibraryBrowse(cloudPremade) {
@@ -9979,48 +9835,6 @@
     return "mp3";
   }
 
-  function mimeTypeForAudioExtension(ext) {
-    if (ext === "wav") return "audio/wav";
-    if (ext === "m4a") return "audio/mp4";
-    return "audio/mpeg";
-  }
-
-  function fetchPremadePublishAudio(audioURL, script) {
-    var paths = scriptAudioStoragePathCandidates(audioURL, script);
-    function tryStoragePath(index) {
-      if (index >= paths.length) {
-        return fetchArrayBufferFromUrl(audioURL, "script audio").then(function (ab) {
-          return {
-            bytes: new Uint8Array(ab),
-            ext: extensionFromStoragePath("", audioURL),
-          };
-        });
-      }
-      var path = paths[index];
-      if (!path || typeof firebase.storage !== "function" || !currentUser) {
-        return tryStoragePath(index + 1);
-      }
-      var ref = firebase.storage().ref(path);
-      if (!ref || typeof ref.getBytes !== "function") {
-        return tryStoragePath(index + 1);
-      }
-      return ref
-        .getBytes(100 * 1024 * 1024)
-        .then(function (bytes) {
-          if (!bytes || !bytes.byteLength) {
-            throw new Error("Script audio download was empty.");
-          }
-          return {
-            bytes: bytes,
-            ext: extensionFromStoragePath(path, audioURL),
-          };
-        })
-        .catch(function () {
-          return tryStoragePath(index + 1);
-        });
-    }
-    return tryStoragePath(0);
-  }
 
   function fetchArrayBufferFromUrl(url, contextLabel) {
     function viaHttp() {
@@ -11315,13 +11129,6 @@
       });
   }
 
-  function handleVoiceRecordedBlob(blob, mimeType) {
-    var extension = (mimeType || "").indexOf("ogg") >= 0 ? "ogg" : "webm";
-    var file = new File([blob], "recorded-voice-sample." + extension, {
-      type: mimeType || "audio/webm",
-    });
-    uploadVoiceSample(file, "clone");
-  }
 
   function handleVoiceFileSelected(ev) {
     var input = ev && ev.target;
@@ -12538,41 +12345,6 @@
     }).length;
   }
 
-  function publishedByMeCount() {
-    if (!currentUser) return 0;
-    return currentPremade.filter(function (p) {
-      return p.createdByUID && p.createdByUID === currentUser.uid;
-    }).length;
-  }
-
-  function mostRecentScriptUpdateLabel() {
-    if (!currentScripts.length) return "No scripts yet";
-    var latest = currentScripts.reduce(function (best, s) {
-      var candidate = s.updatedAt || s.createdAt || null;
-      var bestTs = best && (best.updatedAt || best.createdAt || null);
-      var cMillis =
-        candidate && typeof candidate.toMillis === "function" ? candidate.toMillis() : 0;
-      var bMillis =
-        bestTs && typeof bestTs.toMillis === "function" ? bestTs.toMillis() : 0;
-      return cMillis > bMillis ? s : best;
-    }, null);
-    var ts = latest && (latest.updatedAt || latest.createdAt || null);
-    return "Last script update: " + formatDate(ts);
-  }
-
-  function resolvePlanLabel() {
-    if (!currentUserProfile) return "Plan not set";
-    var candidates = [
-      currentUserProfile.subscriptionTier,
-      currentUserProfile.plan,
-      currentUserProfile.tier,
-    ];
-    for (var i = 0; i < candidates.length; i += 1) {
-      var raw = (candidates[i] || "").toString().trim();
-      if (raw) return raw;
-    }
-    return "Plan not set";
-  }
 
   function formatCount(v) {
     var n = Number(v);
@@ -12594,25 +12366,6 @@
     return n.toFixed(precision) + " " + units[i];
   }
 
-  function profileFirstNumber(keys) {
-    if (!currentUserProfile || !keys || !keys.length) return null;
-    for (var i = 0; i < keys.length; i += 1) {
-      var val = currentUserProfile[keys[i]];
-      if (val === null || typeof val === "undefined") continue;
-      var n = Number(val);
-      if (isFinite(n) && n >= 0) return n;
-    }
-    return null;
-  }
-
-  function profileFirstArrayLength(keys) {
-    if (!currentUserProfile || !keys || !keys.length) return null;
-    for (var i = 0; i < keys.length; i += 1) {
-      var val = currentUserProfile[keys[i]];
-      if (Array.isArray(val)) return val.length;
-    }
-    return null;
-  }
 
   function importedAudioCount() {
     return currentScripts.filter(function (s) {
@@ -15989,13 +15742,6 @@
     return !!(getFrozenAudioVoiceId(script) || getFrozenAudioBackgroundId(script));
   }
 
-  function scriptVoiceBackgroundDrifted(script) {
-    if (!script || !(script.audioURL && String(script.audioURL).trim())) return false;
-    if (!scriptHasFrozenAudioSettings(script)) return false;
-    var av = getFrozenAudioVoiceId(script);
-    var ab = getFrozenAudioBackgroundId(script);
-    return effectiveVoiceIdForScript(script) !== av || effectiveBackgroundIdForScript(script) !== ab;
-  }
 
   function scriptDigestSourceFromScript(script) {
     return {
@@ -16056,7 +15802,6 @@
     if (/\[short pause\]|\[long pause\]|\[pause\]|\[emphasized\]/.test(text)) return true;
     return /\[[^\]]+\]/.test(text);
   }
-
 
 
   function fallbackHashHex(raw) {
@@ -16124,10 +15869,6 @@
   }
 
   /** @deprecated Use scriptNeedsAudioRegeneration — kept for call sites. */
-  function scriptAudioSettingsDrifted(script, contentHashHex) {
-    if (!script || !(script.audioURL && String(script.audioURL).trim())) return false;
-    return scriptNeedsAudioRegeneration(script, contentHashHex);
-  }
 
   function getStoredGeneratedHashPremade(premadeId) {
     try {
@@ -18514,17 +18255,6 @@
     };
   }
 
-  function inlineScriptHasUnsavedChanges(script) {
-    if (!script || !script.id || inlineScriptEditorOpenById[script.id] !== true) return false;
-    var draft = inlineScriptDraftForScript(script);
-    if (!draft) return false;
-    var savedTitle = String(script.title || "").trim();
-    var savedText = String(script.text || "").trim();
-    return (
-      String(draft.title || "").trim() !== savedTitle ||
-      String(draft.text || "").trim() !== savedText
-    );
-  }
 
   function getInlineScriptEditorText(scriptId) {
     if (
@@ -18832,77 +18562,6 @@
     });
   }
 
-  function saveInlineScript(script) {
-    if (!currentUser || !script || !script.id) return;
-    if (scriptIsSharedListenOnly(script)) {
-      setMessage("Shared audio is listen-only and cannot be edited.", "info");
-      return;
-    }
-    if (isWebFreeReadOnlyLibraryScript(script)) {
-      promptWebPaidUpgrade(WEB_PAID_FEATURE_COPY.editScript);
-      return;
-    }
-    var list = document.getElementById("scripts-list");
-    if (!list) return;
-    var card = null;
-    var cards = list.querySelectorAll(".library-script-card");
-    for (var ci = 0; ci < cards.length; ci++) {
-      if (cards[ci].getAttribute("data-script-id") === script.id) {
-        card = cards[ci];
-        break;
-      }
-    }
-    if (!card) return;
-    var titleEl = card.querySelector(".script-inline-title-input");
-    var ta = card.querySelector(".script-inline-textarea");
-    var title = (titleEl && titleEl.value ? titleEl.value : "").trim();
-    var text;
-    if (ta) {
-      text = (ta.value ? ta.value : "").trim();
-    } else {
-      text = ((script.text && String(script.text)) || "").trim();
-    }
-    if (!title) {
-      setMessage("Title is required.", "error");
-      return;
-    }
-    if (!text) {
-      setMessage(
-        "Script text is required. Turn on Show formatting to edit tags and spoken text.",
-        "error"
-      );
-      return;
-    }
-
-    setMessage("Saving…", "");
-    var uid = currentUser.uid;
-    scriptCollection(uid)
-      .doc(script.id)
-      .set(
-        {
-          title: title,
-          text: text,
-          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      )
-      .then(function () {
-        var ix = currentScripts.findIndex(function (s) {
-          return s.id === script.id;
-        });
-        if (ix >= 0) {
-          currentScripts[ix].title = title;
-          currentScripts[ix].text = text;
-        }
-        delete inlineScriptEditorOpenById[script.id];
-        clearInlineScriptDraft(script.id);
-        setMessage("Script updated.", "success");
-        renderScripts(currentScripts);
-      })
-      .catch(function (e) {
-        setMessage(e.message || "Could not update script.", "error");
-      });
-  }
 
   function bindScriptCardActions(scripts) {
     var list = document.getElementById("scripts-list");
@@ -19603,39 +19262,6 @@
       });
   }
 
-  function openEditor(script) {
-    isEditing = !!script;
-    editingScriptId = script ? script.id : null;
-    var editor = document.getElementById("script-editor");
-    if (!editor) return;
-    editor.innerHTML =
-      '<form id="script-form" class="app-form app-card">' +
-      "  <h2 style=\"font-size:1.1rem;margin-top:0;\">" +
-      (isEditing ? "Edit script" : "Create script") +
-      "</h2>" +
-      "  <label for=\"script-title\">Title</label>" +
-      '  <input id="script-title" type="text" maxlength="120" required value="' +
-      escapeHtml((script && script.title) || "") +
-      '">' +
-      "  <label for=\"script-text\">Script text</label>" +
-      '  <textarea id="script-text" required>' +
-      escapeHtml((script && script.text) || "") +
-      "</textarea>" +
-      '  <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">' +
-      '    <button type="submit" class="app-btn">Save</button>' +
-      '    <button type="button" class="app-btn" id="btn-cancel-edit">Cancel</button>' +
-      "  </div>" +
-      "</form>";
-
-    document.getElementById("btn-cancel-edit").addEventListener("click", function () {
-      closeEditor();
-    });
-
-    document.getElementById("script-form").addEventListener("submit", function (ev) {
-      ev.preventDefault();
-      saveScriptFromEditor(script);
-    });
-  }
 
   function closeEditor() {
     isEditing = false;
@@ -21625,14 +21251,6 @@
     return published || selectedBackgroundId || "";
   }
 
-  function premadeHasVoiceOrBackgroundDrift(premade) {
-    var currentVoice = String(resolvePremadeVoiceSelection(premade) || "").trim();
-    var currentBg = String(resolvePremadeBackgroundSelection(premade) || "").trim();
-    return (
-      currentVoice !== premadePublishedVoiceId(premade) ||
-      currentBg !== premadePublishedBackgroundId(premade)
-    );
-  }
 
   function savePremadeToMyLibrary(premade) {
     if (!currentUser) return;
