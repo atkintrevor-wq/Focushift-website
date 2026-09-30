@@ -68,6 +68,10 @@
   var generationOverlayStartedAt = 0;
   var scriptWorkOverlayTimerId = null;
   var scriptWorkOverlayStartedAt = 0;
+  var scriptWorkInFlight = false;
+  var scriptWorkBackgrounded = false;
+  /** { kind: "script"|"audio", scriptId } shown on the top badge after background work finishes. */
+  var pendingReadyWork = null;
   var activeAudio = null;
   /** Web Audio gain for paid-tier volume boost above 100%. */
   var playbackAudioContext = null;
@@ -5925,7 +5929,7 @@
       '      <span class="audio-generation-overlay-title">Generating audio</span>' +
       '      <button type="button" class="audio-generation-overlay-dismiss" id="audio-generation-overlay-dismiss" aria-label="Hide panel (generation continues)">\u00d7</button>' +
       "    </div>" +
-      '    <p class="audio-generation-overlay-detail">Long scripts can take up to 5 minutes. You can keep using the app while we work.</p>' +
+      '    <p class="audio-generation-overlay-detail">Longer scripts can take up to 5 minutes. You can keep using the app while we work.</p>' +
       '    <p id="audio-generation-overlay-script" class="audio-generation-overlay-script"></p>' +
       '    <p id="audio-generation-overlay-elapsed" class="audio-generation-overlay-elapsed">Elapsed: 0:00</p>' +
       "  </div>" +
@@ -6895,6 +6899,26 @@
         if (ev.key === "Enter") {
           ev.preventDefault();
           confirmScriptWorkshopSaveAs();
+        }
+      });
+    }
+    var generationBadge = document.getElementById("app-generation-badge-wrap");
+    if (generationBadge) {
+      generationBadge.style.cursor = "pointer";
+      generationBadge.addEventListener("click", function () {
+        if (activeBackgroundAudioTask) return;
+        if (scriptWorkInFlight && scriptWorkBackgrounded) return;
+        if (!pendingReadyWork) return;
+        var work = pendingReadyWork;
+        pendingReadyWork = null;
+        updateBackgroundAudioBadge();
+        if (work.kind === "script") {
+          openInlineScriptEditorForScript(work.scriptId, true);
+        } else {
+          activeLibraryTab = "my-library";
+          setAdminTab("library");
+          setScriptControlsExpanded(work.scriptId, true);
+          renderScripts(currentScripts);
         }
       });
     }
@@ -14770,7 +14794,7 @@
     generationMessage("", "");
     showScriptWorkOverlay({
       title: "Generating your script...",
-      detail: "You can leave this page or lock your phone. The script will be in My Library when it is ready.",
+      detail: "Could take up to 3 minutes.",
     });
     postScriptJob(payload)
       .then(function (jobId) {
@@ -14798,7 +14822,14 @@
           "success"
         );
         setHomeFlowStep("landing", ctx.displayName || "");
-        openInlineScriptEditorForScript(entry.id, true);
+        if (scriptWorkBackgrounded) {
+          pendingReadyWork = { kind: "script", scriptId: entry.id };
+          scriptWorkBackgrounded = false;
+          scriptWorkInFlight = false;
+          updateBackgroundAudioBadge();
+        } else {
+          openInlineScriptEditorForScript(entry.id, true);
+        }
       })
       .catch(function (e) {
         var msg = e.message || "Could not generate script.";
@@ -14816,6 +14847,7 @@
     showScriptWorkOverlay({
       title: "Generating follow-up " + (f.followUpStep + 1) + " of " + f.maxClarify + "…",
       detail: "This usually takes a moment.",
+      allowBackground: false,
     });
     var ctx = {
       displayName: f.displayName,
@@ -16586,12 +16618,51 @@
   function updateBackgroundAudioBadge() {
     var wrap = document.getElementById("app-generation-badge-wrap");
     if (!wrap) return;
+    var spinner = wrap.querySelector(".app-generation-badge-spinner");
+    var writing = scriptWorkInFlight && scriptWorkBackgrounded;
     var active = !!activeBackgroundAudioTask;
-    wrap.hidden = !active;
-    if (!active) {
+    if (!active && !writing && !pendingReadyWork) {
+      wrap.hidden = true;
+      if (spinner) spinner.hidden = false;
       if (backgroundAudioBadgeTimerId) {
         clearInterval(backgroundAudioBadgeTimerId);
         backgroundAudioBadgeTimerId = null;
+      }
+      return;
+    }
+    wrap.hidden = false;
+    if (!active && !writing && pendingReadyWork) {
+      if (spinner) spinner.hidden = true;
+      var readyLabel = document.getElementById("app-generation-badge-label");
+      var readyElapsed = document.getElementById("app-generation-badge-elapsed");
+      var readyQueue = document.getElementById("app-generation-badge-queue");
+      if (readyLabel) {
+        readyLabel.textContent = pendingReadyWork.kind === "audio" ? "Audio ready" : "Script ready";
+      }
+      if (readyElapsed) readyElapsed.hidden = true;
+      if (readyQueue) readyQueue.hidden = true;
+      if (backgroundAudioBadgeTimerId) {
+        clearInterval(backgroundAudioBadgeTimerId);
+        backgroundAudioBadgeTimerId = null;
+      }
+      return;
+    }
+    if (spinner) spinner.hidden = false;
+    var elapsedNode = document.getElementById("app-generation-badge-elapsed");
+    if (elapsedNode) elapsedNode.hidden = false;
+    if (writing && !active) {
+      var writeLabel = document.getElementById("app-generation-badge-label");
+      var writeQueue = document.getElementById("app-generation-badge-queue");
+      if (writeLabel) writeLabel.textContent = "Writing";
+      if (writeQueue) writeQueue.hidden = true;
+      if (elapsedNode && scriptWorkOverlayStartedAt) {
+        var writeSecs = Math.max(0, Math.floor((Date.now() - scriptWorkOverlayStartedAt) / 1000));
+        elapsedNode.textContent = formatGenerationElapsed(writeSecs);
+      }
+      if (!backgroundAudioBadgeTimerId) {
+        backgroundAudioBadgeTimerId = setInterval(function () {
+          updateBackgroundAudioBadge();
+        }, 1000);
       }
       return;
     }
@@ -16678,7 +16749,7 @@
     if (showStartingBanner) {
       showAppBanner(
         "Generating audio",
-        "Long scripts can take up to 5 minutes. You can keep using the app.",
+        "Longer scripts can take up to 5 minutes. You can keep using the app.",
         "info",
         { duration: 5500 }
       );
@@ -16703,6 +16774,7 @@
     setScriptBusy(script.id, false);
     activeBackgroundAudioTask = null;
     if (success) {
+      pendingReadyWork = { kind: "audio", scriptId: script.id };
       showAppBanner("Audio Generated", "Your audio was generated and saved.", "success", { duration: 4500 });
     } else if (error) {
       var msg = (error && error.message) || "Audio generation failed.";
@@ -17517,9 +17589,16 @@
       '<div class="script-work-overlay-card" role="status">' +
       '<div class="script-work-overlay-spinner" aria-hidden="true"></div>' +
       '<p id="script-work-overlay-title" class="script-work-overlay-title">Generating your script...</p>' +
-      '<p id="script-work-overlay-detail" class="script-work-overlay-detail">Long scripts can take up to 5 minutes.</p>' +
+      '<p id="script-work-overlay-detail" class="script-work-overlay-detail">Could take up to 3 minutes.</p>' +
       '<p id="script-work-overlay-elapsed" class="script-work-overlay-elapsed">0:00</p>' +
+      '<button type="button" id="script-work-overlay-continue" class="app-btn app-btn-primary" style="margin-top:0.85rem;">Continue in the app</button>' +
       "</div>";
+    var continueBtn = overlay.querySelector("#script-work-overlay-continue");
+    if (continueBtn) {
+      continueBtn.addEventListener("click", function () {
+        continueScriptWorkInApp();
+      });
+    }
     document.body.appendChild(overlay);
     return overlay;
   }
@@ -17536,8 +17615,11 @@
     options = options || {};
     var title = options.title || "Generating your script...";
     var detail =
-      options.detail != null ? options.detail : "Long scripts can take up to 5 minutes.";
+      options.detail != null ? options.detail : "Could take up to 3 minutes.";
     var showTimer = options.showTimer !== false;
+    var allowBackground = options.allowBackground !== false;
+    scriptWorkInFlight = true;
+    scriptWorkBackgrounded = false;
 
     var overlay = ensureScriptWorkOverlay();
     var titleEl = document.getElementById("script-work-overlay-title");
@@ -17552,6 +17634,8 @@
       elapsedEl.hidden = !showTimer;
       elapsedEl.textContent = "0:00";
     }
+    var continueBtn = document.getElementById("script-work-overlay-continue");
+    if (continueBtn) continueBtn.hidden = !allowBackground;
 
     scriptWorkOverlayStartedAt = Date.now();
     overlay.hidden = false;
@@ -17565,18 +17649,33 @@
     }
   }
 
-  function stopScriptWorkOverlay() {
-    if (scriptWorkOverlayTimerId) {
-      clearInterval(scriptWorkOverlayTimerId);
-      scriptWorkOverlayTimerId = null;
-    }
-    scriptWorkOverlayStartedAt = 0;
+  function continueScriptWorkInApp() {
+    if (!scriptWorkInFlight) return;
+    scriptWorkBackgrounded = true;
     var overlay = document.getElementById("script-work-overlay");
     if (overlay) {
       overlay.hidden = true;
       overlay.setAttribute("aria-hidden", "true");
     }
     document.body.classList.remove("script-work-overlay-open");
+    updateBackgroundAudioBadge();
+  }
+
+  function stopScriptWorkOverlay() {
+    if (scriptWorkOverlayTimerId) {
+      clearInterval(scriptWorkOverlayTimerId);
+      scriptWorkOverlayTimerId = null;
+    }
+    scriptWorkOverlayStartedAt = 0;
+    scriptWorkInFlight = false;
+    scriptWorkBackgrounded = false;
+    var overlay = document.getElementById("script-work-overlay");
+    if (overlay) {
+      overlay.hidden = true;
+      overlay.setAttribute("aria-hidden", "true");
+    }
+    document.body.classList.remove("script-work-overlay-open");
+    updateBackgroundAudioBadge();
   }
 
   function updateGenerationOverlayElapsed() {
@@ -18228,6 +18327,7 @@
     showScriptWorkOverlay({
       title: "Restoring your script…",
       detail: "Looking up your free generated script.",
+      allowBackground: false,
     });
     recoverLatestGeneratedScriptIntoLibrary()
       .then(function (scriptId) {
@@ -19430,6 +19530,7 @@
     showScriptWorkOverlay({
       title: "Creating script...",
       detail: "Saving to your library.",
+      allowBackground: false,
     });
     scriptCollection(currentUser.uid)
       .doc(docRef.id)
