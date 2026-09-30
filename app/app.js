@@ -1676,6 +1676,16 @@
   var selectedCreatePath = "full";
   var quickStartAnswers = ["", "", "", ""];
   var quickStartPageIndex = 0;
+  var quickStartIntention = "";
+  var quickStartAsksLength = false;
+  var quickStartLength = "Medium";
+  var quickStartBeliefs = [];
+  var quickStartFeelings = [];
+  var quickStartMoment = "";
+  var quickStartBeliefNote = "";
+  var quickStartFeelingNote = "";
+  var quickStartMomentNote = "";
+  var quickStartWhenChosen = false;
   /** Cached Daily Spark payload + playback blob URL (Starter/Creator). */
   var dailySparkState = {
     spark: null,
@@ -1898,6 +1908,80 @@
   function resetQuickStartAnswers() {
     quickStartAnswers = ["", "", "", ""];
     quickStartPageIndex = 0;
+    quickStartIntention = "";
+    quickStartBeliefs = [];
+    quickStartFeelings = [];
+    quickStartMoment = "";
+    quickStartBeliefNote = "";
+    quickStartFeelingNote = "";
+    quickStartMomentNote = "";
+    quickStartWhenChosen = false;
+  }
+
+  function isRepeatListen() {
+    return quickStartIntention === "repeat";
+  }
+
+  function quickStartScreens() {
+    if (typeof QuickStartChips === "undefined") return ["intention"];
+    return QuickStartChips.screens(quickStartIntention, quickStartAsksLength);
+  }
+
+  function phrasesWithNote(selected, note) {
+    var list = (selected || []).map(function (s) { return String(s || "").trim(); }).filter(Boolean);
+    var extra = String(note || "").trim();
+    if (extra && !list.some(function (s) { return s.toLowerCase() === extra.toLowerCase(); })) list.push(extra);
+    return list;
+  }
+
+  function quickStartMomentValue() {
+    var note = String(quickStartMomentNote || "").trim();
+    return note || String(quickStartMoment || "").trim();
+  }
+
+  function quickStartPhraseList() {
+    var list = [];
+    if (quickStartIntention === "moment") {
+      var moment = quickStartMomentValue();
+      if (moment) list.push(moment);
+    } else {
+      list = list.concat(phrasesWithNote(quickStartBeliefs, quickStartBeliefNote));
+    }
+    return list.concat(phrasesWithNote(quickStartFeelings, quickStartFeelingNote));
+  }
+
+  function toggleCapped(list, value, cap, note) {
+    var next = (list || []).slice();
+    var idx = next.findIndex(function (s) { return String(s).toLowerCase() === String(value).toLowerCase(); });
+    if (idx >= 0) {
+      next.splice(idx, 1);
+      return next;
+    }
+    var extra = String(note || "").trim();
+    var extraCounts = extra && !next.some(function (s) { return s.toLowerCase() === extra.toLowerCase(); });
+    if (next.length + (extraCounts ? 1 : 0) >= cap) return next;
+    next.push(value);
+    return next;
+  }
+
+  function quickStartScreenReady(screen) {
+    var chips = typeof QuickStartChips !== "undefined" ? QuickStartChips : null;
+    if (!chips) return false;
+    if (screen === "intention") return quickStartIntention === "repeat" || quickStartIntention === "moment";
+    if (screen === "length") return true;
+    if (screen === "when") return !!quickStartWhenChosen;
+    if (screen === "moment") return !!quickStartMomentValue();
+    if (screen === "beliefs") {
+      var cap = chips.beliefPickCount(quickStartLength);
+      var count = phrasesWithNote(quickStartBeliefs, quickStartBeliefNote).length;
+      return count >= 1 && quickStartBeliefs.length <= cap;
+    }
+    if (screen === "feelings") {
+      var feelCap = chips.feelingPickCount(quickStartLength);
+      var feelCount = phrasesWithNote(quickStartFeelings, quickStartFeelingNote).length;
+      return feelCount >= 1 && quickStartFeelings.length <= feelCap;
+    }
+    return false;
   }
 
   function listenModeHint(mode, categoryId) {
@@ -2235,10 +2319,16 @@
     "Next: a concrete scene for this listen — where they are and what's happening.",
     "One moment you already showed up, or how it feels in your body at your best.",
   ];
+  var REPEAT_CLARIFY_TURN_GOALS = [
+    "An example of where or when you want to feel that way — not a specific plan this week.",
+    "What that feeling is like when it’s there.",
+    "One more detail that helps the script stay with that feeling.",
+  ];
 
   function clarifyingTurnGoal(step) {
-    var idx = Math.max(0, Math.min(step, CLARIFY_TURN_GOALS.length - 1));
-    return CLARIFY_TURN_GOALS[idx];
+    var goals = isRepeatListen() ? REPEAT_CLARIFY_TURN_GOALS : CLARIFY_TURN_GOALS;
+    var idx = Math.max(0, Math.min(step, goals.length - 1));
+    return goals[idx];
   }
 
   var DEFAULT_TONE_BY_CATEGORY = {
@@ -13503,15 +13593,22 @@
       back.addEventListener("click", function () {
         setHomeFlowStep("path", displayName);
       });
-    } else if (homeFlowStep === "listen") {
+    } else if (homeFlowStep === "intention") {
       back.setAttribute("aria-label", "Back to categories");
       titleEl.hidden = false;
-      titleEl.textContent = "When you'll listen";
+      titleEl.textContent = "Create";
       back.addEventListener("click", function () {
         setHomeFlowStep("category", displayName);
       });
+    } else if (homeFlowStep === "listen") {
+      back.setAttribute("aria-label", "Back");
+      titleEl.hidden = false;
+      titleEl.textContent = "When you'll listen";
+      back.addEventListener("click", function () {
+        setHomeFlowStep(isQuickStartPath() ? "category" : "intention", displayName);
+      });
     } else if (homeFlowStep === "quickstart") {
-      back.setAttribute("aria-label", quickStartPageIndex > 0 ? "Previous question" : "Back to when you'll listen");
+      back.setAttribute("aria-label", quickStartPageIndex > 0 ? "Previous question" : "Back to categories");
       titleEl.hidden = false;
       titleEl.textContent = "Quick start";
       back.addEventListener("click", function () {
@@ -13520,10 +13617,10 @@
           renderHomeFlow(displayName);
           return;
         }
-        setHomeFlowStep("listen", displayName);
+        setHomeFlowStep("category", displayName);
       });
     } else if (homeFlowStep === "survey") {
-      back.setAttribute("aria-label", "Back to when you'll listen");
+      back.setAttribute("aria-label", "Back");
       titleEl.hidden = true;
       back.addEventListener("click", function () {
         if (isQuickStartPath()) {
@@ -13531,7 +13628,7 @@
           return;
         }
         syncHomeDeepenFromForm(displayName);
-        setHomeFlowStep("listen", displayName);
+        setHomeFlowStep(isRepeatListen() ? "intention" : "listen", displayName);
       });
     } else if (homeFlowStep === "clarify") {
       back.setAttribute("aria-label", "Back to questions");
@@ -14278,34 +14375,42 @@
     var answersMap = {};
     answersMap[cat.id] = [ctx.q1, ctx.q2];
     var intakeAnswers = {};
+    var repeat = isRepeatListen();
     if (ctx.intakeObstacle) intakeAnswers.obstacle = ctx.intakeObstacle;
-    if (ctx.intakeContext) intakeAnswers.context = ctx.intakeContext;
-    if (ctx.intakeFeeling) intakeAnswers.feeling = ctx.intakeFeeling;
-    var quickQuestions =
-      typeof QuickStartChips !== "undefined" ? QuickStartChips.questions(cat.id, listenMode) : [];
+    if (!repeat) {
+      if (ctx.intakeContext) intakeAnswers.context = ctx.intakeContext;
+      if (ctx.intakeFeeling) intakeAnswers.feeling = ctx.intakeFeeling;
+    }
     if (isQuickStartPath()) {
       intakeAnswers.createPath = "quickStart";
-      if (quickStartAnswers[0]) intakeAnswers.topic = quickStartAnswers[0];
-      if (quickStartAnswers[1]) intakeAnswers.context = quickStartAnswers[1];
-      if (quickStartAnswers[2]) intakeAnswers.feeling = quickStartAnswers[2];
-      if (quickStartAnswers[3]) intakeAnswers.scriptJob = quickStartAnswers[3];
-      answersMap[cat.id] = quickQuestions
-        .map(function (q, idx) {
-          var value = String(quickStartAnswers[idx] || "").trim();
-          return value ? q.shortLabel + ": " + value : "";
-        })
-        .filter(Boolean);
+      if (quickStartIntention) intakeAnswers.intention = quickStartIntention;
+      if (quickStartIntention === "moment") {
+        var moment = quickStartMomentValue();
+        if (moment) intakeAnswers.context = moment;
+      }
+      var feelings = phrasesWithNote(quickStartFeelings, quickStartFeelingNote);
+      if (feelings.length === 1) intakeAnswers.feeling = feelings[0];
+      answersMap[cat.id] = quickStartPhraseList();
+      if (repeat) listenMode = "";
+    } else if (repeat) {
+      intakeAnswers.intention = "repeat";
+      delete intakeAnswers.context;
+      delete intakeAnswers.feeling;
+      listenMode = "";
     }
+    var questionList = isQuickStartPath()
+      ? (quickStartIntention === "moment"
+        ? [QuickStartChips.titles.moment, QuickStartChips.titles.feeling]
+        : [QuickStartChips.titles.belief, QuickStartChips.titles.feeling])
+      : (repeat && typeof QuickStartChips !== "undefined"
+        ? QuickStartChips.overAndOverQuestions(cat.id)
+        : questionsForListenMode(cat.id, listenMode || selectedListenMode));
     return {
       categories: [
         {
           id: cat.id,
           name: cat.name,
-          questions: isQuickStartPath()
-            ? quickQuestions.map(function (q) {
-                return q.prompt;
-              })
-            : questionsForListenMode(cat.id, listenMode),
+          questions: questionList,
         },
       ],
       answers: answersMap,
@@ -14503,11 +14608,12 @@
 
   function validateRequiredIntake(ctx) {
     if (isQuickStartPath()) {
-      var missing = quickStartAnswers.some(function (a) {
-        return !String(a || "").trim();
+      var screens = quickStartScreens();
+      var ready = screens.every(function (screen) {
+        return screen === "intention" || screen === "length" || quickStartScreenReady(screen);
       });
-      if (missing) {
-        generationMessage("Tap an option for each Quick start question.", "error");
+      if (!quickStartIntention || !ready) {
+        generationMessage("Choose at least one on each step before generating.", "error");
         return false;
       }
       return true;
@@ -14960,6 +15066,179 @@
     }
   }
 
+
+  function renderIntentionStep(el, cat, displayName) {
+    var chips = QuickStartChips;
+    el.innerHTML =
+      '<div class="home-quick-start">' +
+      '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(cat.name) + "</p>" +
+      '<p style="margin:0 0 0.75rem;font-weight:600;">' + escapeHtml(chips.titles.intention) + "</p>" +
+      choiceButton("moment", "A specific moment", quickStartIntention === "moment") +
+      choiceButton("repeat", "Something I can listen to over and over", quickStartIntention === "repeat") +
+      '<button type="button" class="app-btn app-btn-primary" id="home-intention-continue" style="margin-top:0.9rem;width:100%;"' +
+      (quickStartIntention ? "" : " disabled") +
+      ">Continue</button></div>";
+    el.querySelectorAll("[data-intention]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var next = btn.getAttribute("data-intention") || "";
+        if (next !== quickStartIntention) {
+          homeDeepenState = null;
+        }
+        quickStartIntention = next;
+        renderHomeFlow(displayName);
+      });
+    });
+    var go = document.getElementById("home-intention-continue");
+    if (go) {
+      go.addEventListener("click", function () {
+        if (!quickStartIntention) return;
+        if (quickStartIntention === "moment") setHomeFlowStep("listen", displayName);
+        else setHomeFlowStep("survey", displayName);
+      });
+    }
+  }
+
+  function renderQuickStartStep(el, cat, displayName) {
+    var chips = QuickStartChips;
+    var screens = quickStartScreens();
+    var index = Math.max(0, Math.min(quickStartPageIndex, Math.max(0, screens.length - 1)));
+    var screen = screens[index] || "intention";
+    var html = '<div class="home-quick-start">' +
+      '<p class="app-muted" style="margin:0 0 0.35rem;">' + escapeHtml(cat.name) + "</p>" +
+      '<p class="app-muted" style="margin:0 0 0.75rem;font-size:0.85rem;">' +
+      escapeHtml(String(index + 1) + " of " + screens.length) + "</p>";
+    if (screen === "intention") {
+      html += '<p style="margin:0 0 0.75rem;font-weight:600;">' + escapeHtml(chips.titles.intention) + "</p>" +
+        choiceButton("moment", "A specific moment", quickStartIntention === "moment") +
+        choiceButton("repeat", "Something I can listen to over and over", quickStartIntention === "repeat");
+    } else if (screen === "length") {
+      var beliefCap = chips.beliefPickCount(quickStartLength);
+      var feelingCap = chips.feelingPickCount(quickStartLength);
+      var detail = quickStartIntention === "moment"
+        ? "Next you’ll select one moment and " + allowance(feelingCap) + " feeling" + (feelingCap === 1 ? "" : "s") + "."
+        : "Next you’ll select " + allowance(beliefCap) + " belief" + (beliefCap === 1 ? "" : "s") + " and " + allowance(feelingCap) + " feeling" + (feelingCap === 1 ? "" : "s") + ".";
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.length) + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(detail) + "</p>" +
+        ["Short", "Medium", "Long"].map(function (len) {
+          return choiceButton(len, len, quickStartLength === len);
+        }).join("");
+    } else if (screen === "when") {
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.when) + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">Before, while it\'s happening, or after.</p>' +
+        ["getting-ready", "in-the-moment", "after"].map(function (mode) {
+          return choiceButton(mode, chips.whenTitle(mode), quickStartWhenChosen && selectedListenMode === mode, listenModeHint(mode, cat.id));
+        }).join("");
+    } else if (screen === "moment") {
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.moment) + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">Select one.</p>' +
+        chipWrap(chips.moments(cat.id, selectedListenMode), quickStartMomentNote.trim() ? [] : [quickStartMoment], false) +
+        typeOwn(quickStartMomentNote);
+    } else if (screen === "beliefs") {
+      var bCap = chips.beliefPickCount(quickStartLength);
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.belief) + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">' + (bCap <= 1 ? "Select one." : "Select up to " + bCap + ".") + "</p>" +
+        chipWrap(chips.beliefs(cat.id), quickStartBeliefs, true) + typeOwn(quickStartBeliefNote);
+    } else if (screen === "feelings") {
+      var fCap = chips.feelingPickCount(quickStartLength);
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.feeling) + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">' + (fCap <= 1 ? "Select one." : "Select up to " + fCap + ".") + "</p>" +
+        chipWrap(chips.feelings(cat.id), quickStartFeelings, true) + typeOwn(quickStartFeelingNote);
+    }
+    var ready = quickStartScreenReady(screen);
+    html += '<button type="button" class="app-btn app-btn-primary" id="home-quick-next" style="margin-top:0.9rem;width:100%;"' +
+      (ready ? "" : " disabled") + ">" +
+      (quickStartIntention && index >= screens.length - 1 ? "Continue" : "Next") + "</button></div>";
+    el.innerHTML = html;
+    el.querySelectorAll("[data-intention]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var value = btn.getAttribute("data-intention") || "";
+        if (screen === "intention") {
+          if (value !== quickStartIntention) {
+            quickStartBeliefs = [];
+            quickStartFeelings = [];
+            quickStartMoment = "";
+            quickStartMomentNote = "";
+            quickStartBeliefNote = "";
+            quickStartFeelingNote = "";
+            quickStartWhenChosen = false;
+          }
+          quickStartIntention = value;
+        } else if (screen === "length") {
+          quickStartLength = value;
+        } else if (screen === "when") {
+          if (selectedListenMode !== value) {
+            quickStartMoment = "";
+            quickStartMomentNote = "";
+          }
+          selectedListenMode = value;
+          quickStartWhenChosen = true;
+        }
+        renderHomeFlow(displayName);
+      });
+    });
+    el.querySelectorAll("[data-quick-chip]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var value = btn.getAttribute("data-quick-chip") || "";
+        if (screen === "moment") {
+          quickStartMoment = value;
+          quickStartMomentNote = "";
+        } else if (screen === "beliefs") {
+          quickStartBeliefs = toggleCapped(quickStartBeliefs, value, chips.beliefPickCount(quickStartLength), quickStartBeliefNote);
+        } else if (screen === "feelings") {
+          quickStartFeelings = toggleCapped(quickStartFeelings, value, chips.feelingPickCount(quickStartLength), quickStartFeelingNote);
+        }
+        renderHomeFlow(displayName);
+      });
+    });
+    var own = document.getElementById("home-quick-own");
+    if (own) {
+      own.addEventListener("input", function () {
+        if (screen === "moment") quickStartMomentNote = own.value;
+        else if (screen === "beliefs") quickStartBeliefNote = own.value;
+        else quickStartFeelingNote = own.value;
+      });
+    }
+    var next = document.getElementById("home-quick-next");
+    if (next) {
+      next.addEventListener("click", function () {
+        if (!quickStartScreenReady(screen)) return;
+        if (index < screens.length - 1) {
+          quickStartPageIndex = index + 1;
+          renderHomeFlow(displayName);
+          return;
+        }
+        setHomeFlowStep("survey", displayName);
+      });
+    }
+  }
+
+  function allowance(cap) {
+    return cap <= 1 ? "one" : "up to " + cap;
+  }
+
+  function choiceButton(value, title, selected, hint) {
+    return '<button type="button" class="home-listen-mode-card' + (selected ? " is-selected" : "") +
+      '" data-intention="' + escapeHtml(value) + '"><span class="home-listen-mode-copy"><span class="home-listen-mode-title">' +
+      escapeHtml(title) + "</span>" +
+      (hint ? '<span class="home-listen-mode-hint">' + escapeHtml(hint) + "</span>" : "") +
+      "</span>" + (selected ? '<span class="home-listen-mode-check">Selected</span>' : "") + "</button>";
+  }
+
+  function chipWrap(options, selected, multi) {
+    var chosen = selected || [];
+    return '<div class="home-chip-wrap">' + options.map(function (chip) {
+      var on = chosen.some(function (s) { return String(s).toLowerCase() === String(chip).toLowerCase(); });
+      return '<button type="button" class="home-chip' + (on ? " is-selected" : "") + '" data-quick-chip="' +
+        escapeHtml(chip) + '">' + escapeHtml(chip) + (on ? " ✓" : "") + "</button>";
+    }).join("") + "</div>";
+  }
+
+  function typeOwn(value) {
+    return '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type your own</label>' +
+      '<input id="home-quick-own" type="text" value="' + escapeHtml(value || "") +
+      '" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />';
+  }
+
   function renderHomeFlow(displayName) {
     var el = document.getElementById("home-flow");
     if (!el) return;
@@ -15149,7 +15428,15 @@
             if (!listenModeForCurrentAnswers) {
               selectedListenMode = defaultListenMode(activeCategoryId);
             }
-            setHomeFlowStep("listen", displayName);
+            if (isQuickStartPath()) {
+              resetQuickStartAnswers();
+              quickStartAsksLength = !isWebFreeTier();
+              quickStartLength = isWebFreeTier() ? "Short" : "Medium";
+              setHomeFlowStep("quickstart", displayName);
+            } else {
+              quickStartIntention = "";
+              setHomeFlowStep("intention", displayName);
+            }
           });
         });
       }
@@ -15211,104 +15498,12 @@
       }
       return;
     }
+    if (homeFlowStep === "intention") {
+      renderIntentionStep(el, cat, displayName);
+      return;
+    }
     if (homeFlowStep === "quickstart") {
-      var chipsApi = typeof QuickStartChips !== "undefined" ? QuickStartChips : null;
-      var qs = chipsApi ? chipsApi.questions(cat.id, selectedListenMode) : [];
-      var qIndex = Math.max(0, Math.min(quickStartPageIndex, Math.max(0, qs.length - 1)));
-      var question = qs[qIndex];
-      var selectedChip = String(quickStartAnswers[qIndex] || "").trim();
-      el.innerHTML =
-        '<div class="home-quick-start">' +
-        '  <p class="app-muted" style="margin:0 0 0.35rem;">' +
-        escapeHtml(cat.name) +
-        " · " +
-        escapeHtml(listenModeQuickStartTitle(selectedListenMode, cat.id)) +
-        "</p>" +
-        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.85rem;">' +
-        escapeHtml(String(qIndex + 1) + " of " + qs.length) +
-        "</p>" +
-        (question
-          ? '  <p style="margin:0 0 0.75rem;font-weight:600;">' +
-            escapeHtml(question.prompt) +
-            "</p>" +
-            '  <div class="home-quick-start-chips">' +
-            question.chips
-              .map(function (chip) {
-                var on = selectedChip === chip;
-                return (
-                  '<button type="button" class="home-listen-mode-card' +
-                  (on ? " is-selected" : "") +
-                  '" data-quick-chip="' +
-                  escapeHtml(chip) +
-                  '"><span class="home-listen-mode-copy">' +
-                  escapeHtml(chip) +
-                  "</span>" +
-                  (on ? '<span class="home-listen-mode-check">Selected</span>' : "") +
-                  "</button>"
-                );
-              })
-              .join("") +
-            "</div>" +
-            '  <label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type your own</label>' +
-            '  <input id="home-quick-own" type="text" value="' +
-            escapeHtml(selectedChip) +
-            '" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:10px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />'
-          : "") +
-        '  <button type="button" class="app-btn app-btn-primary" id="home-quick-next" style="margin-top:0.9rem;width:100%;">Next</button>' +
-        '  <button type="button" class="app-btn" id="home-quick-switch" style="margin-top:0.45rem;width:100%;">Write my own answers</button>' +
-        "</div>";
-      el.querySelectorAll("[data-quick-chip]").forEach(function (btn) {
-        btn.addEventListener("click", function () {
-          quickStartAnswers[qIndex] = btn.getAttribute("data-quick-chip") || "";
-          renderHomeFlow(displayName);
-        });
-      });
-      var own = document.getElementById("home-quick-own");
-      if (own) {
-        own.addEventListener("input", function () {
-          quickStartAnswers[qIndex] = own.value;
-        });
-      }
-      var next = document.getElementById("home-quick-next");
-      if (next) {
-        next.addEventListener("click", function () {
-          if (!String(quickStartAnswers[qIndex] || "").trim()) {
-            generationMessage("Choose a tap or type your own.", "error");
-            return;
-          }
-          if (qIndex < qs.length - 1) {
-            quickStartPageIndex = qIndex + 1;
-            generationMessage("", "");
-            renderHomeFlow(displayName);
-            return;
-          }
-          generationMessage("", "");
-          setHomeFlowStep("survey", displayName);
-        });
-      }
-      var switchBtn = document.getElementById("home-quick-switch");
-      if (switchBtn) {
-        switchBtn.addEventListener("click", function () {
-          selectedCreatePath = "full";
-          homeDeepenState = {
-            displayName: displayName || "",
-            cat: cat,
-            q1: quickStartAnswers[0] || quickStartAnswers[1] || "",
-            q2: quickStartAnswers[2] || "",
-            intakeObstacle: "",
-            intakeContext: quickStartAnswers[1] || "",
-            intakeFeeling: quickStartAnswers[2] || "",
-            tone: defaultToneForCategory(cat.id),
-            length: isWebFreeTier() ? "Short" : "Medium",
-            perspective: "First person",
-            useNameInScript: true,
-            listenMode: selectedListenMode,
-            clarifyingAnswers: {},
-            followUpStep: 0,
-          };
-          setHomeFlowStep("survey", displayName);
-        });
-      }
+      renderQuickStartStep(el, cat, displayName);
       return;
     }
     if (homeFlowStep === "clarify" && homeClarifyFlow) {
@@ -15375,9 +15570,12 @@
             " to deepen the script, or generate now."
           : "You've used all follow-ups. Generate your script when ready."
         : "Follow-ups are available on Starter and Creator. You can still generate from your answers below.";
-    var listenQs = questionsForListenMode(cat.id, selectedListenMode);
-    var ph0 = surveyAnswerPlaceholder(cat.id, 0, selectedListenMode);
-    var ph1 = surveyAnswerPlaceholder(cat.id, 1, selectedListenMode);
+    var repeatFull = !isQuickStartPath() && isRepeatListen();
+    var listenQs = repeatFull && typeof QuickStartChips !== "undefined"
+      ? QuickStartChips.overAndOverQuestions(cat.id)
+      : questionsForListenMode(cat.id, selectedListenMode);
+    var ph0 = repeatFull ? "One idea per line" : surveyAnswerPlaceholder(cat.id, 0, selectedListenMode);
+    var ph1 = repeatFull ? "Steady, calm, clear" : surveyAnswerPlaceholder(cat.id, 1, selectedListenMode);
     var defaultTone = defaultToneForCategory(cat.id);
     var mediaRec = recommendedMediaForCategory(cat.id, defaultTone);
     var lengthPills = isWebFreeTier()
@@ -15443,15 +15641,19 @@
       '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
       "  </div>";
     if (isQuickStartPath()) {
-      var tapSummary = ["What this is about", "When this plays", "How they want to feel", "What the audio should do"]
-        .map(function (label, idx) {
-          return (
-            "<li><strong>" +
-            escapeHtml(label) +
-            ":</strong> " +
-            escapeHtml(quickStartAnswers[idx] || "—") +
-            "</li>"
-          );
+      var summaryRows = quickStartIntention === "moment"
+        ? [
+            ["When", QuickStartChips.whenTitle(selectedListenMode)],
+            ["Moment", quickStartMomentValue() || "—"],
+            ["Feelings", phrasesWithNote(quickStartFeelings, quickStartFeelingNote).join(", ") || "—"],
+          ]
+        : [
+            ["Beliefs", phrasesWithNote(quickStartBeliefs, quickStartBeliefNote).join(", ") || "—"],
+            ["Feelings", phrasesWithNote(quickStartFeelings, quickStartFeelingNote).join(", ") || "—"],
+          ];
+      var tapSummary = summaryRows
+        .map(function (row) {
+          return "<li><strong>" + escapeHtml(row[0]) + ":</strong> " + escapeHtml(row[1]) + "</li>";
         })
         .join("");
       el.innerHTML =
@@ -15459,7 +15661,9 @@
         '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
         escapeHtml(cat.name) +
         "</strong> · " +
-        escapeHtml(listenModeQuickStartTitle(selectedListenMode, cat.id)) +
+        escapeHtml(quickStartIntention === "moment" ? QuickStartChips.whenTitle(selectedListenMode) : "Over and over") +
+        " · " +
+        escapeHtml(quickStartLength) +
         "</p>" +
         '  <ul class="app-muted" style="margin:0 0 0.85rem;padding-left:1.1rem;font-size:0.88rem;">' +
         tapSummary +
@@ -15475,6 +15679,10 @@
       var tonePickQuick = document.getElementById("gen-tone");
       if (tonePickQuick && (!homeDeepenState || !homeDeepenState.tone)) tonePickQuick.value = defaultTone;
       wireGenFeelPills(cat.id);
+      document.querySelectorAll('input[name="gen-length"]').forEach(function (input) {
+        input.checked = input.value === (isWebFreeTier() ? "Short" : quickStartLength);
+        input.disabled = true;
+      });
       var formQuick = document.getElementById("generate-form");
       if (formQuick) {
         formQuick.addEventListener("submit", function (ev) {
@@ -15489,7 +15697,7 @@
       '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
       escapeHtml(cat.name) +
       "</strong> · " +
-      escapeHtml(listenModeTitle(selectedListenMode, cat.id)) +
+      escapeHtml(repeatFull ? "Something you can listen to over and over" : listenModeTitle(selectedListenMode, cat.id)) +
       "</p>" +
       (mediaRec
         ? '  <p class="app-muted" id="gen-media-hint" style="margin:0 0 0.5rem;font-size:0.85rem;">Listen match: <strong>' +
@@ -15516,11 +15724,19 @@
       escapeHtml(surveyIntakeSectionSubtitle(cat.id, selectedListenMode)) +
       "</p>" +
       '  <label for="gen-intake-obstacle" style="margin-top:0.2rem;">' +
-      escapeHtml(surveyIntakeObstacleForCategory(cat.id, selectedListenMode)) +
+      escapeHtml(repeatFull ? QuickStartChips.overAndOverObstacle : surveyIntakeObstacleForCategory(cat.id, selectedListenMode)) +
       "</label>" +
       '  <textarea id="gen-intake-obstacle" class="gen-survey-textarea" rows="3" placeholder="' +
-      escapeHtml(surveyIntakeObstaclePlaceholder(cat.id, selectedListenMode)) +
+      escapeHtml(repeatFull ? "" : surveyIntakeObstaclePlaceholder(cat.id, selectedListenMode)) +
       '"></textarea>' +
+      (repeatFull && maxClar > 0 && followLeft > 0
+        ? '  <div class="gen-action-row" style="margin-top:0.85rem;">' +
+          '    <button type="button" class="app-btn app-btn-primary" id="gen-follow-up">Follow Up</button>' +
+          "  </div>" +
+          '  <p class="app-muted" style="margin:0.35rem 0 0.75rem;font-size:0.85rem;">' +
+          escapeHtml(clarifyHint) +
+          "</p>"
+        : "") +
       '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
       '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
       '    <option value="Calming">Calming</option>' +
@@ -15565,12 +15781,14 @@
       '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
       '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
       "  </div>" +
-      '  <p class="app-muted" style="margin:0.75rem 0 0;font-size:0.85rem;">' +
-      escapeHtml(clarifyHint) +
-      "</p>" +
+      (repeatFull
+        ? ""
+        : '  <p class="app-muted" style="margin:0.75rem 0 0;font-size:0.85rem;">' +
+          escapeHtml(clarifyHint) +
+          "</p>") +
       '  <div class="gen-action-row">' +
       '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate Script</button>' +
-      (maxClar > 0 && followLeft > 0
+      (!repeatFull && maxClar > 0 && followLeft > 0
         ? '    <button type="button" class="app-btn app-btn-primary" id="gen-follow-up">Follow Up</button>'
         : "") +
       "  </div>" +

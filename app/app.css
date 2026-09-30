@@ -5403,6 +5403,24 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
   flex-direction: column;
   gap: 0.55rem;
 }
+.home-chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.home-chip {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 12px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0.55rem 0.75rem;
+  cursor: pointer;
+  text-align: left;
+}
+.home-chip.is-selected {
+  border: 2px solid #2563eb;
+}
 .home-listen-mode-list {
   display: flex;
   flex-direction: column;
