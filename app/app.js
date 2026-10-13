@@ -5273,6 +5273,9 @@
     if (document.getElementById("premade-list")) {
       renderPremade();
     }
+    if (document.getElementById("scripts-list")) {
+      renderScripts(currentScripts);
+    }
     if (document.getElementById("audio-app-list")) {
       renderAudioPage();
     }
@@ -8223,7 +8226,12 @@
         return pcmPremadeRowHtml(
           p.title,
           escapeHtml((p.accessTier || "paid") === "free" ? "Free (all users)" : "Paid (Starter & Creator)"),
-          '<button type="button" class="app-btn app-btn-secondary" data-pcm-hide-premade="' +
+          '<button type="button" class="app-btn app-btn-secondary" data-pcm-download-premade="' +
+            escapeHtml(p.id) +
+            '" title="Download audio file to this computer"' +
+            (p.audioURL && String(p.audioURL).trim() ? "" : " disabled") +
+            ">Download</button>" +
+            '<button type="button" class="app-btn app-btn-secondary" data-pcm-hide-premade="' +
             escapeHtml(p.id) +
             '">Hide</button>'
         );
@@ -8289,6 +8297,10 @@
                     escapeHtml(s.id) +
                     '">Publish</button>'
                   : "";
+              var downloadBtn =
+                '<button type="button" class="app-btn app-btn-secondary" data-pcm-download-script="' +
+                escapeHtml(s.id) +
+                '" title="Download audio file to this computer">Download</button>';
               return (
                 '<div class="pcm-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.55rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
                 '<div style="flex:1;min-width:0;"><strong>' +
@@ -8297,6 +8309,7 @@
                 escapeHtml(formatFirestoreDateLabel(s.createdAt)) +
                 "</span></div>" +
                 statusHtml +
+                downloadBtn +
                 publishBtn +
                 "</div>"
               );
@@ -8510,6 +8523,28 @@
       btn.addEventListener("click", function () {
         if (!adminModeEnabled) return;
         openPublishPremadeModal(btn.getAttribute("data-pcm-publish-script"));
+      });
+    });
+    body.querySelectorAll("[data-pcm-download-script]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        var sid = btn.getAttribute("data-pcm-download-script");
+        var script = currentScripts.find(function (s) {
+          return s.id === sid;
+        });
+        if (!script) return;
+        runAdminAudioFileDownload(btn, script.audioURL, script.title);
+      });
+    });
+    body.querySelectorAll("[data-pcm-download-premade]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        var pid = btn.getAttribute("data-pcm-download-premade");
+        var premade = currentPremade.find(function (x) {
+          return x.id === pid;
+        });
+        if (!premade) return;
+        runAdminAudioFileDownload(btn, premade.audioURL, premade.title);
       });
     });
     body.querySelectorAll("[data-pcm-hide-premade]").forEach(function (btn) {
@@ -9947,6 +9982,62 @@
     if (/\.m4a$/.test(p) || /\.m4a(\?|$)/i.test(fallbackURL || "")) return "m4a";
     if (/\.mp3$/.test(p) || /\.mp3(\?|$)/i.test(fallbackURL || "")) return "mp3";
     return "mp3";
+  }
+
+  function mimeTypeForAudioExtension(ext) {
+    if (ext === "m4a") return "audio/mp4";
+    if (ext === "wav") return "audio/wav";
+    return "audio/mpeg";
+  }
+
+  function audioFileDownloadName(title, audioURL) {
+    var raw = String(title || "focus-shift-audio").trim() || "focus-shift-audio";
+    var base = raw.replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, " ").trim().slice(0, 80);
+    if (!base) base = "focus-shift-audio";
+    var ext = extensionFromStoragePath(storagePathFromFirebaseDownloadUrl(audioURL), audioURL);
+    if (new RegExp("\\." + ext + "$", "i").test(base)) return base;
+    return base + "." + ext;
+  }
+
+  function saveBlobAsFile(blob, filename) {
+    var objectUrl = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () {
+      URL.revokeObjectURL(objectUrl);
+    }, 2000);
+  }
+
+  function downloadAudioFileToComputer(audioURL, title) {
+    var url = audioURL && String(audioURL).trim();
+    if (!url) return Promise.reject(new Error("This item has no audio file."));
+    var filename = audioFileDownloadName(title, url);
+    var ext = extensionFromStoragePath(storagePathFromFirebaseDownloadUrl(url), url);
+    return fetchArrayBufferFromUrl(url, "audio file").then(function (ab) {
+      if (!ab || !ab.byteLength) throw new Error("Audio file was empty.");
+      saveBlobAsFile(new Blob([ab], { type: mimeTypeForAudioExtension(ext) }), filename);
+    });
+  }
+
+  function runAdminAudioFileDownload(btn, audioURL, title) {
+    if (!adminModeEnabled) return;
+    if (btn) btn.disabled = true;
+    downloadAudioFileToComputer(audioURL, title)
+      .then(function () {
+        showAppBanner("Audio downloaded", "Saved to your computer.", "success", { duration: 4000 });
+      })
+      .catch(function (e) {
+        showAppBanner("Download failed", (e && e.message) || "Could not download audio.", "error", {
+          duration: 7000,
+        });
+      })
+      .finally(function () {
+        if (btn && btn.isConnected) btn.disabled = false;
+      });
   }
 
 
@@ -17886,6 +17977,12 @@
         '" title="Creator: share listen link" aria-label="Share listen link">' +
         '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg></button>'
       : "";
+    var downloadBtnHtml =
+      adminModeEnabled && hasAudio
+        ? '<button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" data-action="download-audio" data-script-id="' +
+          escapeHtml(script.id) +
+          '" title="Download audio file to this computer" aria-label="Download audio file">Download</button>'
+        : "";
     var deleteBtnHtml = controlsExpanded
       ? '<button type="button" class="script-card-icon-btn script-card-icon-btn-delete" data-action="delete" data-script-id="' +
         escapeHtml(script.id) +
@@ -17896,7 +17993,7 @@
         '">\u2715</button>'
       : "";
     var expandedToolbarHtml = controlsExpanded
-      ? scriptCardToolbarRowHtml(syncStatusHtml, primaryActionsHtml + shareBtnHtml, deleteBtnHtml)
+      ? scriptCardToolbarRowHtml(syncStatusHtml, primaryActionsHtml + shareBtnHtml + downloadBtnHtml, deleteBtnHtml)
       : "";
 
     var audioSection = controlsExpanded
@@ -18912,6 +19009,8 @@
           addScriptToPlaylistPrompt(script);
         } else if (action === "share-audio") {
           shareAudioFromScript(script);
+        } else if (action === "download-audio") {
+          runAdminAudioFileDownload(btn, script.audioURL, script.title);
         } else if (action === "refresh-script") {
           refreshOneScriptFromCloud(script.id);
         }
@@ -21753,8 +21852,15 @@
     var chevChar = audioControlsExpanded ? "▲" : "▼";
     var hideCategoryChip = !!activePremadeCategoryId;
     var paidActionsHtml = premadeCardEditPlaylistDualHtml(p.id);
+    var adminDownloadBtnHtml =
+      adminModeEnabled && hasAudio
+        ? '<button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" data-premade-action="download-audio" data-premade-id="' +
+          escapeHtml(p.id) +
+          '" title="Download audio file to this computer" aria-label="Download audio file">Download</button>'
+        : "";
     var paidToolbarTrailingHtml =
       offlineIconHtml +
+      adminDownloadBtnHtml +
       (adminModeEnabled && isStreamableCloudPremade(p)
         ? '  <button type="button" class="app-btn app-btn-secondary script-card-toolbar-btn" data-premade-action="hide" data-premade-id="' +
           escapeHtml(p.id) +
@@ -21783,7 +21889,7 @@
       ? scriptCardToolbarRowHtml(
           premadeSyncStatusHtml,
           paid ? paidActionsHtml : freeActionsHtml,
-          paid ? paidToolbarTrailingHtml : ""
+          paid ? paidToolbarTrailingHtml : adminDownloadBtnHtml
         )
       : "";
     var audioSection = audioControlsExpanded
@@ -21911,6 +22017,8 @@
             });
         } else if (action === "play") {
           togglePlayScriptAudio(premadeToScript(premade));
+        } else if (action === "download-audio") {
+          runAdminAudioFileDownload(btn, premade.audioURL, premade.title);
         } else if (action === "download-offline") {
           if (!requireWebPaidTier(WEB_PAID_FEATURE_COPY.offlineDownload)) return;
           btn.disabled = true;
