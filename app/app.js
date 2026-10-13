@@ -10012,14 +10012,65 @@
     }, 2000);
   }
 
+  function saveDownloadFromHiddenFrame(url) {
+    var iframe = document.createElement("iframe");
+    iframe.hidden = true;
+    iframe.setAttribute("aria-hidden", "true");
+    iframe.src = url;
+    document.body.appendChild(iframe);
+    setTimeout(function () {
+      iframe.remove();
+    }, 60000);
+  }
+
   function downloadAudioFileToComputer(audioURL, title) {
     var url = audioURL && String(audioURL).trim();
     if (!url) return Promise.reject(new Error("This item has no audio file."));
     var filename = audioFileDownloadName(title, url);
     var ext = extensionFromStoragePath(storagePathFromFirebaseDownloadUrl(url), url);
-    return fetchArrayBufferFromUrl(url, "audio file").then(function (ab) {
-      if (!ab || !ab.byteLength) throw new Error("Audio file was empty.");
-      saveBlobAsFile(new Blob([ab], { type: mimeTypeForAudioExtension(ext) }), filename);
+    // blob: URLs are already local. Remote files go through our API: a direct
+    // fetch of Firebase Storage is blocked by the browser (CORS).
+    if (url.indexOf("blob:") === 0) {
+      return fetch(url)
+        .then(function (r) {
+          if (!r.ok) throw new Error("Could not read audio file.");
+          return r.arrayBuffer();
+        })
+        .then(function (ab) {
+          if (!ab || !ab.byteLength) throw new Error("Audio file was empty.");
+          saveBlobAsFile(new Blob([ab], { type: mimeTypeForAudioExtension(ext) }), filename);
+        });
+    }
+    if (!currentUser) return Promise.reject(new Error("Sign in to download audio."));
+    return currentUser.getIdToken(true).then(function (token) {
+      return fetch(backendBaseURL() + "/admin/audio-download", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({ audioURL: url, filename: filename }),
+      });
+    }).then(function (resp) {
+      var type = (resp.headers.get("Content-Type") || "").toLowerCase();
+      if (type.indexOf("application/json") !== -1) {
+        return resp.json().then(function (json) {
+          if (!resp.ok || !json || json.ok === false || !json.url) {
+            throw new Error((json && json.error) || "Could not prepare the download.");
+          }
+          saveDownloadFromHiddenFrame(json.url);
+        });
+      }
+      if (!resp.ok) {
+        return resp.text().then(function (text) {
+          throw new Error(text || "Could not download audio (" + resp.status + ").");
+        });
+      }
+      return resp.arrayBuffer().then(function (ab) {
+        if (!ab || !ab.byteLength) throw new Error("Audio file was empty.");
+        var mime = type.indexOf("audio/") === 0 ? type.split(";")[0] : mimeTypeForAudioExtension(ext);
+        saveBlobAsFile(new Blob([ab], { type: mime }), filename);
+      });
     });
   }
 
@@ -10028,7 +10079,9 @@
     if (btn) btn.disabled = true;
     downloadAudioFileToComputer(audioURL, title)
       .then(function () {
-        showAppBanner("Audio downloaded", "Saved to your computer.", "success", { duration: 4000 });
+        showAppBanner("Download started", "Check your downloads folder for the audio file.", "success", {
+          duration: 4000,
+        });
       })
       .catch(function (e) {
         showAppBanner("Download failed", (e && e.message) || "Could not download audio.", "error", {
