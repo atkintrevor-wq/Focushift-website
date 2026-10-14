@@ -6500,7 +6500,7 @@
       '    <select id="publish-category"></select>' +
       '    <label for="publish-access-tier">Who can access</label>' +
       '    <select id="publish-access-tier">' +
-      '      <option value="paid" selected>Paid (Starter &amp; Creator)</option>' +
+      '      <option value="paid" selected>Paid (Starter, Creator &amp; Pro)</option>' +
       '      <option value="free">Free (all users)</option>' +
       "    </select>" +
       '    <label for="publish-description">Description (optional)</label>' +
@@ -6525,11 +6525,23 @@
       '    <select id="bg-publish-category"></select>' +
       '    <label for="bg-publish-access-tier">Who can access</label>' +
       '    <select id="bg-publish-access-tier">' +
-      '      <option value="paid" selected>Paid (Starter &amp; Creator)</option>' +
+      '      <option value="paid" selected>Paid (Starter, Creator &amp; Pro)</option>' +
       '      <option value="free">Free (all users)</option>' +
       "    </select>" +
-      '    <label for="bg-publish-file">Audio file (MP3, M4A, WAV)</label>' +
-      '    <input id="bg-publish-file" type="file" accept="audio/*,.mp3,.m4a,.wav">' +
+      '    <label for="bg-publish-source">Audio source</label>' +
+      '    <select id="bg-publish-source">' +
+      '      <option value="computer" selected>From this computer</option>' +
+      '      <option value="my-audio">From My Audio</option>' +
+      "    </select>" +
+      '    <div id="bg-publish-file-wrap">' +
+      '      <label for="bg-publish-file">Audio file (MP3, M4A, WAV)</label>' +
+      '      <input id="bg-publish-file" type="file" accept="audio/*,.mp3,.m4a,.wav">' +
+      "    </div>" +
+      '    <div id="bg-publish-library-wrap" hidden>' +
+      '      <label for="bg-publish-library">My Audio</label>' +
+      '      <select id="bg-publish-library"></select>' +
+      '      <p class="app-muted" style="margin:0.35rem 0 0;font-size:0.82rem;">Uses a track you already uploaded. It is copied into the shared library.</p>' +
+      "    </div>" +
       '    <div id="bg-publish-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="bg-publish-cancel">Cancel</button>' +
@@ -6567,7 +6579,7 @@
       '    <select id="premade-edit-category"></select>' +
       '    <label for="premade-edit-access-tier">Who can access</label>' +
       '    <select id="premade-edit-access-tier">' +
-      '      <option value="paid">Paid (Starter &amp; Creator)</option>' +
+      '      <option value="paid">Paid (Starter, Creator &amp; Pro)</option>' +
       '      <option value="free">Free (all users)</option>' +
       "    </select>" +
       '    <label for="premade-edit-description">Description</label>' +
@@ -7438,6 +7450,19 @@
     document.getElementById("bg-publish-submit").addEventListener("click", function () {
       publishBackgroundFromModal();
     });
+    var bgPublishSource = document.getElementById("bg-publish-source");
+    if (bgPublishSource) {
+      bgPublishSource.addEventListener("change", syncBgPublishSourceUi);
+    }
+    var bgPublishLibrary = document.getElementById("bg-publish-library");
+    if (bgPublishLibrary) {
+      bgPublishLibrary.addEventListener("change", function () {
+        var nameInput = document.getElementById("bg-publish-name");
+        if (!nameInput || (nameInput.value || "").trim()) return;
+        var picked = userBackgroundForPublish(bgPublishLibrary.value);
+        if (picked && picked.name) nameInput.value = picked.name;
+      });
+    }
     document.getElementById("publish-script-id").addEventListener("change", function () {
       syncPublishFormFromSelectedScript();
     });
@@ -7851,17 +7876,71 @@
     }
   }
 
+  function syncBgPublishSourceUi() {
+    var source = document.getElementById("bg-publish-source");
+    var fileWrap = document.getElementById("bg-publish-file-wrap");
+    var libWrap = document.getElementById("bg-publish-library-wrap");
+    var fromLibrary = !!(source && source.value === "my-audio");
+    if (fileWrap) fileWrap.hidden = fromLibrary;
+    if (libWrap) libWrap.hidden = !fromLibrary;
+  }
+
+  function userBackgroundForPublish(id) {
+    var bid = (id && String(id).trim()) || "";
+    if (!bid) return null;
+    var cloud = currentCloudUserBackgrounds.find(function (b) {
+      return b && b.id === bid;
+    });
+    var meta = mergedUserBackgroundMetas().find(function (m) {
+      return m && m.id === bid;
+    });
+    if (!cloud && !meta) return null;
+    return {
+      id: bid,
+      name: (cloud && cloud.name) || (meta && meta.name) || "Imported audio",
+      audioURL: (cloud && cloud.audioURL) || (meta && meta.audioURL) || "",
+      storagePath: (cloud && cloud.storagePath) || "",
+    };
+  }
+
+  function populateBgPublishLibrarySelect() {
+    var select = document.getElementById("bg-publish-library");
+    if (!select) return;
+    var items = mergedUserBackgroundMetas().filter(function (m) {
+      return m && m.id;
+    });
+    if (!items.length) {
+      select.innerHTML = '<option value="">No audio in My Audio yet</option>';
+      return;
+    }
+    select.innerHTML = items
+      .map(function (m) {
+        return (
+          '<option value="' +
+          escapeHtml(m.id) +
+          '">' +
+          escapeHtml(m.name || "Imported audio") +
+          "</option>"
+        );
+      })
+      .join("");
+  }
+
   function openBackgroundPublishModal() {
     if (!adminModeEnabled) return;
     var backdrop = document.getElementById("background-publish-backdrop");
     if (!backdrop) return;
     populateBgPublishCategorySelect();
+    populateBgPublishLibrarySelect();
     var name = document.getElementById("bg-publish-name");
     var file = document.getElementById("bg-publish-file");
     var tier = document.getElementById("bg-publish-access-tier");
+    var source = document.getElementById("bg-publish-source");
     if (name) name.value = "";
     if (file) file.value = "";
     if (tier) tier.value = "paid";
+    if (source) source.value = "computer";
+    syncBgPublishSourceUi();
     setBackgroundPublishMessage("", "");
     setStackedAdminModal(backdrop, isPremadeContentManagerOpen());
     backdrop.hidden = false;
@@ -7883,37 +7962,27 @@
     return "bg-cloud-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
   }
 
-  function publishBackgroundFromModal() {
-    if (!adminModeEnabled) return;
-    if (!currentUser) return;
-    if (typeof firebase.storage !== "function") {
-      setBackgroundPublishMessage("Firebase Storage is not loaded. Refresh and try again.", "error");
-      return;
+  function extensionForBackgroundUpload(fileOrBlob, filename) {
+    var name = filename || (fileOrBlob && fileOrBlob.name) || "";
+    var ext = (String(name).split(".").pop() || "").toLowerCase();
+    var type = (fileOrBlob && fileOrBlob.type && String(fileOrBlob.type).toLowerCase()) || "";
+    if (ext !== "mp3" && ext !== "m4a" && ext !== "wav") {
+      if (type.indexOf("wav") >= 0) ext = "wav";
+      else if (type.indexOf("mp4") >= 0 || type.indexOf("m4a") >= 0) ext = "m4a";
+      else ext = "mp3";
     }
-    var displayName = ((document.getElementById("bg-publish-name").value || "").trim());
-    var categoryID = (document.getElementById("bg-publish-category").value || "").trim() || "bg-ambient";
-    var accessTierEl = document.getElementById("bg-publish-access-tier");
-    var accessTier = accessTierEl && accessTierEl.value === "free" ? "free" : "paid";
-    var fileInput = document.getElementById("bg-publish-file");
-    var file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
-    if (!displayName) {
-      setBackgroundPublishMessage("Display name is required.", "error");
-      return;
-    }
-    if (!file) {
-      setBackgroundPublishMessage("Choose an audio file to upload.", "error");
-      return;
-    }
-    setBackgroundPublishMessage("Publishing (uploading to catalog storage)...", "");
+    return ext;
+  }
+
+  function uploadBackgroundCatalogFile(fileOrBlob, displayName, categoryID, accessTier, filename) {
     var docId = newBgCloudDocId();
-    var ext = (file.name.split(".").pop() || "mp3").toLowerCase();
-    if (ext !== "mp3" && ext !== "m4a" && ext !== "wav") ext = "mp3";
+    var ext = extensionForBackgroundUpload(fileOrBlob, filename);
     var storagePath =
       "backgroundCatalog/" + makeSafeBackgroundFilename(displayName) + "-" + docId.slice(-8) + "." + ext;
     var contentType = ext === "wav" ? "audio/wav" : ext === "m4a" ? "audio/mp4" : "audio/mpeg";
     var storageRef = firebase.storage().ref(storagePath);
-    storageRef
-      .put(file, { contentType: contentType })
+    return storageRef
+      .put(fileOrBlob, { contentType: contentType })
       .then(function (snap) {
         return snap.ref.getDownloadURL();
       })
@@ -7929,16 +7998,81 @@
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           createdBy: currentUser.uid,
         });
+      });
+  }
+
+  function finishBackgroundPublish(displayName) {
+    setBackgroundPublishMessage("Published to cloud catalog.", "success");
+    setBackgroundsMessage('Published "' + displayName + '" to App Audio cloud catalog.', "success");
+    if (document.getElementById("premade-content-manager-backdrop") && !document.getElementById("premade-content-manager-backdrop").hidden) {
+      renderPremadeContentManager();
+    }
+    setTimeout(function () {
+      closeBackgroundPublishModal();
+    }, 600);
+  }
+
+  function publishBackgroundFromModal() {
+    if (!adminModeEnabled) return;
+    if (!currentUser) return;
+    if (typeof firebase.storage !== "function") {
+      setBackgroundPublishMessage("Firebase Storage is not loaded. Refresh and try again.", "error");
+      return;
+    }
+    var displayName = ((document.getElementById("bg-publish-name").value || "").trim());
+    var categoryID = (document.getElementById("bg-publish-category").value || "").trim() || "bg-ambient";
+    var accessTierEl = document.getElementById("bg-publish-access-tier");
+    var accessTier = accessTierEl && accessTierEl.value === "free" ? "free" : "paid";
+    var sourceEl = document.getElementById("bg-publish-source");
+    var fromLibrary = !!(sourceEl && sourceEl.value === "my-audio");
+    if (!displayName) {
+      setBackgroundPublishMessage("Display name is required.", "error");
+      return;
+    }
+    if (!fromLibrary) {
+      var fileInput = document.getElementById("bg-publish-file");
+      var file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+      if (!file) {
+        setBackgroundPublishMessage("Choose an audio file to upload.", "error");
+        return;
+      }
+      setBackgroundPublishMessage("Publishing (uploading to catalog storage)...", "");
+      uploadBackgroundCatalogFile(file, displayName, categoryID, accessTier, file.name)
+        .then(function () {
+          finishBackgroundPublish(displayName);
+        })
+        .catch(function (e) {
+          setBackgroundPublishMessage(e.message || "Could not publish background.", "error");
+        });
+      return;
+    }
+    var libraryEl = document.getElementById("bg-publish-library");
+    var sourceId = libraryEl && libraryEl.value ? String(libraryEl.value).trim() : "";
+    var picked = userBackgroundForPublish(sourceId);
+    if (!picked) {
+      setBackgroundPublishMessage("Choose a track from My Audio.", "error");
+      return;
+    }
+    setBackgroundPublishMessage("Publishing from My Audio...", "");
+    getUserBackgroundBlob(picked.id)
+      .catch(function () {
+        return null;
+      })
+      .then(function (blob) {
+        if (blob) {
+          return uploadBackgroundCatalogFile(blob, displayName, categoryID, accessTier, "");
+        }
+        return currentUser.getIdToken(true).then(function (token) {
+          return backendRequest("/admin/publish-background", token, {
+            name: displayName,
+            categoryID: categoryID,
+            accessTier: accessTier,
+            sourceBackgroundId: picked.id,
+          });
+        });
       })
       .then(function () {
-        setBackgroundPublishMessage("Published to cloud catalog.", "success");
-        setBackgroundsMessage('Published "' + displayName + '" to App Audio cloud catalog.', "success");
-        if (document.getElementById("premade-content-manager-backdrop") && !document.getElementById("premade-content-manager-backdrop").hidden) {
-          renderPremadeContentManager();
-        }
-        setTimeout(function () {
-          closeBackgroundPublishModal();
-        }, 600);
+        finishBackgroundPublish(displayName);
       })
       .catch(function (e) {
         setBackgroundPublishMessage(e.message || "Could not publish background.", "error");
@@ -7966,7 +8100,7 @@
           '<div style="flex:1;min-width:0;"><strong>' +
           escapeHtml(b.name || "Background") +
           '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
-          escapeHtml((b.accessTier || "free") === "paid" ? "Paid (Starter & Creator)" : "Free (all users)") +
+          escapeHtml((b.accessTier || "free") === "paid" ? "Paid (Starter, Creator & Pro)" : "Free (all users)") +
           "</span></div></div>"
         );
       });
@@ -8225,7 +8359,7 @@
       var liveRows = renderPcmCategoryGroupedPremades(liveGroups, function (p) {
         return pcmPremadeRowHtml(
           p.title,
-          escapeHtml((p.accessTier || "paid") === "free" ? "Free (all users)" : "Paid (Starter & Creator)"),
+          escapeHtml((p.accessTier || "paid") === "free" ? "Free (all users)" : "Paid (Starter, Creator & Pro)"),
           '<button type="button" class="app-btn app-btn-secondary" data-pcm-download-premade="' +
             escapeHtml(p.id) +
             '" title="Download audio file to this computer"' +
@@ -8375,7 +8509,7 @@
       })
       .join("");
     return (
-      '<p class="app-muted" style="margin:0 0 0.65rem;">Create browse categories in Firestore <code>catalogCategories</code> — no app update required. Paid categories are visible only to Starter &amp; Creator subscribers.</p>' +
+      '<p class="app-muted" style="margin:0 0 0.65rem;">Create browse categories in Firestore <code>catalogCategories</code> — no app update required. Paid categories are visible to Starter, Creator, and Pro subscribers.</p>' +
       '<div class="app-empty-hint" style="margin:0 0 0.85rem;padding:0.75rem;">' +
       '<div style="font-weight:700;margin-bottom:0.35rem;">New category</div>' +
       '<label for="pcm-cat-kind">Type</label>' +
@@ -8385,7 +8519,7 @@
       '<label for="pcm-cat-id">Category ID</label>' +
       '<input id="pcm-cat-id" type="text" maxlength="64" placeholder="auto-generated from name">' +
       '<label for="pcm-cat-access">Who can browse</label>' +
-      '<select id="pcm-cat-access"><option value="paid" selected>Paid (Starter &amp; Creator)</option><option value="free">Free (all users)</option></select>' +
+      '<select id="pcm-cat-access"><option value="paid" selected>Paid (Starter, Creator &amp; Pro)</option><option value="free">Free (all users)</option></select>' +
       '<label for="pcm-cat-sort">Sort order</label>' +
       '<input id="pcm-cat-sort" type="number" min="0" max="9999" value="1000" style="max-width:8rem;">' +
       '<div id="pcm-cat-message" class="app-inline-msg" role="status" aria-live="polite" style="margin-top:0.45rem;"></div>' +
