@@ -28,6 +28,8 @@
   var currentPremade = [];
   /** Raw cloud rows from Firestore `premadeAudio` before tier-split browse merge. */
   var currentPremadeCloud = [];
+  /** Set after the first successful premadeAudio snapshot, including an empty catalog. */
+  var premadeCloudSnapshotReceived = false;
   /** Cloud premades with `active: false` — admin-only, not shown in App Library. */
   var currentHiddenPremade = [];
   /** User-imported backgrounds synced via `users/{uid}/userBackgrounds`. */
@@ -2349,28 +2351,58 @@
 
   var TONE_VOICE_POOLS = {
     confidence: {
-      Calming: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE"],
-      Motivational: ["xctasy8XvGp2cVO9HL9k", "rJ9XoWu8gbUhVKZnKY8X"],
-      Compassionate: ["l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ"],
-      Assertive: ["lnieQLGTodpbhjpZtg1k", "87tjwokZlpNU7QL3HaLP"],
+      Calming: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ"],
+      Motivational: ["lxYfHSkYm1EzQzGhdbfc", "rJ9XoWu8gbUhVKZnKY8X", "uju3wxzG5OhpWcoi3SMy"],
+      Compassionate: ["l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ", "rJ9XoWu8gbUhVKZnKY8X"],
+      Assertive: ["EkK5I93UQWFDigLMpZcX", "ZthjuvLPty3kTMaNKVKb", "5F6a8n4ijdCrImoXgxM9"],
     },
     "sports-performance": {
-      Calming: ["dPah2VEoifKnZT37774q", "lnieQLGTodpbhjpZtg1k"],
-      Motivational: ["87tjwokZlpNU7QL3HaLP", "EkK5I93UQWFDigLMpZcX"],
-      Compassionate: ["MFZUKuGQUsGJPQjTS4wC", "l32B8XDoylOsZKiSdfhE"],
-      Assertive: ["87tjwokZlpNU7QL3HaLP", "5F6a8n4ijdCrImoXgxM9"],
+      Calming: ["dPah2VEoifKnZT37774q", "gUABw7pXQjhjt0kNFBTF", "lnieQLGTodpbhjpZtg1k"],
+      Motivational: ["EkK5I93UQWFDigLMpZcX", "87tjwokZlpNU7QL3HaLP", "5F6a8n4ijdCrImoXgxM9"],
+      Compassionate: ["kqVT88a5QfII1HNAEPTJ", "MFZUKuGQUsGJPQjTS4wC", "rJ9XoWu8gbUhVKZnKY8X"],
+      Assertive: ["87tjwokZlpNU7QL3HaLP", "EkK5I93UQWFDigLMpZcX", "5F6a8n4ijdCrImoXgxM9"],
     },
     "sleep-rest": {
-      Calming: ["8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE"],
-      Motivational: ["8LVfoRdkh4zgjr8v5ObE", "1wGbFxmAM3Fgw63G1zZJ"],
-      Compassionate: ["8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE"],
-      Assertive: ["dPah2VEoifKnZT37774q", "lnieQLGTodpbhjpZtg1k"],
+      Calming: ["8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ"],
+      Motivational: ["8LVfoRdkh4zgjr8v5ObE", "1wGbFxmAM3Fgw63G1zZJ", "l32B8XDoylOsZKiSdfhE"],
+      Compassionate: ["A7LE95x99tn9HChsblA6", "8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE"],
+      Assertive: ["dPah2VEoifKnZT37774q", "8LVfoRdkh4zgjr8v5ObE", "kqVT88a5QfII1HNAEPTJ"],
+    },
+    "success-prosperity": {
+      Calming: ["gUABw7pXQjhjt0kNFBTF", "NtS6nEHDYMQC9QczMQuq", "lnieQLGTodpbhjpZtg1k"],
+      Motivational: ["uju3wxzG5OhpWcoi3SMy", "lxYfHSkYm1EzQzGhdbfc", "ZthjuvLPty3kTMaNKVKb"],
+      Assertive: ["ZthjuvLPty3kTMaNKVKb", "5F6a8n4ijdCrImoXgxM9", "lnieQLGTodpbhjpZtg1k"],
+      Compassionate: ["FVQMzxJGPUBtfz1Azdoy", "l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ"],
+    },
+    "mental-wellbeing": {
+      Calming: ["l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ", "8LVfoRdkh4zgjr8v5ObE"],
+      Motivational: ["8LVfoRdkh4zgjr8v5ObE", "rJ9XoWu8gbUhVKZnKY8X", "MFZUKuGQUsGJPQjTS4wC"],
+      Compassionate: ["8LVfoRdkh4zgjr8v5ObE", "1wGbFxmAM3Fgw63G1zZJ", "l32B8XDoylOsZKiSdfhE"],
+      Assertive: ["dPah2VEoifKnZT37774q", "gUABw7pXQjhjt0kNFBTF", "lnieQLGTodpbhjpZtg1k"],
+    },
+    relationships: {
+      Calming: ["l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ", "rJ9XoWu8gbUhVKZnKY8X"],
+      Motivational: ["lxYfHSkYm1EzQzGhdbfc", "rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE"],
+      Compassionate: ["l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ", "8LVfoRdkh4zgjr8v5ObE"],
+      Assertive: ["gUABw7pXQjhjt0kNFBTF", "lxYfHSkYm1EzQzGhdbfc", "FVQMzxJGPUBtfz1Azdoy"],
+    },
+    "health-fitness": {
+      Calming: ["1wGbFxmAM3Fgw63G1zZJ", "8LVfoRdkh4zgjr8v5ObE", "l32B8XDoylOsZKiSdfhE"],
+      Motivational: ["ZthjuvLPty3kTMaNKVKb", "uju3wxzG5OhpWcoi3SMy", "87tjwokZlpNU7QL3HaLP"],
+      Compassionate: ["FVQMzxJGPUBtfz1Azdoy", "8LVfoRdkh4zgjr8v5ObE", "1wGbFxmAM3Fgw63G1zZJ"],
+      Assertive: ["EkK5I93UQWFDigLMpZcX", "87tjwokZlpNU7QL3HaLP", "ZthjuvLPty3kTMaNKVKb"],
+    },
+    other: {
+      Calming: ["NtS6nEHDYMQC9QczMQuq", "MFZUKuGQUsGJPQjTS4wC", "8LVfoRdkh4zgjr8v5ObE"],
+      Motivational: ["uju3wxzG5OhpWcoi3SMy", "lxYfHSkYm1EzQzGhdbfc", "lnieQLGTodpbhjpZtg1k"],
+      Compassionate: ["MFZUKuGQUsGJPQjTS4wC", "l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ"],
+      Assertive: ["ZthjuvLPty3kTMaNKVKb", "lnieQLGTodpbhjpZtg1k", "gUABw7pXQjhjt0kNFBTF"],
     },
     "i-am": {
-      Calming: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE"],
-      Motivational: ["xctasy8XvGp2cVO9HL9k", "rJ9XoWu8gbUhVKZnKY8X"],
-      Compassionate: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE"],
-      Assertive: ["lnieQLGTodpbhjpZtg1k", "87tjwokZlpNU7QL3HaLP"],
+      Calming: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE", "8LVfoRdkh4zgjr8v5ObE"],
+      Motivational: ["lxYfHSkYm1EzQzGhdbfc", "rJ9XoWu8gbUhVKZnKY8X", "uju3wxzG5OhpWcoi3SMy"],
+      Compassionate: ["rJ9XoWu8gbUhVKZnKY8X", "l32B8XDoylOsZKiSdfhE", "1wGbFxmAM3Fgw63G1zZJ"],
+      Assertive: ["lxYfHSkYm1EzQzGhdbfc", "lnieQLGTodpbhjpZtg1k", "ZthjuvLPty3kTMaNKVKb"],
     },
   };
 
@@ -2398,6 +2430,64 @@
       Motivational: "bg-momentum-desire",
       Compassionate: "bg-kindness-melody",
       Assertive: "bg-momentum-desire",
+    },
+  };
+
+  // Published backgroundCatalog ids. Paid suggestions use these; Free keeps the bundled slugs.
+  var TONE_BACKGROUND_CATALOG_IDS = {
+    confidence: {
+      Calming: "bg-cloud-918c480a-0cce-4bf7-8531-355ed3e4b52a",
+      Motivational: "bg-cloud-4df443d6-ca88-4c67-8672-0dfdef848c82",
+      Compassionate: "bg-cloud-899c1983-462f-4800-bcb9-915be96d36d7",
+      Assertive: "bg-cloud-634c9bfc-de24-4747-badf-0387c3c52054",
+    },
+    relationships: {
+      Calming: "bg-cloud-175bd932-7e91-4c78-b2c9-197884308856",
+      Motivational: "bg-cloud-cbe7ea74-e9be-4c2b-99ec-4449a99434d7",
+      Compassionate: "bg-cloud-e9824510-6eef-458f-89fd-b6988458761f",
+      Assertive: "bg-cloud-9c815566-5d6b-4e27-8b1f-dc4bd1468d69",
+    },
+    "success-prosperity": {
+      Calming: "bg-cloud-e79eb3a6-b979-4348-82fd-f21373b44409",
+      Motivational: "bg-cloud-95a0fae1-48b4-4027-9fec-838142e0989b",
+      Compassionate: "bg-cloud-899c1983-462f-4800-bcb9-915be96d36d7",
+      Assertive: "bg-cloud-95a0fae1-48b4-4027-9fec-838142e0989b",
+    },
+    "mental-wellbeing": {
+      Calming: "bg-cloud-261c461c-9e3c-4004-b278-22d88c6edab9",
+      Motivational: "bg-cloud-4c06505e-d86c-4854-b739-213830f39e3c",
+      Compassionate: "bg-cloud-d03fab66-badd-40c4-8b38-3de8aaaea90a",
+      Assertive: "bg-cloud-ce6cdedf-1bfc-4a20-a2ab-f836b69a3c6a",
+    },
+    "health-fitness": {
+      Calming: "bg-cloud-90fc9ceb-438a-4812-a538-77f4b357a4aa",
+      Motivational: "bg-cloud-76ee2191-c291-475f-bd31-91cedcf686bc",
+      Compassionate: "bg-cloud-918c480a-0cce-4bf7-8531-355ed3e4b52a",
+      Assertive: "bg-cloud-4df443d6-ca88-4c67-8672-0dfdef848c82",
+    },
+    "sports-performance": {
+      Calming: "bg-cloud-2d9d9e4f-7e96-42a4-a6ad-db1c57a84513",
+      Motivational: "bg-cloud-6b54c80d-10aa-4d20-b9ac-56714330cd0b",
+      Compassionate: "bg-cloud-7195ed22-f5f1-4881-887a-4dcc98c1c3e1",
+      Assertive: "bg-cloud-3d975bae-f10e-4b89-84d8-a862d8ad2d83",
+    },
+    "i-am": {
+      Calming: "bg-cloud-e9824510-6eef-458f-89fd-b6988458761f",
+      Motivational: "bg-cloud-184c7b14-72ef-4c23-8844-288ed466eeed",
+      Compassionate: "bg-cloud-e9824510-6eef-458f-89fd-b6988458761f",
+      Assertive: "bg-cloud-634c9bfc-de24-4747-badf-0387c3c52054",
+    },
+    "sleep-rest": {
+      Calming: "bg-cloud-21e71fad-d77b-4ab7-a10c-1a75d526b65c",
+      Motivational: "bg-cloud-0198adfc-6073-4b2f-a98c-56a8d59a306a",
+      Compassionate: "bg-cloud-df4c333d-fbe6-490c-a2e5-853d8341fa3a",
+      Assertive: "bg-cloud-df4c333d-fbe6-490c-a2e5-853d8341fa3a",
+    },
+    other: {
+      Calming: "bg-cloud-d03fab66-badd-40c4-8b38-3de8aaaea90a",
+      Motivational: "bg-cloud-184c7b14-72ef-4c23-8844-288ed466eeed",
+      Compassionate: "bg-cloud-899c1983-462f-4800-bcb9-915be96d36d7",
+      Assertive: "bg-cloud-317d0d35-ce79-486b-ac15-d4e75fbe6c31",
     },
   };
 
@@ -2429,7 +2519,14 @@
         : legacy
           ? [legacy.voiceID]
           : [];
-    var voiceID = pool.length ? pool[0] : null;
+    var voiceID = null;
+    for (var vi = 0; vi < pool.length; vi++) {
+      if (!isWebFreeTier() || isWebVoiceAvailableForGeneration(pool[vi])) {
+        voiceID = pool[vi];
+        break;
+      }
+    }
+    if (!voiceID && pool.length) voiceID = pool[0];
     if (!voiceID && legacy) voiceID = legacy.voiceID;
     var backgroundID =
       TONE_BACKGROUND_OVERRIDES[id] && TONE_BACKGROUND_OVERRIDES[id][toneKey]
@@ -2437,6 +2534,13 @@
         : legacy
           ? legacy.backgroundID
           : "";
+    if (
+      !isWebFreeTier() &&
+      TONE_BACKGROUND_CATALOG_IDS[id] &&
+      TONE_BACKGROUND_CATALOG_IDS[id][toneKey]
+    ) {
+      backgroundID = TONE_BACKGROUND_CATALOG_IDS[id][toneKey];
+    }
     if (!voiceID || !backgroundID) return legacy || null;
     return {
       voiceID: voiceID,
@@ -2568,6 +2672,19 @@
 
   function listenMatchHeroCards(categoryID, energy, preference) {
     if (energy !== "Relaxed" || String(categoryID || "") === "sleep-rest") return null;
+    var approvedTone = primaryToneForListenEnergy(energy, categoryID);
+    var approved = recommendedMediaForCategory(categoryID, approvedTone);
+    var approvedVoice = approved && availableVoices.find(function (v) {
+      return v.id === approved.voiceID;
+    });
+    if (
+      approvedVoice &&
+      listenMatchVoiceMatches(approvedVoice, preference) &&
+      isWebVoiceAvailableForGeneration(approved.voiceID) &&
+      isWebBackgroundAvailableForGeneration(approved.backgroundID)
+    ) {
+      return null;
+    }
     var carla = "l32B8XDoylOsZKiSdfhE";
     var clara = "8LVfoRdkh4zgjr8v5ObE";
     var allison = "1wGbFxmAM3Fgw63G1zZJ";
@@ -2670,8 +2787,29 @@
   }
 
   function listenMatchPaidCards(categoryID, energy, preference) {
+    var tone = primaryToneForListenEnergy(energy, categoryID);
+    var rec = recommendedMediaForCategory(categoryID, tone);
     var voices = listenMatchRankedVoices(energy, preference);
+    if (rec && rec.voiceID) {
+      var recVoice = availableVoices.find(function (v) {
+        return v.id === rec.voiceID;
+      });
+      if (
+        recVoice &&
+        listenMatchVoiceMatches(recVoice, preference) &&
+        isWebVoiceAvailableForGeneration(rec.voiceID)
+      ) {
+        voices = voices.filter(function (v) {
+          return v.id !== rec.voiceID;
+        });
+        voices.unshift(recVoice);
+      }
+    }
     var beds = listenMatchRankedBeds(categoryID, energy);
+    var leadBed = beds[0] || "bg-none";
+    if (rec && rec.backgroundID && isWebBackgroundAvailableForGeneration(rec.backgroundID)) {
+      leadBed = rec.backgroundID;
+    }
     var pairs = [];
     function append(voiceID, backgroundID, badge) {
       var key = voiceID + "|" + backgroundID;
@@ -2686,7 +2824,7 @@
       if (!isWebBackgroundAvailableForGeneration(backgroundID)) return;
       pairs.push([voiceID, backgroundID, badge]);
     }
-    if (voices[0]) append(voices[0].id, beds[0] || "bg-none", "Suggested");
+    if (voices[0]) append(voices[0].id, leadBed, "Suggested");
     if (voices[1]) append(voices[1].id, beds[1] || "bg-none", "Also fits");
     if (voices[2]) append(voices[2].id, "bg-none", "Voice only");
     if (pairs.length < 3) {
@@ -8302,7 +8440,7 @@
       return n + ((c.items && c.items.length) || 0);
     }, 0);
     var intro =
-      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Shipped inside the iOS app bundle — Free users see these in App Library. Web lists metadata from <code>bundled-premades-manifest.json</code> (update when bundled MP3s change).</p>';
+      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Built into the app. Free listeners hear these in a category until a Free item is published online for that category. Web lists metadata from <code>bundled-premades-manifest.json</code>.</p>';
     if (!total) {
       return (
         '<details class="admin-bundled-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
@@ -9462,12 +9600,35 @@
   }
 
 
-  /** App Library browse: Free = built-in static premades; Paid = cloud `premadeAudio` only. */
+  /**
+   * App Library browse.
+   * Paid: online catalog, filtered by access.
+   * Free: online items marked free. A category with no Free publish yet keeps the built-in tracks.
+   */
   function premadesForAppLibraryBrowse(cloudPremade) {
-    if (isWebFreeTier()) {
-      return buildStaticPremadeFallbackList();
-    }
-    return filterPremadesByCatalogAccess(cloudPremade || []);
+    var accessible = filterPremadesByCatalogAccess(cloudPremade || []);
+    if (!isWebFreeTier()) return accessible;
+    if (!premadeCloudSnapshotReceived) return buildStaticPremadeFallbackList();
+
+    var staticRows = buildStaticPremadeFallbackList();
+    var cloudByCategory = {};
+    accessible.forEach(function (p) {
+      var cid = (p.categoryID && String(p.categoryID).trim()) || "";
+      if (!cid) return;
+      if (!cloudByCategory[cid]) cloudByCategory[cid] = [];
+      cloudByCategory[cid].push(p);
+    });
+    var rows = [];
+    Object.keys(cloudByCategory).forEach(function (cid) {
+      cloudByCategory[cid].forEach(function (p) {
+        rows.push(p);
+      });
+    });
+    staticRows.forEach(function (row) {
+      if (cloudByCategory[row.categoryID]) return;
+      rows.push(row);
+    });
+    return rows;
   }
 
   function refreshAppLibraryPremadesFromCloud() {
@@ -16284,7 +16445,7 @@
     return scriptDigestSourceFromScript(script);
   }
 
-  /** Aligns with iOS `AudioTagUtils` for Eleven v3-style tags. */
+  /** Aligns with iOS `AudioTagUtils` for Eleven v4-style tags. */
   var WEB_SHOW_AUDIO_TAGS_STORAGE_KEY = "focusshiftWebShowAudioTagsInScript";
 
   function readShowAudioTagsFormattingPreference() {
@@ -18367,6 +18528,12 @@
     return false;
   }
 
+  function premadeAccessTierFromData(data) {
+    var raw =
+      data && data.accessTier != null ? String(data.accessTier).trim().toLowerCase() : "";
+    return raw === "free" ? "free" : "paid";
+  }
+
   function catalogAccessTierFromData(data) {
     var raw =
       data && data.accessTier != null ? String(data.accessTier).trim().toLowerCase() : "";
@@ -19715,11 +19882,11 @@
     var canCreate = canWebStartAiTaste();
     return (
       '<div class="app-empty-hint library-samples-banner" style="margin:0 0 0.85rem;padding:0.75rem 0.85rem;">' +
-      "  <strong>These are sample starters</strong>" +
+      "  <strong>Short listens</strong>" +
       '  <p style="margin:0.3rem 0 0.55rem;">' +
       (canCreate
-        ? "Browse and listen freely — or try one free personalized script + audio."
-        : "Browse and listen freely. Upgrade to create more affirmation audio personalized to you.") +
+        ? "Play these anytime. When you want one about your life, try your free personalized audio."
+        : "Play these anytime. Upgrade to create more affirmation audio personalized to you.") +
       "</p>" +
       '  <button type="button" class="app-btn app-btn-primary" id="btn-app-library-samples-upgrade" style="font-size:0.88rem;">' +
       (canCreate ? "Try my free personalized audio" : "Upgrade to create yours") +
@@ -22411,7 +22578,7 @@
       description: data.description || "",
       scriptText: data.scriptText || "",
       audioURL: (data.audioURL && String(data.audioURL).trim()) || resolvePremadeStaticAudioURLFromData(data),
-      accessTier: catalogAccessTierFromData(data),
+      accessTier: premadeAccessTierFromData(data),
       isCloudCatalog: true,
       storagePath: data.storagePath || "",
       voiceID: (data.voiceID && String(data.voiceID).trim()) || "",
@@ -22553,6 +22720,7 @@
             return p.active !== false;
           })
         );
+        premadeCloudSnapshotReceived = true;
         refreshAppLibraryPremadesFromCloud();
         var nextExpanded = {};
         currentPremade.forEach(function (p) {
