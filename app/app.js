@@ -15043,26 +15043,37 @@
 
   function readGenerateFormFromDom() {
     var cat = selectedCategory();
-    var q1 = isQuickStartPath()
-      ? String(quickStartAnswers[0] || "").trim()
-      : (document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "";
-    var q2 = isQuickStartPath()
-      ? String(quickStartAnswers[2] || quickStartAnswers[1] || "").trim()
-      : (document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "";
+    var quickPhrases = isQuickStartPath() ? quickStartPhraseList() : null;
+    var q1 = quickPhrases
+      ? String(quickPhrases[0] || "").trim()
+      : ((document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "");
+    var q2 = quickPhrases
+      ? String(quickPhrases[1] || "").trim()
+      : ((document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "");
     var obstacleEl = document.getElementById("gen-intake-obstacle");
     var toneEl = document.getElementById("gen-tone");
     var lenRadio = document.querySelector('input[name="gen-length"]:checked');
     var persRadio = document.querySelector('input[name="gen-perspective"]:checked');
     var useNameEl = document.getElementById("gen-use-name");
+    var feelingPhrases = quickPhrases
+      ? phrasesWithNote(quickStartFeelings, quickStartFeelingNote)
+      : [];
+    var length = quickPhrases
+      ? (isWebFreeTier() ? "Short" : (quickStartLength || "Medium"))
+      : ((lenRadio && lenRadio.value) || "Medium");
     return {
       cat: cat,
       q1: q1.trim(),
       q2: q2.trim(),
       intakeObstacle: obstacleEl ? obstacleEl.value.trim() : "",
-      intakeContext: q1.trim(),
-      intakeFeeling: q2.trim(),
+      intakeContext: quickPhrases
+        ? (quickStartIntention === "moment" ? quickStartMomentValue() : "")
+        : q1.trim(),
+      intakeFeeling: quickPhrases
+        ? (feelingPhrases.length === 1 ? feelingPhrases[0] : "")
+        : q2.trim(),
       tone: (toneEl && toneEl.value) || "Calming",
-      length: (lenRadio && lenRadio.value) || "Medium",
+      length: length,
       perspective: (persRadio && persRadio.value) || "First person",
       useNameInScript: useNameEl ? !!useNameEl.checked : true,
       listenMode: selectedListenMode,
@@ -15329,11 +15340,15 @@
     if (!currentUser) return;
     if (!requireWebCreateOrTaste()) return;
     var deepen = syncHomeDeepenFromForm(displayName);
-    if (!deepen.q1 || !deepen.q2) {
-      generationMessage("Please answer both questions first.", "error");
-      return;
+    if (isQuickStartPath()) {
+      if (!validateRequiredIntake(deepen)) return;
+    } else {
+      if (!deepen.q1 || !deepen.q2) {
+        generationMessage("Please answer both questions first.", "error");
+        return;
+      }
+      if (!validateRequiredIntake(deepen)) return;
     }
-    if (!validateRequiredIntake(deepen)) return;
     finalizeScriptGeneration({
       displayName: deepen.displayName,
       cat: deepen.cat,
