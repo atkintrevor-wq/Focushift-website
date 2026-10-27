@@ -2862,25 +2862,24 @@
     var voiceID = (scriptWorkshopDraft && scriptWorkshopDraft.voiceID) || "";
     listenMatchEnergy = inferredListenEnergy(categoryID, toneRaw, backgroundID);
     listenMatchVoicePref = scriptWorkshopIsNewDraft ? "Either" : inferredListenVoicePreference(voiceID);
-    applyFirstListenMatchCard(scriptWorkshopIsNewDraft || !voiceID);
+    applyFirstListenMatchCard();
   }
 
-  function applyFirstListenMatchCard(force) {
+  function applyFirstListenMatchCard() {
     if (!scriptWorkshopDraft) return;
+    var currentVoice = String(scriptWorkshopDraft.voiceID || "").trim();
+    var currentBed = String(scriptWorkshopDraft.backgroundID || "").trim();
+    if (currentVoice && currentBed) return;
     var cards = listenMatchCards(
       currentListenMatchCategoryId(getScriptWorkshopContextScript()),
       listenMatchEnergy,
       listenMatchVoicePref
     );
     if (!cards.length) return;
-    var currentVoice = String(scriptWorkshopDraft.voiceID || "").trim();
-    var currentBed = String(scriptWorkshopDraft.backgroundID || "").trim() || "bg-none";
-    var inList = cards.some(function (card) {
-      return card.voiceID === currentVoice && card.backgroundID === currentBed;
-    });
-    if (inList) return;
-    if (force || scriptWorkshopIsNewDraft || !currentVoice) {
-      applyListenMatchCard(cards[0], false);
+    var card = cards[0];
+    if (!currentVoice) scriptWorkshopDraft.voiceID = card.voiceID;
+    if (!currentBed) {
+      scriptWorkshopDraft.backgroundID = card.backgroundID === "bg-none" ? "bg-none" : card.backgroundID;
     }
   }
 
@@ -3133,7 +3132,6 @@
         if (group === "voice") listenMatchVoicePref = value;
         if (group === "feel") listenMatchEnergy = value;
         stopListenMixPreview();
-        applyFirstListenMatchCard(true);
         renderScriptWorkshop();
       };
     });
@@ -3153,18 +3151,7 @@
         ev.stopPropagation();
         var voiceID = btn.getAttribute("data-voice-id") || "";
         var backgroundID = btn.getAttribute("data-background-id") || "";
-        var card = cards.find(function (c) {
-          return c.voiceID === voiceID && c.backgroundID === backgroundID;
-        });
-        if (card) applyListenMatchCard(card, false);
         toggleListenMixPreview(voiceID, backgroundID);
-        var voiceBtn = document.getElementById("script-workshop-voice");
-        var bgBtn = document.getElementById("script-workshop-background");
-        if (voiceBtn) voiceBtn.textContent = "Voice: " + workshopVoiceLabelFromDraft(scriptWorkshopDraft);
-        if (bgBtn) bgBtn.textContent = "Background: " + workshopBackgroundLabelFromDraft(scriptWorkshopDraft);
-        document.querySelectorAll(".listen-match-card").forEach(function (el) {
-          el.classList.toggle("is-selected", el.getAttribute("data-listen-card") === voiceID + "|" + backgroundID);
-        });
       };
     });
     var hear = document.getElementById("script-workshop-hear-mixes");
@@ -15204,8 +15191,13 @@
       Long: "Long — about 800 words (~4 min).",
     };
     function sync() {
-      var checked = document.querySelector('input[name="gen-length"]:checked');
-      var v = (checked && checked.value) || "Medium";
+      var v;
+      if (isQuickStartPath() && quickStartLength) {
+        v = isWebFreeTier() ? "Short" : quickStartLength;
+      } else {
+        var checked = document.querySelector('input[name="gen-length"]:checked');
+        v = (checked && checked.value) || "Medium";
+      }
       if (hint) hint.textContent = labels[v] || labels.Medium;
     }
     document.querySelectorAll('input[name="gen-length"]').forEach(function (r) {
@@ -16160,7 +16152,6 @@
         "  </div>" +
         "</form>";
       wirePerspectiveUseNameRow();
-      wireGenLengthHint();
       fillSurveyFormFromDeepen();
       var tonePickQuick = document.getElementById("gen-tone");
       if (tonePickQuick && (!homeDeepenState || !homeDeepenState.tone)) tonePickQuick.value = defaultTone;
@@ -16169,6 +16160,7 @@
         input.checked = input.value === (isWebFreeTier() ? "Short" : quickStartLength);
         input.disabled = true;
       });
+      wireGenLengthHint();
       var formQuick = document.getElementById("generate-form");
       if (formQuick) {
         formQuick.addEventListener("submit", function (ev) {
@@ -16280,8 +16272,8 @@
       "  </div>" +
       "</form>";
     wirePerspectiveUseNameRow();
-    wireGenLengthHint();
     fillSurveyFormFromDeepen();
+    wireGenLengthHint();
     var tonePick = document.getElementById("gen-tone");
     if (tonePick) {
       if (!homeDeepenState || !homeDeepenState.tone) tonePick.value = defaultTone;
