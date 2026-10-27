@@ -16486,7 +16486,7 @@
     standaloneTags.forEach(function (tag) {
       result = result.split(tag).join("");
     });
-    result = result.replace(/\[\/?[a-zA-Z\s]+\]/g, "");
+    result = result.replace(/\[[^\]\n]{1,80}\]/g, "");
     while (result.indexOf("  ") >= 0) {
       result = result.replace(/  /g, " ");
     }
@@ -18469,23 +18469,55 @@
     return isWebPaidTier();
   }
 
-  /** Free lifetime: 1 short AI script remaining (server-enforced; shared with iOS). */
+  function freeListenDayCount(usage) {
+    var keys = usage && usage.freeListenDayKeys;
+    return Array.isArray(keys) ? keys.length : 0;
+  }
+
+  function freeSecondTasteUnlockedWeb(usage) {
+    return freeListenDayCount(usage) >= 3;
+  }
+
+  function freeCreateBlockedDetailWeb(usage) {
+    var days = freeListenDayCount(usage || {});
+    if (days >= 3) {
+      return "You've used both free personalized scripts. Upgrade to Starter or Creator to create more.";
+    }
+    var scripts = usageDocInt(usage || {}, "scriptsThisMonth");
+    if (scripts >= 1) {
+      var left = Math.max(0, 3 - days);
+      return (
+        "Listen to your audio on " +
+        left +
+        " more day" +
+        (left === 1 ? "" : "s") +
+        " to unlock one more free script. Or upgrade to create more now."
+      );
+    }
+    return "You've used your free personalized script. Upgrade to Starter or Creator to create more.";
+  }
+
+  /** Free: 1 short script, or 2 after three different days of listening (server-enforced). */
   function canWebStartAiTaste() {
     if (isWebPaidTierForAI()) return true;
     if (!isWebFreeTier()) return false;
     // Until usage loads, do not offer another Free create (prevents cross-device double-dip UI).
     if (!freeUsageReady) return false;
     var usage = (accountInsightsSnapshot && accountInsightsSnapshot.usage) || {};
-    return usageDocInt(usage, "scriptsThisMonth") < 1;
+    var allowance = freeSecondTasteUnlockedWeb(usage) ? 2 : 1;
+    return usageDocInt(usage, "scriptsThisMonth") < allowance;
   }
 
-  /** Free lifetime: TTS taste remaining (any prior TTS usage counts as used; shared with iOS). */
+  /** Free audio: the first render, then one more after the second script unlocks. */
   function canWebGenerateAiTaste() {
     if (isWebPaidTierForAI()) return true;
     if (!isWebFreeTier()) return false;
     if (!freeUsageReady) return false;
     var usage = (accountInsightsSnapshot && accountInsightsSnapshot.usage) || {};
-    return usageDocInt(usage, "ttsCharactersThisMonth") === 0;
+    var tts = usageDocInt(usage, "ttsCharactersThisMonth");
+    if (tts === 0) return true;
+    if (!freeSecondTasteUnlockedWeb(usage)) return false;
+    return tts < 4000;
   }
 
   function canWebParticipateInCreateHearPath() {
@@ -18509,7 +18541,7 @@
     promptWebPaidUpgrade(
       detail ||
         (isWebFreeTier()
-          ? "You've used your free personalized script (shared across the iOS app and web). Upgrade to Starter or Creator to create more."
+          ? freeCreateBlockedDetailWeb((accountInsightsSnapshot && accountInsightsSnapshot.usage) || {})
           : "AI script generation requires Starter or Creator.")
     );
     return false;
@@ -18529,7 +18561,7 @@
     promptWebPaidUpgrade(
       detail ||
         (isWebFreeTier()
-          ? "You've used your free audio sample (shared across the iOS app and web). Upgrade to Starter or Creator to generate more."
+          ? freeCreateBlockedDetailWeb((accountInsightsSnapshot && accountInsightsSnapshot.usage) || {})
           : WEB_PAID_FEATURE_COPY.generate)
     );
     return false;
@@ -20187,6 +20219,43 @@
     refreshHomeDailySparkTransportIfVisible();
   }
 
+  var freeOwnListenNotedKey = "";
+
+  function postFreeOwnListen(scriptId) {
+    if (!currentUser || !scriptId) return;
+    currentUser.getIdToken().then(function (token) {
+      return fetch(backendBaseURL() + "/api/usage/free-listen", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ scriptId: scriptId }),
+      });
+    }).catch(function () {});
+  }
+
+  /** One qualifying listen per own script per page load, after about eight seconds. */
+  function watchFreeOwnListen(script) {
+    if (!isWebFreeTier() || !script || script.isPremade || !activeAudio) return;
+    var id = script.id;
+    var day = new Date().toISOString().slice(0, 10);
+    var key = id + ":" + day;
+    if (freeOwnListenNotedKey === key) return;
+    function onTime() {
+      if (!activeAudio || activeAudioScriptId !== id) {
+        if (activeAudio) activeAudio.removeEventListener("timeupdate", onTime);
+        return;
+      }
+      if (activeAudio.currentTime < 8) return;
+      activeAudio.removeEventListener("timeupdate", onTime);
+      if (freeOwnListenNotedKey === key) return;
+      freeOwnListenNotedKey = key;
+      postFreeOwnListen(id);
+    }
+    activeAudio.addEventListener("timeupdate", onTime);
+  }
+
   function beginScriptAudioPlayback(script, audioURL) {
     stopActiveAudio();
     reportCatalogStorageCostFromUrl(audioURL, script.isPremade ? "premade_play" : "user_audio_play");
@@ -20199,6 +20268,7 @@
       rerenderMyLibraryCardsIfNeeded();
       refreshHomeDailySparkTransportIfVisible();
       recordWebListen(activeAudioTitle, audioURL);
+      watchFreeOwnListen(script);
     });
   }
 
@@ -20287,6 +20357,7 @@
         renderSelectedPlaylistDetail();
         renderScripts(currentScripts);
         recordWebListen(activeAudioTitle, audioURL);
+        watchFreeOwnListen(script);
       })
       .catch(function () {
         setPlaylistsMessage("Could not play playlist audio in browser.", "error");
