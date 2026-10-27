@@ -37,6 +37,9 @@
   var userBackgroundsUnsubscribe = null;
   /** Active rows from Firestore `backgroundCatalog` (stream URLs). */
   var currentBackgroundCatalog = [];
+  /** Hidden cloud backgrounds. Still resolvable for scripts that already use them. */
+  var currentHiddenBackgroundCatalog = [];
+  var editingBackgroundId = null;
   /** Active browse categories from Firestore `catalogCategories`. */
   var currentCatalogCategories = [];
   var currentClonedVoices = [];
@@ -6719,6 +6722,26 @@
       "    </div>" +
       "  </div>" +
       "</div>" +
+      '<div id="background-edit-backdrop" class="app-modal-backdrop" hidden>' +
+      '  <div class="app-modal" role="dialog" aria-modal="true" aria-label="Edit background">' +
+      "    <h3>Edit background</h3>" +
+      '    <label for="background-edit-name">Name</label>' +
+      '    <input id="background-edit-name" type="text" maxlength="120">' +
+      '    <label for="background-edit-category">Category</label>' +
+      '    <select id="background-edit-category"></select>' +
+      '    <label for="background-edit-access-tier">Who can access</label>' +
+      '    <select id="background-edit-access-tier">' +
+      '      <option value="paid">Paid (Starter, Creator &amp; Pro)</option>' +
+      '      <option value="free">Free (all users)</option>' +
+      "    </select>" +
+      '    <div id="background-edit-message" class="app-inline-msg" role="status" aria-live="polite"></div>' +
+      '    <div class="app-modal-actions">' +
+      '      <button type="button" class="app-btn app-btn-danger" id="background-edit-hide">Hide from catalog</button>' +
+      '      <button type="button" class="app-btn" id="background-edit-cancel">Cancel</button>' +
+      '      <button type="button" class="app-btn" id="background-edit-save">Save changes</button>' +
+      "    </div>" +
+      "  </div>" +
+      "</div>" +
       '<div id="media-picker-backdrop" class="app-modal-backdrop" hidden>' +
       '  <div class="app-modal media-picker-modal" id="media-picker-modal" role="dialog" aria-modal="true" aria-label="Media picker">' +
       '    <h3 id="media-picker-title">Select option</h3>' +
@@ -7606,6 +7629,29 @@
     document.getElementById("premade-edit-delete").addEventListener("click", function () {
       unpublishPremade();
     });
+    var backgroundEditCancel = document.getElementById("background-edit-cancel");
+    var backgroundEditSave = document.getElementById("background-edit-save");
+    var backgroundEditHide = document.getElementById("background-edit-hide");
+    if (backgroundEditCancel) {
+      backgroundEditCancel.addEventListener("click", function () {
+        closeEditBackgroundModal();
+      });
+    }
+    if (backgroundEditSave) {
+      backgroundEditSave.addEventListener("click", function () {
+        saveBackgroundEdits();
+      });
+    }
+    if (backgroundEditHide) {
+      backgroundEditHide.addEventListener("click", function () {
+        var track = findCloudBackground(editingBackgroundId);
+        if (!track) return;
+        if (window.confirm('Hide "' + (track.name || "this track") + '" from the libraries?')) {
+          setBackgroundActive(track.id, false);
+          closeEditBackgroundModal();
+        }
+      });
+    }
     root.querySelectorAll("[data-voices-tab]").forEach(function (btn) {
       btn.addEventListener("click", function () {
         var tab = btn.getAttribute("data-voices-tab") || "app-voices";
@@ -8226,9 +8272,42 @@
           escapeHtml(b.name || "Background") +
           '</strong><br><span class="app-muted" style="font-size:0.82rem;">' +
           escapeHtml((b.accessTier || "free") === "paid" ? "Paid (Starter, Creator & Pro)" : "Free (all users)") +
-          "</span></div></div>"
+          "</span></div>" +
+          '<button type="button" class="app-btn app-btn-secondary" data-bg-action="edit" data-bg-id="' +
+          escapeHtml(b.id) +
+          '">Edit</button>' +
+          '<button type="button" class="app-btn app-btn-secondary" data-bg-action="hide" data-bg-id="' +
+          escapeHtml(b.id) +
+          '">Hide</button>' +
+          '<button type="button" class="app-btn app-btn-secondary" data-bg-action="delete" data-bg-id="' +
+          escapeHtml(b.id) +
+          '">Delete</button></div>'
         );
       });
+    }
+    var hiddenBody = "";
+    if (currentHiddenBackgroundCatalog.length) {
+      hiddenBody =
+        '<details style="margin-top:0.75rem;"><summary style="cursor:pointer;">Hidden (' +
+        currentHiddenBackgroundCatalog.length +
+        ")</summary>" +
+        currentHiddenBackgroundCatalog
+          .map(function (b) {
+            return (
+              '<div class="admin-cloud-bg-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;">' +
+              '<div style="flex:1;min-width:0;"><strong>' +
+              escapeHtml(b.name || "Background") +
+              '</strong></div>' +
+              '<button type="button" class="app-btn app-btn-secondary" data-bg-action="restore" data-bg-id="' +
+              escapeHtml(b.id) +
+              '">Restore</button>' +
+              '<button type="button" class="app-btn app-btn-secondary" data-bg-action="delete" data-bg-id="' +
+              escapeHtml(b.id) +
+              '">Delete</button></div>'
+            );
+          })
+          .join("") +
+        "</details>";
     }
     var bundledGroups = groupBackgroundsByCategory(availableBackgrounds);
     var bundledTotal = availableBackgrounds.length;
@@ -8248,15 +8327,135 @@
       intro +
       header +
       cloudBody +
+      hiddenBody +
       "</details>" +
       '<details class="admin-bundled-bg-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
       '<summary style="cursor:pointer;font-weight:600;">Bundled backgrounds (iOS app) (' +
       bundledTotal +
       ")</summary>" +
-      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Shipped inside the app bundle. Free users browse these in App Audio.</p>' +
+      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Shipped inside the app. Free listeners also see any cloud track marked Free.</p>' +
       (bundledTotal ? bundledBlocks : '<p class="app-muted" style="margin:0.35rem 0 0;">No bundled backgrounds found.</p>') +
       "</details>"
     );
+  }
+
+  function findCloudBackground(backgroundId) {
+    var id = (backgroundId && String(backgroundId).trim()) || "";
+    return (
+      currentBackgroundCatalog.find(function (b) {
+        return b.id === id;
+      }) ||
+      currentHiddenBackgroundCatalog.find(function (b) {
+        return b.id === id;
+      }) ||
+      null
+    );
+  }
+
+  function setBackgroundEditMessage(text, kind) {
+    postScreenMessage("background-edit-message", text, kind);
+  }
+
+  function openEditBackgroundModal(track) {
+    if (!adminModeEnabled || !track) return;
+    editingBackgroundId = track.id;
+    var backdrop = document.getElementById("background-edit-backdrop");
+    var nameEl = document.getElementById("background-edit-name");
+    var categoryEl = document.getElementById("background-edit-category");
+    var accessEl = document.getElementById("background-edit-access-tier");
+    if (!backdrop || !nameEl || !categoryEl || !accessEl) return;
+    categoryEl.innerHTML = allBackgroundCategoriesForAdmin()
+      .map(function (id) {
+        var selected = id === (track.categoryID || "") ? " selected" : "";
+        return (
+          '<option value="' +
+          escapeHtml(id) +
+          '"' +
+          selected +
+          ">" +
+          escapeHtml(backgroundCategoryDisplayName(id)) +
+          "</option>"
+        );
+      })
+      .join("");
+    nameEl.value = track.name || "";
+    categoryEl.value = track.categoryID || "bg-ambient";
+    accessEl.value = track.accessTier === "free" ? "free" : "paid";
+    setBackgroundEditMessage("", "");
+    backdrop.hidden = false;
+  }
+
+  function closeEditBackgroundModal() {
+    var backdrop = document.getElementById("background-edit-backdrop");
+    if (backdrop) backdrop.hidden = true;
+    editingBackgroundId = null;
+    setBackgroundEditMessage("", "");
+  }
+
+  function saveBackgroundEdits() {
+    if (!adminModeEnabled || !editingBackgroundId || !currentUser) return;
+    var name = ((document.getElementById("background-edit-name").value || "").trim());
+    var categoryID =
+      ((document.getElementById("background-edit-category").value || "").trim()) || "bg-ambient";
+    var accessEl = document.getElementById("background-edit-access-tier");
+    var accessTier = accessEl && accessEl.value === "free" ? "free" : "paid";
+    if (!name) {
+      setBackgroundEditMessage("Name is required.", "error");
+      return;
+    }
+    setBackgroundEditMessage("Saving...", "");
+    backgroundCatalogCollection()
+      .doc(editingBackgroundId)
+      .set(
+        {
+          name: name,
+          categoryID: categoryID,
+          accessTier: accessTier,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      .then(function () {
+        closeEditBackgroundModal();
+        setBackgroundsMessage('Updated "' + name + '".', "success");
+      })
+      .catch(function (e) {
+        setBackgroundEditMessage((e && e.message) || "Could not save that background.", "error");
+      });
+  }
+
+  function setBackgroundActive(backgroundId, active) {
+    if (!adminModeEnabled || !backgroundId) return;
+    backgroundCatalogCollection()
+      .doc(backgroundId)
+      .set(
+        {
+          active: active,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+      .catch(function (e) {
+        setBackgroundsMessage((e && e.message) || "Could not update that background.", "error");
+      });
+  }
+
+  function deleteCloudBackground(track) {
+    if (!adminModeEnabled || !track) return;
+    var removal = backgroundCatalogCollection().doc(track.id).delete();
+    if (track.storagePath) {
+      removal = firebase
+        .storage()
+        .ref(track.storagePath)
+        .delete()
+        .catch(function () {})
+        .then(function () {
+          return backgroundCatalogCollection().doc(track.id).delete();
+        });
+    }
+    removal.catch(function (e) {
+      setBackgroundsMessage((e && e.message) || "Could not delete that background.", "error");
+    });
   }
 
   function bindAdminCloudBackgroundActions(scopeRoot) {
@@ -8268,6 +8467,37 @@
         openBackgroundPublishModal();
       });
     }
+    scopeRoot.querySelectorAll("[data-bg-action]").forEach(function (el) {
+      el.addEventListener("click", function () {
+        if (!adminModeEnabled) return;
+        var action = el.getAttribute("data-bg-action");
+        var track = findCloudBackground(el.getAttribute("data-bg-id"));
+        if (!track) return;
+        if (action === "edit") {
+          openEditBackgroundModal(track);
+          return;
+        }
+        if (action === "hide") {
+          if (window.confirm('Hide "' + (track.name || "this track") + '" from the libraries?')) {
+            setBackgroundActive(track.id, false);
+          }
+          return;
+        }
+        if (action === "restore") {
+          setBackgroundActive(track.id, true);
+          return;
+        }
+        if (action === "delete") {
+          if (
+            window.confirm(
+              'Delete "' + (track.name || "this track") + '"? This removes it for everyone.'
+            )
+          ) {
+            deleteCloudBackground(track);
+          }
+        }
+      });
+    });
   }
 
   function premadeSourceScriptStatus(scriptId) {
@@ -9405,6 +9635,10 @@
       return b.id === bid;
     });
     if (cloud) return cloud;
+    var hiddenCloud = currentHiddenBackgroundCatalog.find(function (b) {
+      return b.id === bid;
+    });
+    if (hiddenCloud) return hiddenCloud;
     var meta = mergedUserBackgroundMetas().find(function (m) {
       return m && m.id === bid;
     });
@@ -12337,7 +12571,11 @@
       if (!grouped[cid]) grouped[cid] = [];
       grouped[cid].push(b);
     });
-    var sections = mergedBackgroundCategoryOrder()
+    var categoryOrder = mergedBackgroundCategoryOrder().slice();
+    Object.keys(grouped).forEach(function (cid) {
+      if (categoryOrder.indexOf(cid) < 0 && grouped[cid].length) categoryOrder.push(cid);
+    });
+    var sections = categoryOrder
       .map(function (cid) {
         var items = grouped[cid] || [];
         if (!items.length) return "";
@@ -18615,7 +18853,27 @@
 
   function appBackgroundTracksForSubscriptionTier() {
     if (isWebFreeTier()) {
-      return bundledAppBackgroundTracks();
+      var bundled = bundledAppBackgroundTracks();
+      var seen = {};
+      bundled.forEach(function (b) {
+        seen[b.id] = true;
+      });
+      var cloudFree = filterBackgroundsByCatalogAccess(currentBackgroundCatalog)
+        .filter(function (b) {
+          return !seen[b.id];
+        })
+        .map(function (b) {
+          return {
+            id: b.id,
+            name: b.name,
+            categoryID: b.categoryID,
+            file: "",
+            audioURL: b.audioURL || "",
+            accessTier: b.accessTier || "free",
+            isCloudCatalog: true,
+          };
+        });
+      return bundled.concat(cloudFree);
     }
     return filterBackgroundsByCatalogAccess(currentBackgroundCatalog).map(function (b) {
       return {
@@ -18659,7 +18917,10 @@
     if (!isWebFreeTier()) return true;
     var id = (backgroundID || "").trim();
     if (!id) return true;
-    return !!WEB_FREE_TIER_BACKGROUND_IDS[id];
+    if (WEB_FREE_TIER_BACKGROUND_IDS[id]) return true;
+    return currentBackgroundCatalog.some(function (b) {
+      return b.id === id && (b.accessTier || "free") !== "paid";
+    });
   }
 
   function preferredWebVoiceId(candidate) {
@@ -22607,25 +22868,30 @@
   function subscribeBackgroundCatalog() {
     teardownBackgroundCatalogListener();
     backgroundCatalogUnsubscribe = backgroundCatalogCollection()
-      .where("active", "==", true)
       .onSnapshot(
         function (snap) {
-          currentBackgroundCatalog = snap.docs
-            .map(function (doc) {
-              var data = doc.data() || {};
-              return {
-                id: doc.id,
-                name: data.name || "Background",
-                categoryID: normalizedBackgroundBrowseCategoryID(data.categoryID) || "bg-ambient",
-                file: "",
-                audioURL: (data.audioURL && String(data.audioURL).trim()) || "",
-                accessTier: catalogAccessTierFromData(data),
-                isCloudCatalog: true,
-              };
-            })
-            .sort(function (a, b) {
-              return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
-            });
+          var active = [];
+          var hidden = [];
+          snap.docs.forEach(function (doc) {
+            var data = doc.data() || {};
+            var row = {
+              id: doc.id,
+              name: data.name || "Background",
+              categoryID: normalizedBackgroundBrowseCategoryID(data.categoryID) || "bg-ambient",
+              file: "",
+              audioURL: (data.audioURL && String(data.audioURL).trim()) || "",
+              storagePath: (data.storagePath && String(data.storagePath).trim()) || "",
+              accessTier: catalogAccessTierFromData(data),
+              isCloudCatalog: true,
+            };
+            if (data.active === false) hidden.push(row);
+            else active.push(row);
+          });
+          var byName = function (a, b) {
+            return String(a.name || "").localeCompare(String(b.name || ""), undefined, { sensitivity: "base" });
+          };
+          currentBackgroundCatalog = active.sort(byName);
+          currentHiddenBackgroundCatalog = hidden.sort(byName);
           applyUserProfileDefaults({ onlyIfNewer: true });
           var offlineBgIds = currentBackgroundCatalog.filter(isStreamableCloudBackground).map(function (b) {
             return b.id;
@@ -22641,6 +22907,7 @@
         },
         function () {
           currentBackgroundCatalog = [];
+          currentHiddenBackgroundCatalog = [];
           if (activeAdminTab === "audio") renderAudioPage();
           rerenderMyLibraryCardsIfNeeded();
         }
