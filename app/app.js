@@ -1687,7 +1687,7 @@
   var quickStartPageIndex = 0;
   var quickStartIntention = "";
   var quickStartAsksLength = false;
-  var quickStartLength = "Medium";
+  var quickStartLength = "Short";
   var quickStartBeliefs = [];
   var quickStartFeelings = [];
   var quickStartMoment = "";
@@ -1900,6 +1900,30 @@
     if (m === "getting-ready") return "Getting ready";
     if (m === "in-the-moment") return "In the moment";
     return "After / winding down";
+  }
+
+  function listenModeRepeatTitle(mode, categoryId) {
+    var m = normalizeListenMode(mode);
+    if (categoryId === "sleep-rest") {
+      if (m === "getting-ready") return "Before bed, most nights";
+      if (m === "in-the-moment") return "While I rest or fall asleep";
+      return "When I wake";
+    }
+    if (m === "getting-ready") return "Before, on ordinary days";
+    if (m === "in-the-moment") return "While I'm in it";
+    return "After, to settle";
+  }
+
+  function listenModeRepeatHint(mode, categoryId) {
+    var m = normalizeListenMode(mode);
+    if (categoryId === "sleep-rest") {
+      if (m === "getting-ready") return "Play this while the day winds down. Not one special night.";
+      if (m === "in-the-moment") return "Play this while you rest. Slower, quieter, most nights.";
+      return "Play this as you wake. Unhurried, no pep talk.";
+    }
+    if (m === "getting-ready") return "Play this while you get ready for the kind of moment that keeps coming.";
+    if (m === "in-the-moment") return "Play this during that kind of activity, any day you are in it.";
+    return "Play this after that part of the day, as a way to settle.";
   }
 
   function listenModeQuickStartTitle(mode, categoryId) {
@@ -2306,7 +2330,6 @@
       homeDeepenState.listenMode = selectedListenMode;
     }
     homeClarifyFlow = null;
-    resetQuickStartAnswers();
   }
 
   function confirmListenModeAndStartSurvey(displayName) {
@@ -2314,12 +2337,14 @@
       clearCreateAnswersForListenModeChange();
     }
     listenModeForCurrentAnswers = selectedListenMode;
+    quickStartWhenChosen = true;
     if (homeDeepenState) homeDeepenState.listenMode = selectedListenMode;
-    if (isQuickStartPath()) {
-      setHomeFlowStep("quickstart", displayName);
+    if (isWebFreeTier()) {
+      quickStartLength = "Short";
+      setHomeFlowStep("survey", displayName);
       return;
     }
-    setHomeFlowStep("survey", displayName);
+    setHomeFlowStep("length", displayName);
   }
 
   // Matches iOS SurveyViewModel / functions CLARIFY_TURN_GOALS (positive identity first).
@@ -2335,6 +2360,9 @@
   ];
 
   function clarifyingTurnGoal(step) {
+    if (isQuickStartPath()) {
+      return "One concrete detail: where you are, who is there, or the first thing you do.";
+    }
     var goals = isRepeatListen() ? REPEAT_CLARIFY_TURN_GOALS : CLARIFY_TURN_GOALS;
     var idx = Math.max(0, Math.min(step, goals.length - 1));
     return goals[idx];
@@ -14291,9 +14319,16 @@
     } else if (homeFlowStep === "listen") {
       back.setAttribute("aria-label", "Back");
       titleEl.hidden = false;
-      titleEl.textContent = "When you'll listen";
+      titleEl.textContent = isRepeatListen() ? "When you'll press play" : "When you'll listen";
       back.addEventListener("click", function () {
-        setHomeFlowStep(isQuickStartPath() ? "category" : "intention", displayName);
+        setHomeFlowStep("intention", displayName);
+      });
+    } else if (homeFlowStep === "length") {
+      back.setAttribute("aria-label", "Back to when you'll listen");
+      titleEl.hidden = false;
+      titleEl.textContent = "Length";
+      back.addEventListener("click", function () {
+        setHomeFlowStep("listen", displayName);
       });
     } else if (homeFlowStep === "quickstart") {
       back.setAttribute("aria-label", quickStartPageIndex > 0 ? "Previous question" : "Back to categories");
@@ -14316,7 +14351,7 @@
           return;
         }
         syncHomeDeepenFromForm(displayName);
-        setHomeFlowStep(isRepeatListen() ? "intention" : "listen", displayName);
+        setHomeFlowStep(isWebFreeTier() ? "listen" : "length", displayName);
       });
     } else if (homeFlowStep === "clarify") {
       back.setAttribute("aria-label", "Back to questions");
@@ -15018,7 +15053,9 @@
   }
 
   function maxClarifyForWebTier(tier) {
-    if (tier === "starter" || tier === "creator" || tier === "pro") return 3;
+    if (tier === "starter" || tier === "creator" || tier === "pro") {
+      return isQuickStartPath() ? 1 : 3;
+    }
     return 0;
   }
 
@@ -15079,11 +15116,16 @@
       var feelings = phrasesWithNote(quickStartFeelings, quickStartFeelingNote);
       if (feelings.length === 1) intakeAnswers.feeling = feelings[0];
       answersMap[cat.id] = quickStartPhraseList();
-      if (repeat) listenMode = "";
+    } else {
+      if (quickStartIntention) intakeAnswers.intention = quickStartIntention;
+      if (repeat) {
+        delete intakeAnswers.context;
+        delete intakeAnswers.feeling;
+      }
+    }
+    if (quickStartWhenChosen) {
+      intakeAnswers.whenChosen = "true";
     } else if (repeat) {
-      intakeAnswers.intention = "repeat";
-      delete intakeAnswers.context;
-      delete intakeAnswers.feeling;
       listenMode = "";
     }
     var questionList = isQuickStartPath()
@@ -15091,7 +15133,7 @@
         ? [QuickStartChips.titles.moment, QuickStartChips.titles.feeling]
         : [QuickStartChips.titles.belief, QuickStartChips.titles.feeling])
       : (repeat && typeof QuickStartChips !== "undefined"
-        ? QuickStartChips.overAndOverQuestions(cat.id)
+        ? QuickStartChips.overAndOverQuestions(cat.id, listenMode || selectedListenMode)
         : questionsForListenMode(cat.id, listenMode || selectedListenMode));
     return {
       categories: [
@@ -15277,15 +15319,12 @@
       : ((document.getElementById("gen-q2") && document.getElementById("gen-q2").value) || "");
     var obstacleEl = document.getElementById("gen-intake-obstacle");
     var toneEl = document.getElementById("gen-tone");
-    var lenRadio = document.querySelector('input[name="gen-length"]:checked');
     var persRadio = document.querySelector('input[name="gen-perspective"]:checked');
     var useNameEl = document.getElementById("gen-use-name");
     var feelingPhrases = quickPhrases
       ? phrasesWithNote(quickStartFeelings, quickStartFeelingNote)
       : [];
-    var length = quickPhrases
-      ? (isWebFreeTier() ? "Short" : (quickStartLength || "Medium"))
-      : ((lenRadio && lenRadio.value) || "Medium");
+    var length = isWebFreeTier() ? "Short" : (quickStartLength || "Medium");
     return {
       cat: cat,
       q1: q1.trim(),
@@ -15421,6 +15460,23 @@
     syncToneFromFeel();
   }
 
+  function chosenLengthMarkup() {
+    var labels = {
+      Short: "about 150 words (~1 min).",
+      Medium: "about 400 words (~2.5 min).",
+      Long: "about 800 words (~4 min).",
+    };
+    var v = isWebFreeTier() ? "Short" : (quickStartLength || "Medium");
+    var note = isWebFreeTier()
+      ? "Short is the free sample."
+      : "Chosen earlier. Go back to change it.";
+    return (
+      '  <p class="gen-field-label" style="margin-top:0.85rem;">Length</p>' +
+      "  <p style=\"margin:0;\">" + escapeHtml(v + ". " + (labels[v] || "")) + "</p>" +
+      '  <p class="app-muted" style="margin:0.2rem 0 0;font-size:0.82rem;">' + escapeHtml(note) + "</p>"
+    );
+  }
+
   function wireGenLengthHint() {
     var hint = document.getElementById("gen-length-hint");
     var labels = {
@@ -15429,13 +15485,7 @@
       Long: "Long — about 800 words (~4 min).",
     };
     function sync() {
-      var v;
-      if (isQuickStartPath() && quickStartLength) {
-        v = isWebFreeTier() ? "Short" : quickStartLength;
-      } else {
-        var checked = document.querySelector('input[name="gen-length"]:checked');
-        v = (checked && checked.value) || "Medium";
-      }
+      var v = isWebFreeTier() ? "Short" : (quickStartLength || "Medium");
       if (hint) hint.textContent = labels[v] || labels.Medium;
     }
     document.querySelectorAll('input[name="gen-length"]').forEach(function (r) {
@@ -15525,7 +15575,9 @@
     var f = homeClarifyFlow;
     generationMessage("", "");
     showScriptWorkOverlay({
-      title: "Generating follow-up " + (f.followUpStep + 1) + " of " + f.maxClarify + "…",
+      title: isQuickStartPath()
+        ? "Writing one question…"
+        : "Generating follow-up " + (f.followUpStep + 1) + " of " + f.maxClarify + "…",
       detail: "This usually takes a moment.",
       allowBackground: false,
     });
@@ -15598,10 +15650,6 @@
 
   function beginFollowUpFromForm(displayName) {
     if (!currentUser) return;
-    if (isQuickStartPath()) {
-      generationMessage("Quick start skips follow-ups. Generate your script, or write your own answers.", "info");
-      return;
-    }
     if (!requireWebCreateOrTaste()) return;
     var maxC = maxClarifyForWebTier(resolvedSubscriptionTier());
     if (maxC <= 0) {
@@ -15609,14 +15657,16 @@
       return;
     }
     var deepen = syncHomeDeepenFromForm(displayName);
-    if (!deepen.q1 || !deepen.q2) {
+    if (!validateRequiredIntake(deepen)) return;
+    if (!isQuickStartPath() && (!deepen.q1 || !deepen.q2)) {
       generationMessage("Please answer both questions before asking a follow-up.", "error");
       return;
     }
-    if (!validateRequiredIntake(deepen)) return;
     if ((deepen.followUpStep || 0) >= maxC) {
       generationMessage(
-        "You've used all " + maxC + " follow-ups. Tap Generate Script when you're ready.",
+        isQuickStartPath()
+          ? "You already added one detail. Tap Generate Script when you're ready."
+          : "You've used all " + maxC + " follow-ups. Tap Generate Script when you're ready.",
         "error"
       );
       return;
@@ -15808,8 +15858,7 @@
     if (go) {
       go.addEventListener("click", function () {
         if (!quickStartIntention) return;
-        if (quickStartIntention === "moment") setHomeFlowStep("listen", displayName);
-        else setHomeFlowStep("survey", displayName);
+        setHomeFlowStep("listen", displayName);
       });
     }
   }
@@ -15830,19 +15879,27 @@
     } else if (screen === "length") {
       var beliefCap = chips.beliefPickCount(quickStartLength);
       var feelingCap = chips.feelingPickCount(quickStartLength);
-      var detail = quickStartIntention === "moment"
+      var detail = (quickStartLength || "Short") + ". " + (quickStartIntention === "moment"
         ? "Next you’ll select one moment and " + allowance(feelingCap) + " feeling" + (feelingCap === 1 ? "" : "s") + "."
-        : "Next you’ll select " + allowance(beliefCap) + " belief" + (beliefCap === 1 ? "" : "s") + " and " + allowance(feelingCap) + " feeling" + (feelingCap === 1 ? "" : "s") + ".";
+        : "Next you’ll select " + allowance(beliefCap) + " belief" + (beliefCap === 1 ? "" : "s") + " and " + allowance(feelingCap) + " feeling" + (feelingCap === 1 ? "" : "s") + ".");
       html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.length) + "</p>" +
         '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(detail) + "</p>" +
         ["Short", "Medium", "Long"].map(function (len) {
           return choiceButton(len, len, quickStartLength === len);
         }).join("");
     } else if (screen === "when") {
-      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.when) + "</p>" +
-        '<p class="app-muted" style="margin:0 0 0.75rem;">Before, while it\'s happening, or after.</p>' +
+      var repeatWhen = quickStartIntention === "repeat";
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' +
+        escapeHtml(repeatWhen ? "When will you press play?" : chips.titles.when) + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">' +
+        escapeHtml(repeatWhen
+          ? "Before those moments, while you're in them, or after. Ordinary days, not one event."
+          : "Before, while it's happening, or after.") +
+        "</p>" +
         ["getting-ready", "in-the-moment", "after"].map(function (mode) {
-          return choiceButton(mode, chips.whenTitle(mode), quickStartWhenChosen && selectedListenMode === mode, listenModeHint(mode, cat.id));
+          var title = repeatWhen ? listenModeRepeatTitle(mode, cat.id) : chips.whenTitle(mode);
+          var hint = repeatWhen ? listenModeRepeatHint(mode, cat.id) : listenModeHint(mode, cat.id);
+          return choiceButton(mode, title, quickStartWhenChosen && selectedListenMode === mode, hint);
         }).join("");
     } else if (screen === "moment") {
       html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.moment) + "</p>" +
@@ -15852,12 +15909,12 @@
     } else if (screen === "beliefs") {
       var bCap = chips.beliefPickCount(quickStartLength);
       html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.belief) + "</p>" +
-        '<p class="app-muted" style="margin:0 0 0.75rem;">' + (bCap <= 1 ? "Select one." : "Select up to " + bCap + ".") + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(quickStartLength || "Short") + ". " + (bCap <= 1 ? "Select one." : "Select up to " + bCap + ".") + "</p>" +
         chipWrap(chips.beliefs(cat.id), quickStartBeliefs, true) + typeOwn(quickStartBeliefNote);
     } else if (screen === "feelings") {
       var fCap = chips.feelingPickCount(quickStartLength);
       html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.feeling) + "</p>" +
-        '<p class="app-muted" style="margin:0 0 0.75rem;">' + (fCap <= 1 ? "Select one." : "Select up to " + fCap + ".") + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(quickStartLength || "Short") + ". " + (fCap <= 1 ? "Select one." : "Select up to " + fCap + ".") + "</p>" +
         chipWrap(chips.feelings(cat.id), quickStartFeelings, true) + typeOwn(quickStartFeelingNote);
     }
     var ready = quickStartScreenReady(screen);
@@ -16108,6 +16165,7 @@
         fullBtn.addEventListener("click", function () {
           selectedCreatePath = "full";
           resetQuickStartAnswers();
+          quickStartLength = isWebFreeTier() ? "Short" : "Medium";
           setHomeFlowStep("category", displayName);
         });
       }
@@ -16167,15 +16225,19 @@
         '  <p class="app-muted" style="margin:0 0 0.35rem;">' +
         escapeHtml(cat.name) +
         "</p>" +
-        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.88rem;">When will you press play? We\'ll ask about that moment next.</p>' +
+        '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.88rem;">' +
+        escapeHtml(isRepeatListen()
+          ? "This is for ordinary days, not one event."
+          : "When will you press play? We'll ask about that moment next.") +
+        "</p>" +
         '  <div class="home-listen-mode-list" role="listbox" aria-label="When you\'ll listen">' +
         LISTEN_MODE_IDS.map(function (mode) {
           var selected = selectedListenMode === mode;
-          var title = isQuickStartPath()
-            ? listenModeQuickStartTitle(mode, cat.id)
+          var title = isRepeatListen()
+            ? listenModeRepeatTitle(mode, cat.id)
             : listenModeTitle(mode, cat.id);
-          var hint = isQuickStartPath()
-            ? listenModeQuickStartHint(mode, cat.id)
+          var hint = isRepeatListen()
+            ? listenModeRepeatHint(mode, cat.id)
             : listenModeHint(mode, cat.id);
           return (
             '<button type="button" class="home-listen-mode-card' +
@@ -16214,6 +16276,35 @@
       }
       return;
     }
+    if (homeFlowStep === "length") {
+      var lengthHints = {
+        Short: "About 150 words, around 1 minute.",
+        Medium: "About 400 words, around 2 and a half minutes.",
+        Long: "About 800 words, around 4 minutes.",
+      };
+      el.innerHTML =
+        '<div class="home-quick-start">' +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(cat.name) + "</p>" +
+        '<p style="margin:0 0 0.35rem;font-weight:600;">How long should it be?</p>' +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">This is the length of the listen. The questions come next.</p>' +
+        ["Short", "Medium", "Long"].map(function (len) {
+          return choiceButton(len, len, quickStartLength === len, lengthHints[len]);
+        }).join("") +
+        '<button type="button" class="app-btn app-btn-primary" id="home-length-continue" style="margin-top:0.9rem;width:100%;">Continue</button></div>';
+      el.querySelectorAll("[data-intention]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          quickStartLength = btn.getAttribute("data-intention") || "Medium";
+          renderHomeFlow(displayName);
+        });
+      });
+      var lengthGo = document.getElementById("home-length-continue");
+      if (lengthGo) {
+        lengthGo.addEventListener("click", function () {
+          setHomeFlowStep("survey", displayName);
+        });
+      }
+      return;
+    }
     if (homeFlowStep === "intention") {
       renderIntentionStep(el, cat, displayName);
       return;
@@ -16228,13 +16319,16 @@
       var pq = cf.pendingQuestion || "";
       var turnHint = clarifyingTurnGoal(cf.followUpStep || 0);
       var remainingAfter = Math.max(0, (cf.maxClarify || 3) - ((cf.followUpStep || 0) + 1));
+      var quickAsk = isQuickStartPath();
       el.innerHTML =
         '<div class="app-card app-glass-card" style="margin:0;padding:0.95rem 0.9rem;">' +
-        '  <p class="gen-clarify-progress">Follow-up <strong>' +
-        escapeHtml(String((cf.followUpStep || 0) + 1)) +
-        "</strong> of <strong>" +
-        escapeHtml(String(cf.maxClarify || 3)) +
-        "</strong></p>" +
+        (quickAsk
+          ? '  <p class="gen-clarify-progress">One quick question</p>'
+          : '  <p class="gen-clarify-progress">Follow-up <strong>' +
+            escapeHtml(String((cf.followUpStep || 0) + 1)) +
+            "</strong> of <strong>" +
+            escapeHtml(String(cf.maxClarify || 3)) +
+            "</strong></p>") +
         '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
         escapeHtml(turnHint) +
         "</p>" +
@@ -16249,7 +16343,9 @@
         '    <button type="button" class="app-btn app-btn-primary" id="clarify-continue">Save answer</button>' +
         '    <button type="button" class="app-btn" id="clarify-cancel">Back</button>' +
         "  </div>" +
-        (remainingAfter > 0
+        (quickAsk
+          ? '<p class="app-muted" style="margin:0.55rem 0 0;font-size:0.82rem;">Continue, then generate the script. Go back if you want to keep only the taps.</p>'
+          : remainingAfter > 0
           ? '<p class="app-muted" style="margin:0.55rem 0 0;font-size:0.82rem;">After saving, you can generate or ask another follow-up (' +
             remainingAfter +
             " left).</p>"
@@ -16288,33 +16384,12 @@
         : "Follow-ups are available on Starter and Creator. You can still generate from your answers below.";
     var repeatFull = !isQuickStartPath() && isRepeatListen();
     var listenQs = repeatFull && typeof QuickStartChips !== "undefined"
-      ? QuickStartChips.overAndOverQuestions(cat.id)
+      ? QuickStartChips.overAndOverQuestions(cat.id, selectedListenMode)
       : questionsForListenMode(cat.id, selectedListenMode);
     var ph0 = repeatFull ? "One idea per line" : surveyAnswerPlaceholder(cat.id, 0, selectedListenMode);
     var ph1 = repeatFull ? "Steady, calm, clear" : surveyAnswerPlaceholder(cat.id, 1, selectedListenMode);
     var defaultTone = defaultToneForCategory(cat.id);
     var mediaRec = recommendedMediaForCategory(cat.id, defaultTone);
-    var lengthPills = isWebFreeTier()
-      ? '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
-        '    <span class="gen-pill-item">' +
-        '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" checked />' +
-        '      <label for="gen-length-short" class="gen-pill-label">Short (free sample)</label>' +
-        "    </span>" +
-        "  </div>"
-      : '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
-        '    <span class="gen-pill-item">' +
-        '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" />' +
-        '      <label for="gen-length-short" class="gen-pill-label">Short</label>' +
-        "    </span>" +
-        '    <span class="gen-pill-item">' +
-        '      <input type="radio" name="gen-length" id="gen-length-medium" value="Medium" class="gen-pill-input" checked />' +
-        '      <label for="gen-length-medium" class="gen-pill-label">Medium</label>' +
-        "    </span>" +
-        '    <span class="gen-pill-item">' +
-        '      <input type="radio" name="gen-length" id="gen-length-long" value="Long" class="gen-pill-input" />' +
-        '      <label for="gen-length-long" class="gen-pill-label">Long</label>' +
-        "    </span>" +
-        "  </div>";
     var defaultFeel = listenEnergyFromTone(defaultTone);
     var styleFields =
       '  <p class="gen-field-label" style="margin-top:0.2rem;">Feel</p>' +
@@ -16339,9 +16414,7 @@
       '    <option value="Compassionate">Compassionate</option>' +
       '    <option value="Assertive">Assertive</option>' +
       "  </select>" +
-      '  <p class="gen-field-label" style="margin-top:0.85rem;">Length</p>' +
-      lengthPills +
-      '  <p id="gen-length-hint" class="gen-pill-hint app-muted"></p>' +
+      chosenLengthMarkup() +
       '  <p class="gen-field-label" style="margin-top:0.75rem;">Perspective</p>' +
       '  <div class="gen-pill-row" role="radiogroup" aria-label="Narration perspective">' +
       '    <span class="gen-pill-item">' +
@@ -16357,16 +16430,20 @@
       '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
       "  </div>";
     if (isQuickStartPath()) {
-      var summaryRows = quickStartIntention === "moment"
+      var whenLabel = quickStartIntention === "repeat"
+        ? listenModeRepeatTitle(selectedListenMode, cat.id)
+        : QuickStartChips.whenTitle(selectedListenMode);
+      var summaryRows = [
+        ["When", whenLabel],
+      ].concat(quickStartIntention === "moment"
         ? [
-            ["When", QuickStartChips.whenTitle(selectedListenMode)],
             ["Moment", quickStartMomentValue() || "—"],
             ["Feelings", phrasesWithNote(quickStartFeelings, quickStartFeelingNote).join(", ") || "—"],
           ]
         : [
             ["Beliefs", phrasesWithNote(quickStartBeliefs, quickStartBeliefNote).join(", ") || "—"],
             ["Feelings", phrasesWithNote(quickStartFeelings, quickStartFeelingNote).join(", ") || "—"],
-          ];
+          ]);
       var tapSummary = summaryRows
         .map(function (row) {
           return "<li><strong>" + escapeHtml(row[0]) + ":</strong> " + escapeHtml(row[1]) + "</li>";
@@ -16377,7 +16454,7 @@
         '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
         escapeHtml(cat.name) +
         "</strong> · " +
-        escapeHtml(quickStartIntention === "moment" ? QuickStartChips.whenTitle(selectedListenMode) : "Over and over") +
+        escapeHtml(whenLabel) +
         " · " +
         escapeHtml(quickStartLength) +
         "</p>" +
@@ -16385,8 +16462,18 @@
         tapSummary +
         "</ul>" +
         styleFields +
+        '  <p class="app-muted" style="margin:0.75rem 0 0;font-size:0.85rem;">' +
+        escapeHtml(maxClar > 0
+          ? (followLeft > 0
+            ? "Optional. One short answer gives this listen a little more direction. Or generate with what you tapped."
+            : "You added one detail. Generate the script when you're ready.")
+          : "One optional question. A short answer gives the script a little more direction. Available on Starter and Creator.") +
+        "</p>" +
         '  <div class="gen-action-row">' +
         '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate Script</button>' +
+        '    <button type="button" class="app-btn" id="gen-follow-up"' +
+        (maxClar > 0 && followLeft <= 0 ? " disabled" : "") +
+        ">Follow Up</button>" +
         "  </div>" +
         "</form>";
       wirePerspectiveUseNameRow();
@@ -16394,16 +16481,17 @@
       var tonePickQuick = document.getElementById("gen-tone");
       if (tonePickQuick && (!homeDeepenState || !homeDeepenState.tone)) tonePickQuick.value = defaultTone;
       wireGenFeelPills(cat.id);
-      document.querySelectorAll('input[name="gen-length"]').forEach(function (input) {
-        input.checked = input.value === (isWebFreeTier() ? "Short" : quickStartLength);
-        input.disabled = true;
-      });
-      wireGenLengthHint();
       var formQuick = document.getElementById("generate-form");
       if (formQuick) {
         formQuick.addEventListener("submit", function (ev) {
           ev.preventDefault();
           beginScriptGenerationFromForm(displayName || "");
+        });
+      }
+      var followQuick = document.getElementById("gen-follow-up");
+      if (followQuick) {
+        followQuick.addEventListener("click", function () {
+          beginFollowUpFromForm(displayName || "");
         });
       }
       return;
@@ -16413,7 +16501,7 @@
       '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
       escapeHtml(cat.name) +
       "</strong> · " +
-      escapeHtml(repeatFull ? "Something you can listen to over and over" : listenModeTitle(selectedListenMode, cat.id)) +
+      escapeHtml(repeatFull ? listenModeRepeatTitle(selectedListenMode, cat.id) : listenModeTitle(selectedListenMode, cat.id)) +
       "</p>" +
       (mediaRec
         ? '  <p class="app-muted" id="gen-media-hint" style="margin:0 0 0.5rem;font-size:0.85rem;">Listen match: <strong>' +
@@ -16445,14 +16533,6 @@
       '  <textarea id="gen-intake-obstacle" class="gen-survey-textarea" rows="3" placeholder="' +
       escapeHtml(repeatFull ? "" : surveyIntakeObstaclePlaceholder(cat.id, selectedListenMode)) +
       '"></textarea>' +
-      (repeatFull && maxClar > 0 && followLeft > 0
-        ? '  <div class="gen-action-row" style="margin-top:0.85rem;">' +
-          '    <button type="button" class="app-btn app-btn-primary" id="gen-follow-up">Follow Up</button>' +
-          "  </div>" +
-          '  <p class="app-muted" style="margin:0.35rem 0 0.75rem;font-size:0.85rem;">' +
-          escapeHtml(clarifyHint) +
-          "</p>"
-        : "") +
       '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
       '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
       '    <option value="Calming">Calming</option>' +
@@ -16460,29 +16540,7 @@
       '    <option value="Compassionate">Compassionate</option>' +
       '    <option value="Assertive">Assertive</option>' +
       "  </select>" +
-      '  <p class="gen-field-label" style="margin-top:0.85rem;">Length</p>' +
-      (isWebFreeTier()
-        ? '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
-          '    <span class="gen-pill-item">' +
-          '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" checked />' +
-          '      <label for="gen-length-short" class="gen-pill-label">Short (free sample)</label>' +
-          "    </span>" +
-          "  </div>"
-        : '  <div class="gen-pill-row" role="radiogroup" aria-label="Script length">' +
-          '    <span class="gen-pill-item">' +
-          '      <input type="radio" name="gen-length" id="gen-length-short" value="Short" class="gen-pill-input" />' +
-          '      <label for="gen-length-short" class="gen-pill-label">Short</label>' +
-          "    </span>" +
-          '    <span class="gen-pill-item">' +
-          '      <input type="radio" name="gen-length" id="gen-length-medium" value="Medium" class="gen-pill-input" checked />' +
-          '      <label for="gen-length-medium" class="gen-pill-label">Medium</label>' +
-          "    </span>" +
-          '    <span class="gen-pill-item">' +
-          '      <input type="radio" name="gen-length" id="gen-length-long" value="Long" class="gen-pill-input" />' +
-          '      <label for="gen-length-long" class="gen-pill-label">Long</label>' +
-          "    </span>" +
-          "  </div>") +
-      '  <p id="gen-length-hint" class="gen-pill-hint app-muted"></p>' +
+      chosenLengthMarkup() +
       '  <p class="gen-field-label" style="margin-top:0.75rem;">Perspective</p>' +
       '  <div class="gen-pill-row" role="radiogroup" aria-label="Narration perspective">' +
       '    <span class="gen-pill-item">' +
@@ -16497,21 +16555,18 @@
       '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
       '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
       "  </div>" +
-      (repeatFull
-        ? ""
-        : '  <p class="app-muted" style="margin:0.75rem 0 0;font-size:0.85rem;">' +
-          escapeHtml(clarifyHint) +
-          "</p>") +
+      '  <p class="app-muted" style="margin:0.75rem 0 0;font-size:0.85rem;">' +
+      escapeHtml(clarifyHint) +
+      "</p>" +
       '  <div class="gen-action-row">' +
       '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate Script</button>' +
-      (!repeatFull && maxClar > 0 && followLeft > 0
-        ? '    <button type="button" class="app-btn app-btn-primary" id="gen-follow-up">Follow Up</button>'
-        : "") +
+      '    <button type="button" class="app-btn" id="gen-follow-up"' +
+      (maxClar > 0 && followLeft <= 0 ? " disabled" : "") +
+      ">Follow Up</button>" +
       "  </div>" +
       "</form>";
     wirePerspectiveUseNameRow();
     fillSurveyFormFromDeepen();
-    wireGenLengthHint();
     var tonePick = document.getElementById("gen-tone");
     if (tonePick) {
       if (!homeDeepenState || !homeDeepenState.tone) tonePick.value = defaultTone;

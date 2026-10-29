@@ -10,9 +10,12 @@
 
   function screens(intention, includesLength) {
     var list = ["intention"];
-    if (includesLength) list.push("length");
+    if (intention === "repeat" || intention === "moment") {
+      list.push("when");
+      if (includesLength) list.push("length");
+    }
     if (intention === "repeat") list.push("beliefs", "feelings");
-    if (intention === "moment") list.push("when", "moment", "feelings");
+    if (intention === "moment") list.push("moment", "feelings");
     return list;
   }
 
@@ -124,11 +127,35 @@
     return pack[m];
   }
 
-  function overAndOverQuestions(categoryId) {
+  function overAndOverQuestions(categoryId, mode) {
+    var m = mode === "in-the-moment" || mode === "after" ? mode : "getting-ready";
+    if (categoryId === "sleep-rest") {
+      if (m === "getting-ready") {
+        return [
+          "What is still with you as you wind down, on an ordinary night?",
+          "How do you want to feel as the day settles?",
+        ];
+      }
+      if (m === "after") {
+        return [
+          "How do mornings usually begin for you?",
+          "How do you want to feel as you wake?",
+        ];
+      }
+      return [
+        "Where are you while you rest — bed, couch, a quiet room?",
+        "How do you want to feel as you rest?",
+      ];
+    }
     var belief = categoryId === "i-am"
       ? "What do you want to believe or embody about yourself? Add everything — one idea per line."
-      : "What do you want to believe? Add everything — one idea per line.";
-    return [belief, "How do you want to feel?"];
+      : "What do you want to believe on days like this? Add everything — one idea per line.";
+    var feeling = m === "in-the-moment"
+      ? "How do you want to feel while you're in it?"
+      : m === "after"
+        ? "How do you want to feel once that part of the day is done?"
+        : "How do you want to feel while you're getting ready, before the moments that keep coming?";
+    return [belief, feeling];
   }
 
   global.QuickStartChips = {
