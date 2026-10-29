@@ -5421,6 +5421,30 @@ html.fs-app[data-app-theme="light"] .premade-category-selector-card:hover {
 .home-chip.is-selected {
   border: 2px solid #2563eb;
 }
+.home-chip-pager {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0 0 0.65rem;
+}
+.home-chip-page {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.home-chip-page.is-current {
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.15);
+}
+.home-chip-page:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
 .home-listen-mode-list {
   display: flex;
   flex-direction: column;

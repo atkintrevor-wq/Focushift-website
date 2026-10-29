@@ -1695,6 +1695,15 @@
   var quickStartFeelingNote = "";
   var quickStartMomentNote = "";
   var quickStartWhenChosen = false;
+  var scriptBlocks = [{ work: "", feel: "", scene: "" }];
+  var blockIndex = 0;
+  var blockPart = "work";
+  var selectedParts = [];
+  var selectedFeelings = [];
+  var feelingResponses = {};
+  var partDraft = "";
+  var feelingDraft = "";
+  var chipPages = {};
   /** Cached Daily Spark payload + playback blob URL (Starter/Creator). */
   var dailySparkState = {
     spark: null,
@@ -1892,26 +1901,34 @@
 
   function listenModeTitle(mode, categoryId) {
     var m = normalizeListenMode(mode);
-    if (categoryId === "sleep-rest") {
-      if (m === "getting-ready") return "Before bed";
-      if (m === "in-the-moment") return "While I rest or fall asleep";
-      return "When I wake";
-    }
-    if (m === "getting-ready") return "Getting ready";
-    if (m === "in-the-moment") return "In the moment";
-    return "After / winding down";
+    var rows = {
+      "sleep-rest": { "getting-ready": "Before bed", "in-the-moment": "While I rest or fall asleep", after: "When I wake" },
+      "sports-performance": { "getting-ready": "Preparing for the game", "in-the-moment": "During the game", after: "After the game" },
+      "health-fitness": { "getting-ready": "Before you move", "in-the-moment": "While you're moving", after: "After you're done" },
+      confidence: { "getting-ready": "Before you walk in", "in-the-moment": "While you're in it", after: "After it's over" },
+      relationships: { "getting-ready": "Before you're with them", "in-the-moment": "While you're with them", after: "After you've been with them" },
+      "success-prosperity": { "getting-ready": "Before the work", "in-the-moment": "While you're in the work", after: "After you step away" },
+      "mental-wellbeing": { "getting-ready": "Before the stretch", "in-the-moment": "While you're in it", after: "After, when you come down" },
+      "i-am": { "getting-ready": "Before you step in", "in-the-moment": "While you're in it", after: "When the moment is done" },
+    };
+    var row = rows[categoryId] || { "getting-ready": "Before it starts", "in-the-moment": "While it's happening", after: "After it's done" };
+    return row[m] || row.after;
   }
 
   function listenModeRepeatTitle(mode, categoryId) {
     var m = normalizeListenMode(mode);
-    if (categoryId === "sleep-rest") {
-      if (m === "getting-ready") return "Before bed, most nights";
-      if (m === "in-the-moment") return "While I rest or fall asleep";
-      return "When I wake";
-    }
-    if (m === "getting-ready") return "Before, on ordinary days";
-    if (m === "in-the-moment") return "While I'm in it";
-    return "After, to settle";
+    var rows = {
+      "sleep-rest": { "getting-ready": "Before bed, most nights", "in-the-moment": "While I rest or fall asleep", after: "When I wake" },
+      "sports-performance": { "getting-ready": "Preparing for the game", "in-the-moment": "During the game", after: "After the game" },
+      "health-fitness": { "getting-ready": "Before you move, on ordinary days", "in-the-moment": "While you're moving", after: "After you move, to settle" },
+      confidence: { "getting-ready": "Before you walk in, on ordinary days", "in-the-moment": "While you're in it", after: "After it's over, to settle" },
+      relationships: { "getting-ready": "Before you're with them, on ordinary days", "in-the-moment": "While you're with them", after: "After you've been with them" },
+      "success-prosperity": { "getting-ready": "Before the work, on ordinary days", "in-the-moment": "While you're in the work", after: "After you step away" },
+      "mental-wellbeing": { "getting-ready": "Before the stretch, on ordinary days", "in-the-moment": "While you're in it", after: "After, when you come down" },
+      "i-am": { "getting-ready": "Before you step in, on ordinary days", "in-the-moment": "While you're in it", after: "When the moment is done" },
+    };
+    var row = rows[categoryId] || { "getting-ready": "Before it starts, on ordinary days", "in-the-moment": "While it's happening", after: "After it's done, to settle" };
+    return row[m] || row.after;
   }
 
   function listenModeRepeatHint(mode, categoryId) {
@@ -1921,9 +1938,12 @@
       if (m === "in-the-moment") return "Play this while you rest. Slower, quieter, most nights.";
       return "Play this as you wake. Unhurried, no pep talk.";
     }
-    if (m === "getting-ready") return "Play this while you get ready for the kind of moment that keeps coming.";
-    if (m === "in-the-moment") return "Play this during that kind of activity, any day you are in it.";
-    return "Play this after that part of the day, as a way to settle.";
+    if (categoryId === "sports-performance") {
+      if (m === "getting-ready") return "Play this while you prepare. All week, or right before the game.";
+      if (m === "in-the-moment") return "Play this during the game or the session.";
+      return "Play this after you compete, as a way to settle.";
+    }
+    return listenModeHint(mode, categoryId);
   }
 
   function listenModeQuickStartTitle(mode, categoryId) {
@@ -1949,6 +1969,70 @@
     quickStartFeelingNote = "";
     quickStartMomentNote = "";
     quickStartWhenChosen = false;
+    resetScriptBlocks();
+  }
+
+  function resetScriptBlocks() {
+    scriptBlocks = [{ work: "", feel: "", scene: "" }];
+    blockIndex = 0;
+    blockPart = "work";
+    selectedParts = [];
+    selectedFeelings = [];
+    feelingResponses = {};
+    partDraft = "";
+    feelingDraft = "";
+    chipPages = {};
+  }
+
+  function selectionCap() {
+    return isWebFreeTier() ? 1 : 3;
+  }
+
+  function blockLimit() {
+    return selectionCap();
+  }
+
+  function selectionLines() {
+    return selectedFeelings.map(function (feeling) {
+      return { feel: feeling, scene: String(feelingResponses[feeling] || "").trim() };
+    }).filter(function (line) { return line.scene; });
+  }
+
+  function completeBlocks() {
+    var lines = selectionLines();
+    if (selectedParts.length && lines.length) {
+      return selectedParts.slice(0, selectionCap()).map(function (work) {
+        return { work: work, feel: lines[0].feel, scene: lines[0].scene, lines: lines };
+      });
+    }
+    return [];
+  }
+
+  function blockPieceCount(blocks) {
+    if (selectedFeelings.length) return selectedFeelings.length;
+    if (blocks && blocks[0] && blocks[0].lines && blocks[0].lines.length) return blocks[0].lines.length;
+    return blocks ? blocks.length : 0;
+  }
+
+  function linesReady() {
+    return selectedFeelings.length > 0 && selectedFeelings.every(function (feeling) {
+      return String(feelingResponses[feeling] || "").trim();
+    });
+  }
+
+  function blockListenLabel(count) {
+    if (count <= 1) return "About 45 seconds";
+    if (count === 2) return "About a minute";
+    if (count === 3) return "About a minute and a half";
+    if (count === 4) return "About 2 minutes";
+    if (count === 5) return "About 2 and a half minutes";
+    return "About 3 minutes";
+  }
+
+  function lengthForBlockCount(count) {
+    if (count >= 4) return "Long";
+    if (count >= 2) return "Medium";
+    return "Short";
   }
 
   function isRepeatListen() {
@@ -2032,7 +2116,7 @@
         after: "When you're done — settle, recover, close the day.",
       },
       "sports-performance": {
-        "getting-ready": "Before practice, a game, or a hard session — walk-up and lock in.",
+        "getting-ready": "Listen while you prepare for the game. Through the week, or right before you play.",
         "in-the-moment": "During play or training — this play, this breath, this moment.",
         after: "After you're done — reset, recover, let it complete.",
       },
@@ -2339,12 +2423,8 @@
     listenModeForCurrentAnswers = selectedListenMode;
     quickStartWhenChosen = true;
     if (homeDeepenState) homeDeepenState.listenMode = selectedListenMode;
-    if (isWebFreeTier()) {
-      quickStartLength = "Short";
-      setHomeFlowStep("survey", displayName);
-      return;
-    }
-    setHomeFlowStep("length", displayName);
+    if (!scriptBlocks.length) resetScriptBlocks();
+    setHomeFlowStep("blocks", displayName);
   }
 
   // Matches iOS SurveyViewModel / functions CLARIFY_TURN_GOALS (positive identity first).
@@ -14323,6 +14403,12 @@
       back.addEventListener("click", function () {
         setHomeFlowStep("intention", displayName);
       });
+    } else if (homeFlowStep === "blocks") {
+      back.setAttribute("aria-label", "Back");
+      titleEl.hidden = true;
+      back.addEventListener("click", function () {
+        backFromBlocks(displayName);
+      });
     } else if (homeFlowStep === "length") {
       back.setAttribute("aria-label", "Back to when you'll listen");
       titleEl.hidden = false;
@@ -14346,12 +14432,17 @@
       back.setAttribute("aria-label", "Back");
       titleEl.hidden = true;
       back.addEventListener("click", function () {
+        if (completeBlocks().length || selectedParts.length) {
+          blockPart = selectedFeelings.length ? "scene" : "feel";
+          setHomeFlowStep("blocks", displayName);
+          return;
+        }
         if (isQuickStartPath()) {
           setHomeFlowStep("quickstart", displayName);
           return;
         }
         syncHomeDeepenFromForm(displayName);
-        setHomeFlowStep(isWebFreeTier() ? "listen" : "length", displayName);
+        setHomeFlowStep("listen", displayName);
       });
     } else if (homeFlowStep === "clarify") {
       back.setAttribute("aria-label", "Back to questions");
@@ -15106,19 +15197,38 @@
       if (ctx.intakeContext) intakeAnswers.context = ctx.intakeContext;
       if (ctx.intakeFeeling) intakeAnswers.feeling = ctx.intakeFeeling;
     }
+    var blocks = completeBlocks();
+    if (blocks.length) {
+      intakeAnswers.blocks = blocks.map(function (block) {
+        var lines = block.lines && block.lines.length ? block.lines : [{ feel: block.feel, scene: block.scene }];
+        return { work: block.work, feel: lines[0].feel, scene: lines[0].scene, lines: lines };
+      });
+      answersMap[cat.id] = [];
+      blocks.forEach(function (block) {
+        var lines = block.lines && block.lines.length ? block.lines : [{ feel: block.feel, scene: block.scene }];
+        answersMap[cat.id].push(block.work);
+        lines.forEach(function (line) {
+          answersMap[cat.id].push(line.feel, line.scene);
+        });
+      });
+      intakeAnswers.feeling = blocks[0].lines && blocks[0].lines[0] ? blocks[0].lines[0].feel : blocks[0].feel;
+      intakeAnswers.context = (blocks[0].lines || [{ scene: blocks[0].scene }]).map(function (line) { return line.scene; }).join("; ");
+    }
     if (isQuickStartPath()) {
       intakeAnswers.createPath = "quickStart";
       if (quickStartIntention) intakeAnswers.intention = quickStartIntention;
-      if (quickStartIntention === "moment") {
-        var moment = quickStartMomentValue();
-        if (moment) intakeAnswers.context = moment;
+      if (!blocks.length) {
+        if (quickStartIntention === "moment") {
+          var moment = quickStartMomentValue();
+          if (moment) intakeAnswers.context = moment;
+        }
+        var feelings = phrasesWithNote(quickStartFeelings, quickStartFeelingNote);
+        if (feelings.length === 1) intakeAnswers.feeling = feelings[0];
+        answersMap[cat.id] = quickStartPhraseList();
       }
-      var feelings = phrasesWithNote(quickStartFeelings, quickStartFeelingNote);
-      if (feelings.length === 1) intakeAnswers.feeling = feelings[0];
-      answersMap[cat.id] = quickStartPhraseList();
     } else {
       if (quickStartIntention) intakeAnswers.intention = quickStartIntention;
-      if (repeat) {
+      if (repeat && !blocks.length) {
         delete intakeAnswers.context;
         delete intakeAnswers.feeling;
       }
@@ -15128,7 +15238,10 @@
     } else if (repeat) {
       listenMode = "";
     }
-    var questionList = isQuickStartPath()
+    var blockPrompts = blocks.length && typeof QuickStartChips !== "undefined" ? QuickStartChips.blockSet(cat.id) : null;
+    var questionList = blockPrompts
+      ? [blockPrompts.work, blockPrompts.feel, blockPrompts.scene]
+      : isQuickStartPath()
       ? (quickStartIntention === "moment"
         ? [QuickStartChips.titles.moment, QuickStartChips.titles.feeling]
         : [QuickStartChips.titles.belief, QuickStartChips.titles.feeling])
@@ -15148,7 +15261,7 @@
       intakeAnswers: intakeAnswers,
       listenMode: listenMode,
       tone: ctx.tone || "Calming",
-      length: ctx.length || "Medium",
+      length: blocks.length ? lengthForBlockCount(blockPieceCount(blocks)) : (ctx.length || "Medium"),
       clarifyCount: clarifyCount,
       tier: resolvedSubscriptionTier(),
       perspective: third ? "Third person" : "First person",
@@ -15310,7 +15423,8 @@
 
   function readGenerateFormFromDom() {
     var cat = selectedCategory();
-    var quickPhrases = isQuickStartPath() ? quickStartPhraseList() : null;
+    var blocks = completeBlocks();
+    var quickPhrases = !blocks.length && isQuickStartPath() ? quickStartPhraseList() : null;
     var q1 = quickPhrases
       ? String(quickPhrases[0] || "").trim()
       : ((document.getElementById("gen-q1") && document.getElementById("gen-q1").value) || "");
@@ -15324,7 +15438,7 @@
     var feelingPhrases = quickPhrases
       ? phrasesWithNote(quickStartFeelings, quickStartFeelingNote)
       : [];
-    var length = isWebFreeTier() ? "Short" : (quickStartLength || "Medium");
+    var length = blocks.length ? lengthForBlockCount(blockPieceCount(blocks)) : (isWebFreeTier() ? "Short" : (quickStartLength || "Medium"));
     return {
       cat: cat,
       q1: q1.trim(),
@@ -15345,6 +15459,7 @@
   }
 
   function validateRequiredIntake(ctx) {
+    if (completeBlocks().length) return true;
     if (isQuickStartPath()) {
       var screens = quickStartScreens();
       var ready = screens.every(function (screen) {
@@ -15461,6 +15576,7 @@
   }
 
   function chosenLengthMarkup() {
+    if (completeBlocks().length) return "";
     var labels = {
       Short: "about 150 words (~1 min).",
       Medium: "about 400 words (~2.5 min).",
@@ -15524,7 +15640,7 @@
     generationMessage("", "");
     showScriptWorkOverlay({
       title: "Generating your script...",
-      detail: "Could take up to 3 minutes.",
+      detail: "Could take up to 5 minutes.",
     });
     postScriptJob(payload)
       .then(function (jobId) {
@@ -15889,15 +16005,14 @@
         }).join("");
     } else if (screen === "when") {
       var repeatWhen = quickStartIntention === "repeat";
-      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' +
-        escapeHtml(repeatWhen ? "When will you press play?" : chips.titles.when) + "</p>" +
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">When will you press play?</p>' +
         '<p class="app-muted" style="margin:0 0 0.75rem;">' +
         escapeHtml(repeatWhen
-          ? "Before those moments, while you're in them, or after. Ordinary days, not one event."
-          : "Before, while it's happening, or after.") +
+          ? "Ordinary days, not one event."
+          : "Pick the moment you'll press play.") +
         "</p>" +
         ["getting-ready", "in-the-moment", "after"].map(function (mode) {
-          var title = repeatWhen ? listenModeRepeatTitle(mode, cat.id) : chips.whenTitle(mode);
+          var title = repeatWhen ? listenModeRepeatTitle(mode, cat.id) : listenModeTitle(mode, cat.id);
           var hint = repeatWhen ? listenModeRepeatHint(mode, cat.id) : listenModeHint(mode, cat.id);
           return choiceButton(mode, title, quickStartWhenChosen && selectedListenMode === mode, hint);
         }).join("");
@@ -15934,6 +16049,7 @@
             quickStartBeliefNote = "";
             quickStartFeelingNote = "";
             quickStartWhenChosen = false;
+            resetScriptBlocks();
           }
           quickStartIntention = value;
         } else if (screen === "length") {
@@ -15980,7 +16096,229 @@
           renderHomeFlow(displayName);
           return;
         }
-        setHomeFlowStep("survey", displayName);
+        if (!scriptBlocks.length) resetScriptBlocks();
+        setHomeFlowStep("blocks", displayName);
+      });
+    }
+  }
+
+  function backFromBlocks(displayName) {
+    readBlockDrafts();
+    if (blockPart === "scene") {
+      blockPart = "feel";
+      renderHomeFlow(displayName);
+      return;
+    }
+    if (blockPart === "feel") {
+      blockPart = "work";
+      renderHomeFlow(displayName);
+      return;
+    }
+    if (isQuickStartPath()) {
+      var screens = quickStartScreens();
+      quickStartPageIndex = Math.max(0, screens.length - 1);
+      setHomeFlowStep("quickstart", displayName);
+      return;
+    }
+    setHomeFlowStep("listen", displayName);
+  }
+
+  function readBlockDrafts() {
+    var partField = document.getElementById("part-draft");
+    if (partField) partDraft = partField.value;
+    var feelField = document.getElementById("feeling-draft");
+    if (feelField) feelingDraft = feelField.value;
+    document.querySelectorAll("[data-response-for]").forEach(function (field) {
+      feelingResponses[field.getAttribute("data-response-for")] = field.value;
+    });
+  }
+
+  function commitDraft(draft, list) {
+    var text = String(draft || "").trim();
+    var next = list.slice();
+    if (!text) return next;
+    if (next.some(function (item) { return item.toLowerCase() === text.toLowerCase(); })) return next;
+    if (next.length >= selectionCap()) return next;
+    next.push(text);
+    return next;
+  }
+
+  function toggleSelection(list, value) {
+    var next = list.slice();
+    var idx = next.findIndex(function (item) { return item.toLowerCase() === String(value).toLowerCase(); });
+    if (idx >= 0) {
+      next.splice(idx, 1);
+      return next;
+    }
+    if (next.length >= selectionCap()) return next;
+    next.push(value);
+    return next;
+  }
+
+  function visibleChipSlice(options, pageKey) {
+    var list = options || [];
+    if (list.length <= 8) return list;
+    var pageCount = Math.ceil(list.length / 8);
+    var page = Math.min(chipPages[pageKey] || 0, pageCount - 1);
+    return list.slice(page * 8, page * 8 + 8);
+  }
+
+  function chipPageBar(options, pageKey) {
+    var list = options || [];
+    if (list.length <= 8) return "";
+    var pageCount = Math.ceil(list.length / 8);
+    var page = Math.min(chipPages[pageKey] || 0, pageCount - 1);
+    var nums = "";
+    for (var i = 0; i < pageCount; i += 1) {
+      nums += '<button type="button" class="home-chip-page' + (i === page ? " is-current" : "") +
+        '" data-chip-page="' + i + '" data-page-key="' + escapeHtml(pageKey) + '">' + String(i + 1) + "</button>";
+    }
+    return '<div class="home-chip-pager">' +
+      '<button type="button" class="home-chip-page" data-chip-page="' + Math.max(0, page - 1) +
+      '" data-page-key="' + escapeHtml(pageKey) + '"' + (page === 0 ? " disabled" : "") + ">‹</button>" +
+      nums +
+      '<button type="button" class="home-chip-page" data-chip-page="' + Math.min(pageCount - 1, page + 1) +
+      '" data-page-key="' + escapeHtml(pageKey) + '"' + (page >= pageCount - 1 ? " disabled" : "") + ">›</button>" +
+      "</div>";
+  }
+
+  function bindChipPages(displayName) {
+    document.querySelectorAll("[data-chip-page]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        if (btn.disabled) return;
+        readBlockDrafts();
+        chipPages[btn.getAttribute("data-page-key") || ""] = Number(btn.getAttribute("data-chip-page") || 0);
+        renderHomeFlow(displayName);
+      });
+    });
+  }
+
+  function renderBlockStep(el, cat, displayName) {
+    var set = QuickStartChips.blockSet(cat.id);
+    var cap = selectionCap();
+    var html = '<div class="home-quick-start">' +
+      '<p class="app-muted" style="margin:0 0 0.35rem;">' + escapeHtml(cat.name) + "</p>";
+    if (blockPart === "scene") {
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">What do you tell yourself?</p>' +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">Each feeling gets its own line. Fill them in any order.</p>';
+      selectedFeelings.forEach(function (feeling) {
+        var pageKey = "line-" + feeling;
+        html += '<div data-feeling-section="' + escapeHtml(feeling) + '" style="margin:0 0 1rem;">' +
+          '<p style="margin:0 0 0.45rem;font-weight:600;">' + escapeHtml(feeling) + "</p>" +
+          chipPageBar(set.sceneChips, pageKey) +
+          chipWrap(visibleChipSlice(set.sceneChips, pageKey), [feelingResponses[feeling] || ""], false) +
+          '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type the line</label>' +
+          '<input data-response-for="' + escapeHtml(feeling) + '" type="text" value="' +
+          escapeHtml(feelingResponses[feeling] || "") +
+          '" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />' +
+          "</div>";
+      });
+      html += '<button type="button" class="app-btn app-btn-primary" id="block-continue" style="margin-top:0.4rem;width:100%;"' +
+        (linesReady() ? "" : " disabled") + ">Continue</button></div>";
+      el.innerHTML = html;
+      bindChipPages(displayName);
+      el.querySelectorAll("[data-quick-chip]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          readBlockDrafts();
+          var section = btn.closest("[data-feeling-section]");
+          var feeling = section ? section.getAttribute("data-feeling-section") : "";
+          if (!feeling) return;
+          feelingResponses[feeling] = btn.getAttribute("data-quick-chip") || "";
+          renderHomeFlow(displayName);
+        });
+      });
+      el.querySelectorAll("[data-response-for]").forEach(function (field) {
+        field.addEventListener("input", function () {
+          feelingResponses[field.getAttribute("data-response-for")] = field.value;
+          var go = document.getElementById("block-continue");
+          if (go) go.disabled = !linesReady();
+        });
+      });
+      var goScene = document.getElementById("block-continue");
+      if (goScene) {
+        goScene.addEventListener("click", function () {
+          readBlockDrafts();
+          if (!linesReady()) return;
+          setHomeFlowStep("survey", displayName);
+        });
+      }
+      return;
+    }
+    var choosingFeelings = blockPart === "feel";
+    var chosen = choosingFeelings ? selectedFeelings : selectedParts;
+    var chips = choosingFeelings ? set.feelChips : set.workChips;
+    var pageKey = choosingFeelings ? "feel" : "work";
+    var title = choosingFeelings
+      ? "How do you want to feel?"
+      : (cat.id === "sports-performance" ? "Which parts do you want in this listen?" : set.work);
+    var detail = choosingFeelings
+      ? "Select every feeling you want in this listen."
+      : "Select every part you want in this listen.";
+    var draft = choosingFeelings ? feelingDraft : partDraft;
+    var ready = chosen.length > 0 || String(draft || "").trim();
+    html += '<p class="app-muted" style="margin:0 0 0.35rem;font-size:0.85rem;">' +
+      escapeHtml((choosingFeelings ? "Feelings" : "Parts") + " · " + chosen.length + " of " + cap) + "</p>" +
+      '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(title) + "</p>" +
+      '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(detail) + "</p>" +
+      chipPageBar(chips, pageKey) +
+      chipWrap(visibleChipSlice(chips, pageKey), chosen, true);
+    if (isQuickStartPath()) {
+      html += '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type your own</label>' +
+        '<input id="' + (choosingFeelings ? "feeling-draft" : "part-draft") + '" type="text" value="' + escapeHtml(draft) +
+        '" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />';
+    } else {
+      html += '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or write it in your words</label>' +
+        '<textarea id="' + (choosingFeelings ? "feeling-draft" : "part-draft") + '" rows="3" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;">' +
+        escapeHtml(draft) + "</textarea>";
+    }
+    html += '<button type="button" class="app-btn app-btn-primary" id="block-next" style="margin-top:0.9rem;width:100%;"' +
+      (ready ? "" : " disabled") + ">Next</button></div>";
+    el.innerHTML = html;
+    bindChipPages(displayName);
+    el.querySelectorAll("[data-quick-chip]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        readBlockDrafts();
+        var value = btn.getAttribute("data-quick-chip") || "";
+        if (choosingFeelings) {
+          var before = selectedFeelings.slice();
+          selectedFeelings = toggleSelection(selectedFeelings, value);
+          before.forEach(function (feeling) {
+            if (!selectedFeelings.some(function (item) { return item.toLowerCase() === feeling.toLowerCase(); })) {
+              delete feelingResponses[feeling];
+            }
+          });
+        } else {
+          selectedParts = toggleSelection(selectedParts, value);
+        }
+        renderHomeFlow(displayName);
+      });
+    });
+    var draftField = document.getElementById(choosingFeelings ? "feeling-draft" : "part-draft");
+    if (draftField) {
+      draftField.addEventListener("input", function () {
+        if (choosingFeelings) feelingDraft = draftField.value;
+        else partDraft = draftField.value;
+        var next = document.getElementById("block-next");
+        var hasChoice = (choosingFeelings ? selectedFeelings : selectedParts).length > 0 || String(draftField.value || "").trim();
+        if (next) next.disabled = !hasChoice;
+      });
+    }
+    var next = document.getElementById("block-next");
+    if (next) {
+      next.addEventListener("click", function () {
+        readBlockDrafts();
+        if (choosingFeelings) {
+          selectedFeelings = commitDraft(feelingDraft, selectedFeelings);
+          feelingDraft = "";
+          if (!selectedFeelings.length) return;
+          blockPart = "scene";
+        } else {
+          selectedParts = commitDraft(partDraft, selectedParts);
+          partDraft = "";
+          if (!selectedParts.length) return;
+          blockPart = "feel";
+        }
+        renderHomeFlow(displayName);
       });
     }
   }
@@ -16204,11 +16542,12 @@
             }
             if (isQuickStartPath()) {
               resetQuickStartAnswers();
-              quickStartAsksLength = !isWebFreeTier();
-              quickStartLength = isWebFreeTier() ? "Short" : "Medium";
+              quickStartAsksLength = false;
+              quickStartLength = "Short";
               setHomeFlowStep("quickstart", displayName);
             } else {
               quickStartIntention = "";
+              resetScriptBlocks();
               setHomeFlowStep("intention", displayName);
             }
           });
@@ -16307,6 +16646,10 @@
     }
     if (homeFlowStep === "intention") {
       renderIntentionStep(el, cat, displayName);
+      return;
+    }
+    if (homeFlowStep === "blocks") {
+      renderBlockStep(el, cat, displayName);
       return;
     }
     if (homeFlowStep === "quickstart") {
@@ -16429,26 +16772,15 @@
       '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
       '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
       "  </div>";
-    if (isQuickStartPath()) {
+    if (completeBlocks().length) {
       var whenLabel = quickStartIntention === "repeat"
         ? listenModeRepeatTitle(selectedListenMode, cat.id)
-        : QuickStartChips.whenTitle(selectedListenMode);
-      var summaryRows = [
-        ["When", whenLabel],
-      ].concat(quickStartIntention === "moment"
-        ? [
-            ["Moment", quickStartMomentValue() || "—"],
-            ["Feelings", phrasesWithNote(quickStartFeelings, quickStartFeelingNote).join(", ") || "—"],
-          ]
-        : [
-            ["Beliefs", phrasesWithNote(quickStartBeliefs, quickStartBeliefNote).join(", ") || "—"],
-            ["Feelings", phrasesWithNote(quickStartFeelings, quickStartFeelingNote).join(", ") || "—"],
-          ]);
-      var tapSummary = summaryRows
-        .map(function (row) {
-          return "<li><strong>" + escapeHtml(row[0]) + ":</strong> " + escapeHtml(row[1]) + "</li>";
-        })
-        .join("");
+        : listenModeTitle(selectedListenMode, cat.id);
+      var doneBlocks = completeBlocks();
+      var tapSummary = "<li>" + escapeHtml(selectedParts.join(" · ")) + "</li>" +
+        selectedFeelings.map(function (feeling) {
+          return "<li>" + escapeHtml(feeling + " · " + (feelingResponses[feeling] || "")) + "</li>";
+        }).join("");
       el.innerHTML =
         '<form id="generate-form" class="app-form" style="margin:0;">' +
         '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
@@ -16456,7 +16788,7 @@
         "</strong> · " +
         escapeHtml(whenLabel) +
         " · " +
-        escapeHtml(quickStartLength) +
+        escapeHtml(blockListenLabel(blockPieceCount(doneBlocks))) +
         "</p>" +
         '  <ul class="app-muted" style="margin:0 0 0.85rem;padding-left:1.1rem;font-size:0.88rem;">' +
         tapSummary +
@@ -18328,7 +18660,7 @@
       '<div class="script-work-overlay-card" role="status">' +
       '<div class="script-work-overlay-spinner" aria-hidden="true"></div>' +
       '<p id="script-work-overlay-title" class="script-work-overlay-title">Generating your script...</p>' +
-      '<p id="script-work-overlay-detail" class="script-work-overlay-detail">Could take up to 3 minutes.</p>' +
+      '<p id="script-work-overlay-detail" class="script-work-overlay-detail">Could take up to 5 minutes.</p>' +
       '<p id="script-work-overlay-elapsed" class="script-work-overlay-elapsed">0:00</p>' +
       '<button type="button" id="script-work-overlay-continue" class="app-btn app-btn-primary" style="margin-top:0.85rem;">Continue in the app</button>' +
       "</div>";
@@ -18354,7 +18686,7 @@
     options = options || {};
     var title = options.title || "Generating your script...";
     var detail =
-      options.detail != null ? options.detail : "Could take up to 3 minutes.";
+      options.detail != null ? options.detail : "Could take up to 5 minutes.";
     var showTimer = options.showTimer !== false;
     var allowBackground = options.allowBackground !== false;
     scriptWorkInFlight = true;

@@ -8,15 +8,82 @@
     feeling: "How do you want to feel?",
   };
 
-  function screens(intention, includesLength) {
+  function screens(intention) {
     var list = ["intention"];
-    if (intention === "repeat" || intention === "moment") {
-      list.push("when");
-      if (includesLength) list.push("length");
-    }
-    if (intention === "repeat") list.push("beliefs", "feelings");
-    if (intention === "moment") list.push("moment", "feelings");
+    if (intention === "repeat" || intention === "moment") list.push("when");
     return list;
+  }
+
+  function sceneChips(categoryId) {
+    switch (categoryId) {
+      case "relationships":
+        return ["Sitting with them", "When they walk in", "After we talk", "When I tell the truth", "A quiet evening", "When I ask for what I need", "When I stay myself", "A message from them"];
+      case "confidence":
+        return ["Walking in", "Before I speak", "After I said it", "A quiet minute", "When I take my time", "When I stay steady", "The moment I decide", "When I know I belong"];
+      case "success-prosperity":
+        return ["Opening the work", "On a call", "After I send it", "At my desk", "When I start", "A clear decision", "The next step", "Closing the day"];
+      case "mental-wellbeing":
+        return ["A quiet morning", "After a walk", "When I slow down", "On my own", "After it got loud", "A steady breath", "Later in the day", "When I come back"];
+      case "health-fitness":
+        return ["On a walk", "After I move", "At a meal", "When I rest", "Getting dressed to move", "A slow morning", "After the session", "When my body feels easy"];
+      case "sleep-rest":
+        return ["In bed", "After a shower", "Lights low", "On the sofa", "When the house is quiet", "Eyes closed", "A slow morning", "When the day is done"];
+      case "i-am":
+        return ["Starting the day", "A quiet minute", "After something hard", "With people I trust", "On my own", "When I tell the truth", "Walking outside", "Before I sleep"];
+      default:
+        return ["A quiet minute", "Starting the day", "With someone I trust", "On my own", "After I begin", "When I tell the truth", "Walking outside", "Closing the day"];
+    }
+  }
+
+  function blockSet(categoryId) {
+    var id = categoryId || "";
+    if (id === "sports-performance") {
+      return {
+        kind: "sports",
+        work: "What part of the performance is this?",
+        feel: "How do you want to feel there?",
+        scene: "In that moment, what do you do or tell yourself?",
+        workHint: "One part you can control. The start, the play, or the rep.",
+        feelHint: "The feeling you want while you are in it.",
+        sceneHint: "A short cue, or the action you take.",
+        workChips: [
+          "The start", "This play", "This rep", "Between plays", "The first minute", "A hard moment", "The last play", "Warming up",
+          "The routine", "The breath before it", "Walking in", "After a mistake", "The next point", "A close score", "Waiting to go in", "The finish",
+          "The first touch", "A big moment", "Resetting", "The last minute", "Between points", "The approach", "Letting the last one go", "Coming back in",
+        ],
+        feelChips: [
+          "Calm", "Sharp", "Loose", "Ready", "Trusting", "Free", "Strong", "Locked in",
+          "Confident", "Focused", "Patient", "Fierce", "Light", "Certain", "Brave", "Playful",
+          "Composed", "Explosive", "Present", "Hungry", "Aggressive", "Steady", "Smooth", "Easy",
+        ],
+        sceneChips: [
+          "See the target", "Next play", "Loose and ready", "One breath", "Trust this rep", "Eyes up", "Let the last one go", "Smooth and simple",
+          "Breathe and go", "Play my game", "Attack this one", "Trust the work", "Finish it", "I've got this", "Next rep", "Quiet mind",
+          "Reset", "Head up", "Let it fly", "Own this one", "One job", "Full effort", "On time", "Through the finish",
+        ],
+      };
+    }
+    var work = "What do you want to work on?";
+    var workHint = "One thing. Say what you want, not what you want to stop.";
+    if (id === "sleep-rest") {
+      work = "What do you want from this rest?";
+      workHint = "One thing you want as you rest.";
+    } else if (id === "i-am") {
+      work = "What do you want to be true about you?";
+      workHint = "One statement you want to live with.";
+    }
+    return {
+      kind: "life",
+      work: work,
+      feel: "How do you want to feel?",
+      scene: "When is a time you already feel this, even a little?",
+      workHint: workHint,
+      feelHint: "The feeling you want, as if it is already here.",
+      sceneHint: "A real moment, even a small one. The script uses that.",
+      workChips: beliefs(id).slice(0, 8),
+      feelChips: feelings(id),
+      sceneChips: sceneChips(id),
+    };
   }
 
   function beliefPickCount(length) {
@@ -167,6 +234,7 @@
     beliefs: beliefs,
     feelings: feelings,
     moments: moments,
+    blockSet: blockSet,
     overAndOverQuestions: overAndOverQuestions,
     overAndOverObstacle: "Are there things that get in your way? (optional)",
   };
