@@ -1701,6 +1701,7 @@
   var selectedParts = [];
   var selectedFeelings = [];
   var feelingResponses = {};
+  var feelingLineIndex = 0;
   var partDraft = "";
   var feelingDraft = "";
   var chipPages = {};
@@ -1979,6 +1980,7 @@
     selectedParts = [];
     selectedFeelings = [];
     feelingResponses = {};
+    feelingLineIndex = 0;
     partDraft = "";
     feelingDraft = "";
     chipPages = {};
@@ -16122,7 +16124,8 @@
   function backFromBlocks(displayName) {
     readBlockDrafts();
     if (blockPart === "scene") {
-      blockPart = "feel";
+      if (feelingLineIndex > 0) feelingLineIndex -= 1;
+      else blockPart = "feel";
       renderHomeFlow(displayName);
       return;
     }
@@ -16216,31 +16219,38 @@
     var html = '<div class="home-quick-start">' +
       '<p class="app-muted" style="margin:0 0 0.35rem;">' + escapeHtml(cat.name) + "</p>";
     if (blockPart === "scene") {
-      html += '<p style="margin:0 0 0.35rem;font-weight:600;">What do you tell yourself?</p>' +
-        '<p class="app-muted" style="margin:0 0 0.75rem;">Each feeling gets its own line. Fill them in any order.</p>';
-      selectedFeelings.forEach(function (feeling) {
-        var pageKey = "line-" + feeling;
-        html += '<div data-feeling-section="' + escapeHtml(feeling) + '" style="margin:0 0 1rem;">' +
-          '<p style="margin:0 0 0.45rem;font-weight:600;">' + escapeHtml(feeling) + "</p>" +
-          chipPageBar(set.sceneChips, pageKey) +
-          chipWrap(visibleChipSlice(set.sceneChips, pageKey), [feelingResponses[feeling] || ""], false) +
-          '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type the line</label>' +
-          '<input data-response-for="' + escapeHtml(feeling) + '" type="text" value="' +
-          escapeHtml(feelingResponses[feeling] || "") +
-          '" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />' +
-          "</div>";
-      });
-      html += '<button type="button" class="app-btn app-btn-primary" id="block-continue" style="margin-top:0.4rem;width:100%;"' +
-        (linesReady() ? "" : " disabled") + ">Continue</button></div>";
+      var lineIndex = selectedFeelings.length ? Math.min(feelingLineIndex, selectedFeelings.length - 1) : 0;
+      feelingLineIndex = lineIndex;
+      var feeling = selectedFeelings[lineIndex] || "";
+      var lastLine = lineIndex >= selectedFeelings.length - 1;
+      var lineReady = !!String(feelingResponses[feeling] || "").trim();
+      var spoken = feeling ? feeling.charAt(0).toLowerCase() + feeling.slice(1) : "";
+      var pageKey = "line-" + feeling;
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' +
+        escapeHtml("What would you like to associate with being " + spoken + "?") + "</p>";
+      if (selectedFeelings.length > 1) {
+        html += '<p class="app-muted" style="margin:0 0 0.75rem;">' +
+          escapeHtml(String(lineIndex + 1) + " of " + selectedFeelings.length) + "</p>";
+      }
+      html += '<div data-feeling-section="' + escapeHtml(feeling) + '">' +
+        chipPageBar(set.sceneChips, pageKey) +
+        chipWrap(visibleChipSlice(set.sceneChips, pageKey), [feelingResponses[feeling] || ""], false) +
+        '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type the line</label>' +
+        '<input data-response-for="' + escapeHtml(feeling) + '" type="text" value="' +
+        escapeHtml(feelingResponses[feeling] || "") +
+        '" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />' +
+        "</div>";
+      html += '<button type="button" class="app-btn app-btn-primary" id="block-continue" style="margin-top:0.9rem;width:100%;"' +
+        (lineReady ? "" : " disabled") + ">" + (lastLine ? "Continue" : "Next") + "</button></div>";
       el.innerHTML = html;
       bindChipPages(displayName);
       el.querySelectorAll("[data-quick-chip]").forEach(function (btn) {
         btn.addEventListener("click", function () {
           readBlockDrafts();
           var section = btn.closest("[data-feeling-section]");
-          var feeling = section ? section.getAttribute("data-feeling-section") : "";
-          if (!feeling) return;
-          feelingResponses[feeling] = btn.getAttribute("data-quick-chip") || "";
+          var named = section ? section.getAttribute("data-feeling-section") : "";
+          if (!named) return;
+          feelingResponses[named] = btn.getAttribute("data-quick-chip") || "";
           renderHomeFlow(displayName);
         });
       });
@@ -16248,13 +16258,19 @@
         field.addEventListener("input", function () {
           feelingResponses[field.getAttribute("data-response-for")] = field.value;
           var go = document.getElementById("block-continue");
-          if (go) go.disabled = !linesReady();
+          if (go) go.disabled = !String(field.value || "").trim();
         });
       });
       var goScene = document.getElementById("block-continue");
       if (goScene) {
         goScene.addEventListener("click", function () {
           readBlockDrafts();
+          if (!String(feelingResponses[feeling] || "").trim()) return;
+          if (!lastLine) {
+            feelingLineIndex = lineIndex + 1;
+            renderHomeFlow(displayName);
+            return;
+          }
           if (!linesReady()) return;
           setHomeFlowStep("survey", displayName);
         });
@@ -16328,6 +16344,7 @@
           selectedFeelings = commitDraft(feelingDraft, selectedFeelings);
           feelingDraft = "";
           if (!selectedFeelings.length) return;
+          feelingLineIndex = 0;
           blockPart = "scene";
         } else {
           selectedParts = commitDraft(partDraft, selectedParts);

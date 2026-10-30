@@ -17,14 +17,16 @@
   function directionQuestion(categoryId, mode, intention) {
     var m = mode === "in-the-moment" || mode === "after" ? mode : "getting-ready";
     var ordinary = intention === "repeat";
-    var detail = ordinary
-      ? "The kind of thing it is on an ordinary day. A few words."
-      : "Name the real thing. A few words. The listen uses it at the start.";
+    var detail = categoryId === "sports-performance"
+      ? "Name the sport and/or the game. A few words."
+      : ordinary
+        ? "The kind of thing it is on an ordinary day. A few words."
+        : "Name the real thing. A few words. The listen uses it at the start.";
     var table = {
       "sports-performance": {
-        "getting-ready": ["What are you getting ready for?", "Friday's game, or the 400"],
-        "in-the-moment": ["What will you be in the middle of?", "This half, or the race"],
-        after: ["What will you have just come out of?", "The game, or practice"],
+        "getting-ready": ["What are you getting ready for?", "Friday's basketball game and/or every soccer game"],
+        "in-the-moment": ["What will you be in the middle of?", "This basketball game"],
+        after: ["What will you have just come out of?", "Today's soccer practice"],
       },
       confidence: {
         "getting-ready": ["What are you about to walk into?", "Monday's meeting"],
