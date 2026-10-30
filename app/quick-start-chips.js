@@ -10,8 +10,59 @@
 
   function screens(intention) {
     var list = ["intention"];
-    if (intention === "repeat" || intention === "moment") list.push("when");
+    if (intention === "repeat" || intention === "moment") list.push("when", "moment");
     return list;
+  }
+
+  function directionQuestion(categoryId, mode, intention) {
+    var m = mode === "in-the-moment" || mode === "after" ? mode : "getting-ready";
+    var ordinary = intention === "repeat";
+    var detail = ordinary
+      ? "The kind of thing it is on an ordinary day. A few words."
+      : "Name the real thing. A few words. The listen uses it at the start.";
+    var table = {
+      "sports-performance": {
+        "getting-ready": ["What are you getting ready for?", "Friday's game, or the 400"],
+        "in-the-moment": ["What will you be in the middle of?", "This half, or the race"],
+        after: ["What will you have just come out of?", "The game, or practice"],
+      },
+      confidence: {
+        "getting-ready": ["What are you about to walk into?", "Monday's meeting"],
+        "in-the-moment": ["What will you be in the middle of?", "Speaking in the meeting"],
+        after: ["What will you have just finished?", "The meeting"],
+      },
+      relationships: {
+        "getting-ready": ["Who are you about to be with?", "Dinner with Alex"],
+        "in-the-moment": ["Who will you be with?", "The talk with my sister"],
+        after: ["Who will you have just been with?", "After I see them"],
+      },
+      "success-prosperity": {
+        "getting-ready": ["What work are you about to start?", "The proposal"],
+        "in-the-moment": ["What work will you be in?", "The client call"],
+        after: ["What work will you have just finished?", "The pitch"],
+      },
+      "mental-wellbeing": {
+        "getting-ready": ["What are you heading into?", "A full day"],
+        "in-the-moment": ["What will you be in the middle of?", "The busy stretch"],
+        after: ["What will you be coming down from?", "The day"],
+      },
+      "health-fitness": {
+        "getting-ready": ["What are you about to do?", "The workout, or a walk"],
+        "in-the-moment": ["What will you be in the middle of?", "This session"],
+        after: ["What will you have just finished?", "The workout"],
+      },
+      "sleep-rest": {
+        "getting-ready": ["What will this wind-down be?", "On the sofa, lights low"],
+        "in-the-moment": ["Where will you be resting?", "In bed"],
+        after: ["What will this wake-up be?", "A slow morning"],
+      },
+    };
+    var row = (table[categoryId] || {
+      "getting-ready": ["What are you getting ready for?", "The thing I'm walking into"],
+      "in-the-moment": ["What will you be in the middle of?", "This part of the day"],
+      after: ["What will you have just finished?", "The thing I just did"],
+    })[m];
+    return { title: row[0], detail: detail, placeholder: row[1] };
   }
 
   function sceneChips(categoryId) {
@@ -234,6 +285,7 @@
     beliefs: beliefs,
     feelings: feelings,
     moments: moments,
+    directionQuestion: directionQuestion,
     blockSet: blockSet,
     overAndOverQuestions: overAndOverQuestions,
     overAndOverObstacle: "Are there things that get in your way? (optional)",

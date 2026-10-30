@@ -15213,6 +15213,8 @@
       });
       intakeAnswers.feeling = blocks[0].lines && blocks[0].lines[0] ? blocks[0].lines[0].feel : blocks[0].feel;
       intakeAnswers.context = (blocks[0].lines || [{ scene: blocks[0].scene }]).map(function (line) { return line.scene; }).join("; ");
+      var named = quickStartMomentValue();
+      if (named) intakeAnswers.direction = named;
     }
     if (isQuickStartPath()) {
       intakeAnswers.createPath = "quickStart";
@@ -15222,6 +15224,8 @@
           var moment = quickStartMomentValue();
           if (moment) intakeAnswers.context = moment;
         }
+        var namedAgain = quickStartMomentValue();
+        if (namedAgain) intakeAnswers.direction = namedAgain;
         var feelings = phrasesWithNote(quickStartFeelings, quickStartFeelingNote);
         if (feelings.length === 1) intakeAnswers.feeling = feelings[0];
         answersMap[cat.id] = quickStartPhraseList();
@@ -15459,7 +15463,13 @@
   }
 
   function validateRequiredIntake(ctx) {
-    if (completeBlocks().length) return true;
+    if (completeBlocks().length) {
+      if (isQuickStartPath() && !quickStartMomentValue()) {
+        generationMessage("Name what this listen is for before generating.", "error");
+        return false;
+      }
+      return true;
+    }
     if (isQuickStartPath()) {
       var screens = quickStartScreens();
       var ready = screens.every(function (screen) {
@@ -16017,10 +16027,10 @@
           return choiceButton(mode, title, quickStartWhenChosen && selectedListenMode === mode, hint);
         }).join("");
     } else if (screen === "moment") {
-      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.moment) + "</p>" +
-        '<p class="app-muted" style="margin:0 0 0.75rem;">Select one.</p>' +
-        chipWrap(chips.moments(cat.id, selectedListenMode), quickStartMomentNote.trim() ? [] : [quickStartMoment], false) +
-        typeOwn(quickStartMomentNote);
+      var ask = chips.directionQuestion(cat.id, selectedListenMode, quickStartIntention);
+      html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(ask.title) + "</p>" +
+        '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(ask.detail) + "</p>" +
+        typeOwn(quickStartMomentNote || quickStartMoment, "", ask.placeholder);
     } else if (screen === "beliefs") {
       var bCap = chips.beliefPickCount(quickStartLength);
       html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(chips.titles.belief) + "</p>" +
@@ -16080,16 +16090,23 @@
       });
     });
     var own = document.getElementById("home-quick-own");
+    var next = document.getElementById("home-quick-next");
     if (own) {
       own.addEventListener("input", function () {
-        if (screen === "moment") quickStartMomentNote = own.value;
-        else if (screen === "beliefs") quickStartBeliefNote = own.value;
+        if (screen === "moment") {
+          quickStartMomentNote = own.value;
+          quickStartMoment = "";
+          if (next) next.disabled = !String(own.value || "").trim();
+        } else if (screen === "beliefs") quickStartBeliefNote = own.value;
         else quickStartFeelingNote = own.value;
       });
     }
-    var next = document.getElementById("home-quick-next");
     if (next) {
       next.addEventListener("click", function () {
+        if (screen === "moment" && own) {
+          quickStartMomentNote = own.value;
+          if (String(own.value || "").trim()) quickStartMoment = "";
+        }
         if (!quickStartScreenReady(screen)) return;
         if (index < screens.length - 1) {
           quickStartPageIndex = index + 1;
@@ -16344,10 +16361,15 @@
     }).join("") + "</div>";
   }
 
-  function typeOwn(value) {
-    return '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type your own</label>' +
-      '<input id="home-quick-own" type="text" value="' + escapeHtml(value || "") +
-      '" style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />';
+  function typeOwn(value, label, placeholder) {
+    var heading = label == null ? "Or type your own" : label;
+    var ph = placeholder ? ' placeholder="' + escapeHtml(placeholder) + '"' : "";
+    var labelHtml = heading
+      ? '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">' + escapeHtml(heading) + "</label>"
+      : "";
+    return labelHtml +
+      '<input id="home-quick-own" type="text" value="' + escapeHtml(value || "") + '"' + ph +
+      ' style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />';
   }
 
   function renderHomeFlow(displayName) {
@@ -16789,6 +16811,7 @@
         escapeHtml(whenLabel) +
         " · " +
         escapeHtml(blockListenLabel(blockPieceCount(doneBlocks))) +
+        (quickStartMomentValue() ? " · " + escapeHtml(quickStartMomentValue()) : "") +
         "</p>" +
         '  <ul class="app-muted" style="margin:0 0 0.85rem;padding-left:1.1rem;font-size:0.88rem;">' +
         tapSummary +
