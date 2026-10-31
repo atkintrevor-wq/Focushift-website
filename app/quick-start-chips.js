@@ -18,14 +18,16 @@
     var m = mode === "in-the-moment" || mode === "after" ? mode : "getting-ready";
     var ordinary = intention === "repeat";
     var detail = categoryId === "sports-performance"
-      ? "Name the sport and/or the game. A few words."
+      ? (m === "in-the-moment"
+        ? "Name the sport and/or the practice. A few words."
+        : "Name the sport and/or the game. A few words.")
       : ordinary
         ? "The kind of thing it is on an ordinary day. A few words."
         : "Name the real thing. A few words. The listen uses it at the start.";
     var table = {
       "sports-performance": {
         "getting-ready": ["What are you getting ready for?", "Friday's basketball game and/or every soccer game"],
-        "in-the-moment": ["What will you be in the middle of?", "This basketball game"],
+        "in-the-moment": ["What are you practicing?", "Friday's basketball practice"],
         after: ["What will you have just come out of?", "Today's soccer practice"],
       },
       confidence: {
@@ -91,13 +93,13 @@
   function sportsParts(mode) {
     if (mode === "in-the-moment") {
       return {
-        title: "What do you want with you in the game?",
-        hint: "Choose the parts of the game you want this listen to stay on.",
+        title: "What do you want with you in practice?",
+        hint: "Choose the part of practice you want to walk through.",
         chips: [
-          "This play", "The next play", "Between plays", "One play at a time",
-          "A hard moment", "After a mistake", "Resetting", "Staying in it",
-          "A big moment", "The finish", "Waiting to go in", "Coming back in",
-          "A close one", "The last play", "Seeing the next play", "My routine",
+          "This rep", "The next rep", "My routine", "Getting loose",
+          "Seeing the target", "One rep at a time", "Warming up", "The first rep",
+          "After a miss", "Resetting", "Staying with it", "The hard rep",
+          "Trusting the work", "Finishing the rep", "A new rep", "The last rep",
         ],
       };
     }
@@ -113,7 +115,7 @@
     }
     return {
       title: "What do you want to take into the game?",
-      hint: "Choose what gets you ready, and what you want with you during the game.",
+      hint: "Choose what gets you ready for the game.",
       chips: [
         "Walking in", "Warming up", "My routine", "Getting loose",
         "Seeing the game", "Trusting my preparation", "The first play", "One play at a time",
@@ -257,7 +259,7 @@
       },
       "sports-performance": {
         "getting-ready": ["Practice", "A game or a race", "A hard session", "Walking in", "Warming up", "The locker room", "Before the first play", "Before I compete"],
-        "in-the-moment": ["This play", "Between plays", "This rep", "This breath", "In the game", "On the field", "This point", "Right here in it"],
+        "in-the-moment": ["This rep", "The next rep", "My routine", "Seeing the target", "One rep at a time", "After a miss", "Resetting", "Finishing the rep"],
         after: ["The session just ended", "The game just ended", "Cooling down", "Leaving the field", "After I competed", "Recovery", "The ride home", "Letting it be done"],
       },
       "sleep-rest": {

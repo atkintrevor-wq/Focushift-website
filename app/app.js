@@ -1892,9 +1892,20 @@
     return "getting-ready";
   }
 
+  function listenModesFor(categoryId) {
+    return LISTEN_MODE_IDS;
+  }
+
+  function clampSportsListenMode() {
+    var cat = typeof selectedCategory === "function" ? selectedCategory() : null;
+    if (!cat || listenModesFor(cat.id).indexOf(selectedListenMode) !== -1) return;
+    selectedListenMode = "getting-ready";
+    quickStartWhenChosen = false;
+  }
+
   function defaultListenMode(categoryId) {
     var id = String(categoryId || "").trim();
-    if (id === "sleep-rest" || id === "sports-performance" || id === "health-fitness") {
+    if (id === "sleep-rest" || id === "health-fitness") {
       return "in-the-moment";
     }
     return "getting-ready";
@@ -1904,7 +1915,7 @@
     var m = normalizeListenMode(mode);
     var rows = {
       "sleep-rest": { "getting-ready": "Before bed", "in-the-moment": "While I rest or fall asleep", after: "When I wake" },
-      "sports-performance": { "getting-ready": "Preparing for the game", "in-the-moment": "During the game", after: "After the game" },
+      "sports-performance": { "getting-ready": "Preparing for the game", "in-the-moment": "While you practice", after: "After the game" },
       "health-fitness": { "getting-ready": "Before you move", "in-the-moment": "While you're moving", after: "After you're done" },
       confidence: { "getting-ready": "Before you walk in", "in-the-moment": "While you're in it", after: "After it's over" },
       relationships: { "getting-ready": "Before you're with them", "in-the-moment": "While you're with them", after: "After you've been with them" },
@@ -1920,7 +1931,7 @@
     var m = normalizeListenMode(mode);
     var rows = {
       "sleep-rest": { "getting-ready": "Before bed, most nights", "in-the-moment": "While I rest or fall asleep", after: "When I wake" },
-      "sports-performance": { "getting-ready": "Preparing for the game", "in-the-moment": "During the game", after: "After the game" },
+      "sports-performance": { "getting-ready": "Preparing for the game", "in-the-moment": "While you practice", after: "After the game" },
       "health-fitness": { "getting-ready": "Before you move, on ordinary days", "in-the-moment": "While you're moving", after: "After you move, to settle" },
       confidence: { "getting-ready": "Before you walk in, on ordinary days", "in-the-moment": "While you're in it", after: "After it's over, to settle" },
       relationships: { "getting-ready": "Before you're with them, on ordinary days", "in-the-moment": "While you're with them", after: "After you've been with them" },
@@ -1941,7 +1952,7 @@
     }
     if (categoryId === "sports-performance") {
       if (m === "getting-ready") return "Play this while you prepare. All week, or right before the game.";
-      if (m === "in-the-moment") return "Play this during the game or the session.";
+      if (m === "in-the-moment") return "Play this while you practice. The next rep, over and over.";
       return "Play this after you compete, as a way to settle.";
     }
     return listenModeHint(mode, categoryId);
@@ -2125,7 +2136,7 @@
       },
       "sports-performance": {
         "getting-ready": "Listen while you prepare for the game. Through the week, or right before you play.",
-        "in-the-moment": "During play or training — this play, this breath, this moment.",
+        "in-the-moment": "Listen while you practice. The next rep, with your cue.",
         after: "After you're done — reset, recover, let it complete.",
       },
       confidence: {
@@ -15998,6 +16009,7 @@
   }
 
   function renderQuickStartStep(el, cat, displayName) {
+    clampSportsListenMode();
     var chips = QuickStartChips;
     var screens = quickStartScreens();
     var index = Math.max(0, Math.min(quickStartPageIndex, Math.max(0, screens.length - 1)));
@@ -16029,7 +16041,7 @@
           ? "Ordinary days, not one event."
           : "Pick the moment you'll press play.") +
         "</p>" +
-        ["getting-ready", "in-the-moment", "after"].map(function (mode) {
+        listenModesFor(cat.id).map(function (mode) {
           var title = repeatWhen ? listenModeRepeatTitle(mode, cat.id) : listenModeTitle(mode, cat.id);
           var hint = repeatWhen ? listenModeRepeatHint(mode, cat.id) : listenModeHint(mode, cat.id);
           return choiceButton(mode, title, quickStartWhenChosen && selectedListenMode === mode, hint);
@@ -16613,6 +16625,7 @@
       if (homeDeepenState && homeDeepenState.listenMode && homeDeepenState.cat && homeDeepenState.cat.id === cat.id) {
         selectedListenMode = normalizeListenMode(homeDeepenState.listenMode);
       }
+      clampSportsListenMode();
       el.innerHTML =
         '<div class="home-listen-mode">' +
         '  <p class="app-muted" style="margin:0 0 0.35rem;">' +
@@ -16624,7 +16637,7 @@
           : "When will you press play? We'll ask about that moment next.") +
         "</p>" +
         '  <div class="home-listen-mode-list" role="listbox" aria-label="When you\'ll listen">' +
-        LISTEN_MODE_IDS.map(function (mode) {
+        listenModesFor(cat.id).map(function (mode) {
           var selected = selectedListenMode === mode;
           var title = isRepeatListen()
             ? listenModeRepeatTitle(mode, cat.id)
