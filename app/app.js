@@ -1990,6 +1990,12 @@
     return isWebFreeTier() ? 1 : 3;
   }
 
+  function partCap() {
+    var cat = typeof selectedCategory === "function" ? selectedCategory() : null;
+    if (cat && cat.id === "sports-performance") return 1;
+    return selectionCap();
+  }
+
   function blockLimit() {
     return selectionCap();
   }
@@ -2003,7 +2009,7 @@
   function completeBlocks() {
     var lines = selectionLines();
     if (selectedParts.length && lines.length) {
-      return selectedParts.slice(0, selectionCap()).map(function (work) {
+      return selectedParts.slice(0, partCap()).map(function (work) {
         return { work: work, feel: lines[0].feel, scene: lines[0].scene, lines: lines };
       });
     }
@@ -16153,12 +16159,14 @@
     });
   }
 
-  function commitDraft(draft, list) {
+  function commitDraft(draft, list, cap) {
     var text = String(draft || "").trim();
     var next = list.slice();
+    var limit = cap == null ? selectionCap() : cap;
     if (!text) return next;
     if (next.some(function (item) { return item.toLowerCase() === text.toLowerCase(); })) return next;
-    if (next.length >= selectionCap()) return next;
+    if (limit === 1) return [text];
+    if (next.length >= limit) return next;
     next.push(text);
     return next;
   }
@@ -16278,6 +16286,9 @@
       return;
     }
     var choosingFeelings = blockPart === "feel";
+    if (!choosingFeelings && partCap() === 1 && selectedParts.length > 1) {
+      selectedParts = selectedParts.slice(0, 1);
+    }
     var chosen = choosingFeelings ? selectedFeelings : selectedParts;
     var chips = choosingFeelings ? set.feelChips : set.workChips;
     var pageKey = choosingFeelings ? "feel" : "work";
@@ -16287,9 +16298,12 @@
       : (cat.id === "sports-performance" ? set.workHint : "Select every part you want in this listen.");
     var draft = choosingFeelings ? feelingDraft : partDraft;
     var ready = chosen.length > 0 || String(draft || "").trim();
-    html += '<p class="app-muted" style="margin:0 0 0.35rem;font-size:0.85rem;">' +
-      escapeHtml((choosingFeelings ? "Feelings" : "Parts") + " · " + chosen.length + " of " + cap) + "</p>" +
-      '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(title) + "</p>" +
+    var showCount = choosingFeelings || partCap() > 1;
+    if (showCount) {
+      html += '<p class="app-muted" style="margin:0 0 0.35rem;font-size:0.85rem;">' +
+        escapeHtml((choosingFeelings ? "Feelings" : "Parts") + " · " + chosen.length + " of " + (choosingFeelings ? cap : partCap())) + "</p>";
+    }
+    html += '<p style="margin:0 0 0.35rem;font-weight:600;">' + escapeHtml(title) + "</p>" +
       '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(detail) + "</p>" +
       chipPageBar(chips, pageKey) +
       chipWrap(visibleChipSlice(chips, pageKey), chosen, true);
@@ -16318,6 +16332,9 @@
               delete feelingResponses[feeling];
             }
           });
+        } else if (partCap() === 1) {
+          var chosenPart = selectedParts.some(function (item) { return item.toLowerCase() === value.toLowerCase(); });
+          selectedParts = chosenPart ? [] : [value];
         } else {
           selectedParts = toggleSelection(selectedParts, value);
         }
@@ -16345,7 +16362,7 @@
           feelingLineIndex = 0;
           blockPart = "scene";
         } else {
-          selectedParts = commitDraft(partDraft, selectedParts);
+          selectedParts = commitDraft(partDraft, selectedParts, partCap());
           partDraft = "";
           if (!selectedParts.length) return;
           blockPart = "feel";
