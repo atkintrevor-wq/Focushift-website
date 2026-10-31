@@ -88,22 +88,54 @@
     }
   }
 
-  function blockSet(categoryId) {
+  function sportsParts(mode) {
+    if (mode === "in-the-moment") {
+      return {
+        title: "What do you want with you in the game?",
+        hint: "Choose the parts of the game you want this listen to stay on.",
+        chips: [
+          "This play", "The next play", "Between plays", "One play at a time",
+          "A hard moment", "After a mistake", "Resetting", "Staying in it",
+          "A big moment", "The finish", "Waiting to go in", "Coming back in",
+          "A close one", "The last play", "Seeing the next play", "My routine",
+        ],
+      };
+    }
+    if (mode === "after") {
+      return {
+        title: "What do you want after the game?",
+        hint: "Choose how you want to come off it.",
+        chips: [
+          "The last play", "Walking off", "Letting it go", "Cooling down",
+          "What went well", "The ride home", "Leaving it here", "Ready for the next one",
+        ],
+      };
+    }
+    return {
+      title: "What do you want to take into the game?",
+      hint: "Choose what gets you ready, and what you want with you during the game.",
+      chips: [
+        "Walking in", "Warming up", "My routine", "Getting loose",
+        "Seeing the game", "Trusting my preparation", "The first play", "One play at a time",
+        "When it gets hard", "After a mistake", "Resetting", "Staying in it",
+        "A big moment", "The finish", "Letting the last game go", "Waiting to start",
+      ],
+    };
+  }
+
+  function blockSet(categoryId, mode) {
     var id = categoryId || "";
     if (id === "sports-performance") {
+      var parts = sportsParts(mode);
       return {
         kind: "sports",
-        work: "What part of the performance is this?",
+        work: parts.title,
         feel: "How do you want to feel there?",
         scene: "In that moment, what do you do or tell yourself?",
-        workHint: "One part you can control. The start, the play, or the rep.",
+        workHint: parts.hint,
         feelHint: "The feeling you want while you are in it.",
         sceneHint: "A short cue, or the action you take.",
-        workChips: [
-          "The start", "This play", "This rep", "Between plays", "The first minute", "A hard moment", "The last play", "Warming up",
-          "The routine", "The breath before it", "Walking in", "After a mistake", "The next point", "A close score", "Waiting to go in", "The finish",
-          "The first touch", "A big moment", "Resetting", "The last minute", "Between points", "The approach", "Letting the last one go", "Coming back in",
-        ],
+        workChips: parts.chips,
         feelChips: [
           "Calm", "Sharp", "Loose", "Ready", "Trusting", "Free", "Strong", "Locked in",
           "Confident", "Focused", "Patient", "Fierce", "Light", "Certain", "Brave", "Playful",

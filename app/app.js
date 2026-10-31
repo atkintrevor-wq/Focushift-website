@@ -15244,7 +15244,7 @@
     } else if (repeat) {
       listenMode = "";
     }
-    var blockPrompts = blocks.length && typeof QuickStartChips !== "undefined" ? QuickStartChips.blockSet(cat.id) : null;
+    var blockPrompts = blocks.length && typeof QuickStartChips !== "undefined" ? QuickStartChips.blockSet(cat.id, listenMode) : null;
     var questionList = blockPrompts
       ? [blockPrompts.work, blockPrompts.feel, blockPrompts.scene]
       : isQuickStartPath()
@@ -16214,7 +16214,7 @@
   }
 
   function renderBlockStep(el, cat, displayName) {
-    var set = QuickStartChips.blockSet(cat.id);
+    var set = QuickStartChips.blockSet(cat.id, selectedListenMode);
     var cap = selectionCap();
     var html = '<div class="home-quick-start">' +
       '<p class="app-muted" style="margin:0 0 0.35rem;">' + escapeHtml(cat.name) + "</p>";
@@ -16281,12 +16281,10 @@
     var chosen = choosingFeelings ? selectedFeelings : selectedParts;
     var chips = choosingFeelings ? set.feelChips : set.workChips;
     var pageKey = choosingFeelings ? "feel" : "work";
-    var title = choosingFeelings
-      ? "How do you want to feel?"
-      : (cat.id === "sports-performance" ? "Which parts do you want in this listen?" : set.work);
+    var title = choosingFeelings ? "How do you want to feel?" : set.work;
     var detail = choosingFeelings
       ? "Select every feeling you want in this listen."
-      : "Select every part you want in this listen.";
+      : (cat.id === "sports-performance" ? set.workHint : "Select every part you want in this listen.");
     var draft = choosingFeelings ? feelingDraft : partDraft;
     var ready = chosen.length > 0 || String(draft || "").trim();
     html += '<p class="app-muted" style="margin:0 0 0.35rem;font-size:0.85rem;">' +
