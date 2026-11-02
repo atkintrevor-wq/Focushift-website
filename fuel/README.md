@@ -81,7 +81,7 @@ Optional, same screen, also encrypted:
 
 | Name | When to set it |
 | --- | --- |
-| `FUEL_DRIVER_PIN` | Recommended. The driver form is on a public website. Without this, anyone who can open `/fuel` can add a fuel stop. They still cannot see the list, the photos, or the spreadsheet. With this set, the form asks for the PIN. Phones remember it after the first entry. |
+| `FUEL_DRIVER_PIN` | Recommended. The driver form is on a public website. Without this, anyone who can open `/fuel` can add a fuel stop. They still cannot see the list, the photos, or the spreadsheet. With this set, the form asks for the PIN. Phones remember it after the first entry. Store suggestions from past stops also require this PIN. |
 | `FUEL_SESSION_SECRET` | Optional. A long random string (`openssl rand -base64 32`). It signs the office sign-in cookie. If you skip it, the admin password is used for that signature. Changing the admin password then signs everyone out, which is fine. |
 
 Add the same secrets on the **Preview** tab only if you want to sign in on a preview URL.
@@ -122,10 +122,10 @@ Under **Settings → Runtime → Fail open / closed**, leave **Fail open** if th
 1. Open https://focusshift.app/fuel on the phone.
 2. Optional: browser menu → **Add to Home Screen**. The icon opens the fuel form, not the Focus Shift marketing site.
 3. Date defaults to today. Pick the state, or tap **Use current location**. Location is sent only to fill in the state. It is not stored.
-4. Enter the station, gallons, total price, truck, and name. A receipt photo is optional (camera or library).
+4. Enter the station, gallons, total price, truck, and name. The station field suggests stores this truck or driver has used before, most-used first and then most recent. Tap a suggestion or type a new name. If a state is selected, the suggestions are stores in that state. A receipt photo is optional (camera or library).
 5. Save.
 
-The phone remembers the last driver, truck, and PIN. It also keeps a short list of names you have used.
+The phone remembers the last driver, truck, and PIN. It also keeps a short list of names you have used, and the last store suggestions for that truck and driver, so those names still appear with no signal. Fresh suggestions from the company log need the driver PIN and a connection. Utah and Nevada are at the top of the state list.
 
 ### Offline
 

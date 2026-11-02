@@ -29,6 +29,18 @@ export function isState(code) {
   return CODE_SET.has(String(code || '').toUpperCase());
 }
 
+/** Utah and Nevada first, then every other state and province A–Z. Keep fuel/app.js in sync. */
+export function driverFormRegions() {
+  const preferred = [
+    ['UT', 'Utah'],
+    ['NV', 'Nevada'],
+  ];
+  const rest = ALL_REGIONS
+    .filter(([code]) => code !== 'UT' && code !== 'NV')
+    .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]));
+  return { preferred, rest };
+}
+
 export function stateFromParts({ countryCode, regionCode, regionName }) {
   const country = String(countryCode || '').toUpperCase();
   if (country && country !== 'US' && country !== 'CA') return '';

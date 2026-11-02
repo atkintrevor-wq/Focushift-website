@@ -230,6 +230,24 @@ td a { word-break: break-all; }
 }
 .preview.show { display: block; }
 
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+}
+.chip {
+  border: 1px solid var(--border);
+  background: var(--input);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.chip:hover { border-color: var(--accent); }
+
 .install-banner { display: none; }
 .install-banner.show { display: block; }
 

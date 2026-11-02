@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { aggregate } from './aggregate.js';
 import { safeEqual, signSession, verifySession } from './auth.js';
-import { stateFromParts, ALL_REGIONS } from './states.js';
+import { stateFromParts, ALL_REGIONS, driverFormRegions } from './states.js';
+import { rankStores } from './stores.js';
 import { parseEntry, parseFilters } from './validate.js';
 import { buildFuelWorkbook, crc32 } from './xlsx.js';
 
@@ -135,6 +136,40 @@ if "Q4" not in quarter_text:
 print("ok")
 `], { input: Buffer.from(bytes) });
   assert.equal(python.status, 0, python.stderr.toString() || python.stdout.toString());
+});
+
+test('driver dropdown leads with Utah and Nevada', () => {
+  const { preferred, rest } = driverFormRegions();
+  assert.deepEqual(preferred.map(([code]) => code), ['UT', 'NV']);
+  assert.equal(rest.some(([code]) => code === 'UT' || code === 'NV'), false);
+  assert.equal(rest.length, ALL_REGIONS.length - 2);
+  const names = rest.map(([, name]) => name);
+  assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)));
+  assert.equal(names[0], 'Alabama');
+
+  const app = readFileSync(new URL('../../fuel/app.js', import.meta.url), 'utf8');
+  const fill = app.slice(app.indexOf('function fillStates'), app.indexOf('function readList'));
+  assert.ok(fill.indexOf("'UT', 'Utah'") < fill.indexOf("'NV', 'Nevada'"));
+  assert.ok(fill.indexOf("'NV', 'Nevada'") < fill.indexOf('────────'));
+  assert.match(fill, /separator\.disabled = true/);
+});
+
+test('store suggestions rank by use, then recency, and can filter by state', () => {
+  const rows = [
+    { id: 1, station_name: 'Pilot #452', state: 'UT', purchase_date: '2026-01-01' },
+    { id: 2, station_name: 'pilot #452', state: 'UT', purchase_date: '2026-06-01' },
+    { id: 3, station_name: 'Pilot #452', state: 'UT', purchase_date: '2026-03-01' },
+    { id: 4, station_name: 'Maverik', state: 'UT', purchase_date: '2026-11-01' },
+    { id: 5, station_name: 'Love’s', state: 'NV', purchase_date: '2026-11-02' },
+    { id: 6, station_name: 'Love’s', state: 'NV', purchase_date: '2026-10-01' },
+  ];
+  const utah = rankStores(rows, { state: 'UT' });
+  assert.deepEqual(utah.map((store) => store.name), ['pilot #452', 'Maverik']);
+  assert.equal(utah[0].uses, 3);
+  assert.equal(utah[0].last_used, '2026-06-01');
+  const all = rankStores(rows);
+  assert.equal(all.find((store) => store.state === 'NV').name, 'Love’s');
+  assert.deepEqual(rankStores(rows, { state: 'CA' }), []);
 });
 
 test('driver page lists every jurisdiction the server accepts', () => {
