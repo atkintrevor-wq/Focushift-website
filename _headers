@@ -6,3 +6,13 @@
 
 /focus-training/*
   X-Robots-Tag: noindex, nofollow
+
+# Fuel log is a private tool. Do not index it. The service worker must revalidate.
+/fuel/*
+  X-Robots-Tag: noindex, nofollow
+
+/fuel/sw.js
+  Cache-Control: no-cache
+
+/fuel/manifest.webmanifest
+  Content-Type: application/manifest+json
