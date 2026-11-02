@@ -1,11 +1,11 @@
-const CACHE = 'ifta-fuel-v1';
+const CACHE = 'ifta-fuel-v2';
 const ASSETS = [
   '/fuel/',
   '/fuel/index.html',
   '/fuel/admin/',
   '/fuel/admin/index.html',
-  '/fuel/styles.css?v=1',
-  '/fuel/app.js?v=1',
+  '/fuel/styles.css?v=2',
+  '/fuel/app.js?v=2',
   '/fuel/admin.js?v=1',
   '/fuel/queue.js?v=1',
   '/fuel/manifest.webmanifest',

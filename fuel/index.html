@@ -12,7 +12,7 @@
   <link rel="manifest" href="/fuel/manifest.webmanifest" />
   <link rel="icon" href="/fuel/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="/fuel/icons/icon-192.png" />
-  <link rel="stylesheet" href="/fuel/styles.css?v=1" />
+  <link rel="stylesheet" href="/fuel/styles.css?v=2" />
   <title>IFTA Fuel Log</title>
 </head>
 <body>
@@ -57,7 +57,9 @@
         </div>
 
         <label for="station_name">Store / Station name</label>
-        <input type="text" id="station_name" name="station_name" required maxlength="120" placeholder="e.g. Pilot #452" autocomplete="organization" />
+        <input type="text" id="station_name" name="station_name" required maxlength="120" placeholder="e.g. Pilot #452" autocomplete="organization" list="stationList" />
+        <datalist id="stationList"></datalist>
+        <div class="chips" id="stationChips"></div>
 
         <div class="row-2">
           <div>
@@ -105,6 +107,6 @@
     </div>
   </main>
   <script src="/fuel/queue.js?v=1"></script>
-  <script src="/fuel/app.js?v=1"></script>
+  <script src="/fuel/app.js?v=2"></script>
 </body>
 </html>

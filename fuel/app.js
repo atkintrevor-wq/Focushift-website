@@ -29,6 +29,13 @@ function todayISO() {
   return `${y}-${m}-${day}`;
 }
 
+function addStateOption(parent, code, name) {
+  const option = document.createElement('option');
+  option.value = code;
+  option.textContent = `${code} — ${name}`;
+  parent.appendChild(option);
+}
+
 function fillStates() {
   const sel = document.getElementById('state');
   sel.innerHTML = '';
@@ -37,25 +44,21 @@ function fillStates() {
   placeholder.textContent = 'Select…';
   sel.appendChild(placeholder);
 
-  const us = document.createElement('optgroup');
-  us.label = 'United States';
-  US_STATES.forEach(([code, name]) => {
-    const option = document.createElement('option');
-    option.value = code;
-    option.textContent = `${code} — ${name}`;
-    us.appendChild(option);
-  });
-  sel.appendChild(us);
+  // Utah and Nevada first, then every other state and province A–Z.
+  // Same order as driverFormRegions() in functions/_lib/states.js.
+  const preferred = [['UT', 'Utah'], ['NV', 'Nevada']];
+  preferred.forEach(([code, name]) => addStateOption(sel, code, name));
 
-  const ca = document.createElement('optgroup');
-  ca.label = 'Canada';
-  CA_PROVINCES.forEach(([code, name]) => {
-    const option = document.createElement('option');
-    option.value = code;
-    option.textContent = `${code} — ${name}`;
-    ca.appendChild(option);
-  });
-  sel.appendChild(ca);
+  const separator = document.createElement('option');
+  separator.disabled = true;
+  separator.value = '-';
+  separator.textContent = '────────';
+  sel.appendChild(separator);
+
+  const rest = [...US_STATES, ...CA_PROVINCES]
+    .filter(([code]) => code !== 'UT' && code !== 'NV')
+    .sort((a, b) => a[1].localeCompare(b[1]) || a[0].localeCompare(b[0]));
+  rest.forEach(([code, name]) => addStateOption(sel, code, name));
 }
 
 function readList(key) {
@@ -81,6 +84,114 @@ function fillDatalist(id, values) {
     option.value = value;
     list.appendChild(option);
   });
+}
+
+function storeCacheKey(truck, driver) {
+  return `${String(truck || '').trim().toLowerCase()}|${String(driver || '').trim().toLowerCase()}`;
+}
+
+function readStoreCache(key) {
+  try {
+    const all = JSON.parse(localStorage.getItem('ifta_store_cache') || '{}');
+    const rows = all[key];
+    return Array.isArray(rows) ? rows : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoreCache(key, stores) {
+  let all = {};
+  try {
+    all = JSON.parse(localStorage.getItem('ifta_store_cache') || '{}');
+    if (!all || typeof all !== 'object') all = {};
+  } catch {
+    all = {};
+  }
+  all[key] = stores;
+  localStorage.setItem('ifta_store_cache', JSON.stringify(all));
+}
+
+function currentIdentity() {
+  return {
+    truck: document.getElementById('truck_number').value.trim(),
+    driver: document.getElementById('driver_name').value.trim(),
+    state: document.getElementById('state').value,
+    pin: document.getElementById('driver_pin').value || localStorage.getItem('ifta_driver_pin') || '',
+  };
+}
+
+function storesForState(stores, state) {
+  if (!state) return stores;
+  return stores.filter((store) => store.state === state);
+}
+
+function renderStoreSuggestions() {
+  const { truck, driver, state } = currentIdentity();
+  const chips = document.getElementById('stationChips');
+  const list = document.getElementById('stationList');
+  chips.innerHTML = '';
+  list.innerHTML = '';
+  if (!truck && !driver) return;
+  const stores = storesForState(readStoreCache(storeCacheKey(truck, driver)), state).slice(0, 12);
+  stores.forEach((store) => {
+    const option = document.createElement('option');
+    option.value = store.name;
+    list.appendChild(option);
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'chip';
+    button.textContent = state ? store.name : `${store.name} · ${store.state}`;
+    button.addEventListener('click', () => {
+      const input = document.getElementById('station_name');
+      input.value = store.name;
+      input.focus();
+    });
+    chips.appendChild(button);
+  });
+}
+
+function rememberStore(record) {
+  const key = storeCacheKey(record.truck_number, record.driver_name);
+  const stores = readStoreCache(key);
+  const name = record.station_name.trim();
+  const found = stores.find((store) => store.state === record.state && store.name.toLowerCase() === name.toLowerCase());
+  if (found) {
+    found.uses += 1;
+    found.last_used = record.purchase_date;
+    found.name = name;
+  } else {
+    stores.push({ name, state: record.state, uses: 1, last_used: record.purchase_date });
+  }
+  stores.sort((a, b) => b.uses - a.uses || String(b.last_used).localeCompare(String(a.last_used)) || a.name.localeCompare(b.name));
+  writeStoreCache(key, stores.slice(0, 12));
+  renderStoreSuggestions();
+}
+
+let storeTimer = 0;
+function scheduleStoreRefresh() {
+  renderStoreSuggestions();
+  clearTimeout(storeTimer);
+  storeTimer = setTimeout(() => { refreshStoreSuggestions(); }, 300);
+}
+
+async function refreshStoreSuggestions() {
+  const { truck, driver, pin } = currentIdentity();
+  if ((!truck && !driver) || !navigator.onLine) return;
+  if (localStorage.getItem('ifta_driver_pin_required') !== '1' || !pin) return;
+  const params = new URLSearchParams();
+  if (truck) params.set('truck', truck);
+  if (driver) params.set('driver', driver);
+  try {
+    const res = await fetch(`/fuel/api/stations?${params}`, { headers: { 'x-fuel-pin': pin } });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!Array.isArray(data.stores)) return;
+    writeStoreCache(storeCacheKey(truck, driver), data.stores);
+    renderStoreSuggestions();
+  } catch {
+    // Keep the on-device list when the request cannot finish.
+  }
 }
 
 function setStatus(msg, ok) {
@@ -113,6 +224,7 @@ async function configurePin() {
     const required = Boolean(data.driver_pin);
     localStorage.setItem('ifta_driver_pin_required', required ? '1' : '0');
     showPin(required);
+    refreshStoreSuggestions();
   } catch {
     showPin(localStorage.getItem('ifta_driver_pin_required') === '1');
   }
@@ -201,6 +313,7 @@ function rememberEntry(record) {
   if (record.driver_pin) localStorage.setItem('ifta_driver_pin', record.driver_pin);
   fillDatalist('driverList', rememberList('ifta_drivers', record.driver_name));
   fillDatalist('truckList', rememberList('ifta_trucks', record.truck_number));
+  rememberStore(record);
 }
 
 function resetForm(form) {
@@ -214,6 +327,7 @@ function resetForm(form) {
   if (!document.getElementById('pinWrap').hidden) {
     document.getElementById('driver_pin').value = localStorage.getItem('ifta_driver_pin') || '';
   }
+  renderStoreSuggestions();
 }
 
 async function queueEntry(record) {
@@ -233,6 +347,11 @@ function initForm() {
   fillDatalist('driverList', readList('ifta_drivers'));
   fillDatalist('truckList', readList('ifta_trucks'));
   setOfflineNote();
+  renderStoreSuggestions();
+  ['state', 'truck_number', 'driver_name', 'driver_pin'].forEach((id) => {
+    document.getElementById(id).addEventListener('input', scheduleStoreRefresh);
+    document.getElementById(id).addEventListener('change', scheduleStoreRefresh);
+  });
 
   document.getElementById('receipt').addEventListener('change', (event) => {
     const file = event.target.files && event.target.files[0];
@@ -259,6 +378,7 @@ function initForm() {
           const code = await stateFromLocation(pos.coords.latitude, pos.coords.longitude);
           document.getElementById('state').value = code;
           status.textContent = `Detected ${code}`;
+          renderStoreSuggestions();
         } catch {
           status.textContent = 'Lookup failed. Pick the state yourself.';
         }
@@ -296,6 +416,7 @@ function initForm() {
       if (!res.ok) throw new Error(data.error || 'Save failed');
       rememberEntry(record);
       resetForm(form);
+      refreshStoreSuggestions();
       const extra = data.warning ? ` ${data.warning}` : '';
       setStatus(`Saved entry #${data.id} — ${data.gallons} gal in ${data.state}.${extra}`, true);
     } catch (err) {
@@ -326,12 +447,14 @@ window.addEventListener('online', async () => {
   setOfflineNote();
   const result = await window.FuelQueue.flush();
   await refreshQueueBanner(result);
+  refreshStoreSuggestions();
 });
 window.addEventListener('offline', setOfflineNote);
 document.addEventListener('visibilitychange', async () => {
   if (document.visibilityState === 'visible' && navigator.onLine) {
     const result = await window.FuelQueue.flush();
     await refreshQueueBanner(result);
+    refreshStoreSuggestions();
   }
 });
 
