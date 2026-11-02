@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f766e" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="/fuel/manifest.webmanifest" />
+  <link rel="icon" href="/fuel/icons/icon-192.png" />
+  <link rel="stylesheet" href="/fuel/styles.css?v=1" />
+  <title>Admin — IFTA Fuel Log</title>
+</head>
+<body>
+  <header class="app-header">
+    <h1>IFTA Admin</h1>
+    <nav>
+      <a href="/fuel/">Log fuel</a>
+      <a href="/fuel/admin/" class="active">Admin</a>
+      <button type="button" class="linkish" id="logoutBtn" hidden>Sign out</button>
+    </nav>
+  </header>
+  <main class="wide">
+    <div class="login-wrap" id="loginView" hidden>
+      <div class="card">
+        <h2>Office sign-in</h2>
+        <p class="note" id="loginIntro">Enter the admin password to see fuel totals and download the spreadsheet.</p>
+        <form id="loginForm">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required />
+          <button type="submit" class="btn block" id="loginBtn">Sign in</button>
+          <div class="status" id="loginStatus" role="status"></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="appView" hidden>
+      <div class="stats" id="totals">
+        <div class="stat"><div class="label">Entries</div><div class="value" id="totCount">—</div></div>
+        <div class="stat"><div class="label">Total gallons</div><div class="value" id="totGal">—</div></div>
+        <div class="stat"><div class="label">Total dollars</div><div class="value" id="totDollars">—</div></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:0.75rem;flex-wrap:wrap">
+          <h2 style="margin:0">Summaries</h2>
+          <button type="button" class="btn" id="exportBtn">Download Excel (.xlsx)</button>
+        </div>
+        <p class="note">Gallons and dollars by state and by quarter, for IFTA. Totals follow the filters below. Clear the filters for the whole log. The spreadsheet uses the same filters and has sheets for entries, by state, and by quarter.</p>
+        <div class="row-2" style="margin-top:1rem">
+          <div>
+            <h3 style="margin:0 0 0.5rem;font-size:0.95rem;color:var(--muted)">By state / province</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>State</th><th>Entries</th><th>Gallons</th><th>Total $</th></tr></thead>
+                <tbody id="byStateBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div>
+            <h3 style="margin:0 0 0.5rem;font-size:0.95rem;color:var(--muted)">By quarter</h3>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Year</th><th>Q</th><th>Entries</th><th>Gallons</th><th>Total $</th></tr></thead>
+                <tbody id="byQuarterBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>All entries</h2>
+        <div class="filters">
+          <div>
+            <label for="filterState">State</label>
+            <select id="filterState"><option value="">All</option></select>
+          </div>
+          <div>
+            <label for="filterYear">Year</label>
+            <select id="filterYear"><option value="">All</option></select>
+          </div>
+          <div>
+            <label for="filterQuarter">Quarter</label>
+            <select id="filterQuarter">
+              <option value="">All</option>
+              <option value="1">Q1</option>
+              <option value="2">Q2</option>
+              <option value="3">Q3</option>
+              <option value="4">Q4</option>
+            </select>
+          </div>
+          <div>
+            <label for="filterDriver">Driver</label>
+            <input type="text" id="filterDriver" placeholder="Name contains…" maxlength="80" />
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn secondary" id="applyFilters">Apply filters</button>
+          <button type="button" class="btn ghost" id="clearFilters">Clear</button>
+        </div>
+        <div class="table-wrap" style="margin-top:0.85rem">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>State</th>
+                <th>Station</th>
+                <th>Gal</th>
+                <th>$</th>
+                <th>Truck</th>
+                <th>Driver</th>
+                <th>Receipt</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="entriesBody"></tbody>
+          </table>
+        </div>
+        <p class="hint" id="entryCount"></p>
+        <p class="status err" id="listError" role="status"></p>
+      </div>
+    </div>
+  </main>
+  <script src="/fuel/admin.js?v=1"></script>
+</body>
+</html>
