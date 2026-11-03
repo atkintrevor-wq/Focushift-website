@@ -152,6 +152,23 @@
     }
     var work = "What do you want to work on?";
     var workHint = "One thing. Say what you want, not what you want to stop.";
+    if (id === "health-fitness" && mode === "in-the-moment") {
+      return {
+        kind: "life",
+        work: work,
+        feel: "How do you want to feel?",
+        scene: "In this movement, what do you do or tell yourself?",
+        workHint: workHint,
+        feelHint: "The feeling you want while you are in it.",
+        sceneHint: "A short cue, or the action you take.",
+        workChips: beliefs(id).slice(0, 8),
+        feelChips: feelings(id),
+        sceneChips: [
+          "Easy", "Right here", "I've got this", "One more", "Stay with it", "Smooth", "Breathe", "Keep going",
+          "This one", "Loose", "Light", "Here", "Steady", "Through it", "Still going", "Let it be easy",
+        ],
+      };
+    }
     if (id === "sleep-rest") {
       work = "What do you want from this rest?";
       workHint = "One thing you want as you rest.";

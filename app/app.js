@@ -16246,8 +16246,12 @@
       var lineReady = !!String(feelingResponses[feeling] || "").trim();
       var spoken = feeling ? feeling.charAt(0).toLowerCase() + feeling.slice(1) : "";
       var pageKey = "line-" + feeling;
+      var movingCue = cat.id === "health-fitness" && selectedListenMode === "in-the-moment";
       html += '<p style="margin:0 0 0.35rem;font-weight:600;">' +
-        escapeHtml("What would you like to associate with being " + spoken + "?") + "</p>";
+        escapeHtml(movingCue ? ("While you are " + spoken + ", what do you do or tell yourself?") : ("What would you like to associate with being " + spoken + "?")) + "</p>";
+      if (movingCue) {
+        html += '<p class="app-muted" style="margin:0 0 0.75rem;">' + escapeHtml(set.sceneHint) + "</p>";
+      }
       if (selectedFeelings.length > 1) {
         html += '<p class="app-muted" style="margin:0 0 0.75rem;">' +
           escapeHtml(String(lineIndex + 1) + " of " + selectedFeelings.length) + "</p>";
