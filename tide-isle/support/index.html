@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Support — Tide Isle</title>
+  <meta name="description" content="Tide Isle support from Izasa, LLC. How to delete an adult voice clone, clear on-device play data, and contact support@focusshift.app." />
+  <link rel="canonical" href="https://focusshift.app/tide-isle/support/" />
+  <meta name="theme-color" content="#123f3b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/tide-isle/tide-isle.css" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top">
+    <div class="top-inner">
+      <a class="brand" href="/tide-isle/">Tide Isle</a>
+      <nav aria-label="Tide Isle">
+        <a href="/tide-isle/support/" aria-current="page">Support</a>
+        <a href="/tide-isle/privacy/">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <article class="card">
+      <h1>Support</h1>
+      <p class="updated">Tide Isle · Izasa, LLC</p>
+
+      <p>Tide Isle is a children’s play app, separate from Focus Shift. For help with Tide Isle, email <a href="mailto:support@focusshift.app">support@focusshift.app</a>. This page is the public support address for the app: <a href="https://focusshift.app/tide-isle/support/">focusshift.app/tide-isle/support</a>.</p>
+
+      <h2>Contact</h2>
+      <p>Email: <a href="mailto:support@focusshift.app">support@focusshift.app</a></p>
+      <p>Please do not send a child’s full name, a photo, or a voice recording unless we ask for it to find the right item. The <a href="/tide-isle/privacy/">privacy policy</a> describes what the app stores on the device and what Parent Voices sends over the internet.</p>
+
+      <h2>Delete a cloned voice</h2>
+      <p>Parent Voices is optional. It is for an adult, age 18 or older, recording their own voice. It is not for a child’s speech, speech in the background, or a label that identifies a child. A person who ignores those rules can still upload a child’s voice. Deleting the app, or resetting stats, does not by itself delete a clone stored by our voice provider.</p>
+      <ol>
+        <li>Open the parent area. The gate asks you to hold the moon, then answer a math question.</li>
+        <li>Open Parent Voices and delete that voice.</li>
+        <li>Keep the device online. The app asks our service to delete the clone at ElevenLabs. If the service cannot be reached, the app tries the deletion again.</li>
+        <li>If the voice is still there the next time you open Parent Voices, connect to the internet and delete it again.</li>
+      </ol>
+      <p>Until a deletion request succeeds, ElevenLabs can still have the clone. ElevenLabs’ delete endpoint does not guarantee that every backup is removed immediately. ElevenLabs says that after retained data is deleted, backup copies can remain for up to 30 days. Deleting generated audio is described separately in their documentation: that audio and text leave their database, and debugging or moderation logs may still keep information about that generation. We do not promise a faster or more complete deletion than ElevenLabs provides.</p>
+      <p>If deletion still does not finish, email <a href="mailto:support@focusshift.app">support@focusshift.app</a> and include the voice label used for that voice. Do not send the app token.</p>
+
+      <h2>Information that stays on the device</h2>
+      <p>Talk photos, custom one-word recordings, settings, counts, and notes are stored on the device. We do not receive a copy. During play, microphone audio is used to measure loudness and is not saved.</p>
+      <ul>
+        <li>Use the parent area to delete the local play summary the screen offers to remove.</li>
+        <li>Reset stats clears local counts on that device. It does not delete a cloned voice, and it does not contact our servers.</li>
+        <li>Deleting Tide Isle removes the app’s on-device information, including Talk photos, one-word recordings, settings, counts, and notes.</li>
+      </ul>
+      <p>Delete a cloned voice while the device is online before you delete the app. If the app is already gone and a clone may remain, email <a href="mailto:support@focusshift.app">support@focusshift.app</a>.</p>
+
+      <h2>A child’s voice</h2>
+      <p>Parent Voices asks the adult to confirm they are 18 or older and that the recording is their own voice. Do not record a child, do not record other people in the background, and do not use a label that identifies a child. If a child’s voice or a child-identifying label was sent, email <a href="mailto:support@focusshift.app">support@focusshift.app</a> and we will ask ElevenLabs to delete that clone. Deletion does not guarantee that every backup is removed immediately.</p>
+    </article>
+  </main>
+
+  <footer class="footer">
+    <nav aria-label="Footer">
+      <a href="/tide-isle/">Tide Isle</a>
+      <span aria-hidden="true">·</span>
+      <a href="/tide-isle/privacy/">Privacy Policy</a>
+      <span aria-hidden="true">·</span>
+      <a href="mailto:support@focusshift.app">support@focusshift.app</a>
+    </nav>
+    <p>© <span id="y"></span> Izasa, LLC</p>
+  </footer>
+  <script>
+    document.getElementById("y").textContent = String(new Date().getFullYear());
+  </script>
+</body>
+</html>
