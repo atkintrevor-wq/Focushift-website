@@ -56,6 +56,7 @@
   /** Full-screen script workshop (iOS ScriptEditView parity). */
   var scriptWorkshopOpenId = null;
   var scriptWorkshopDraft = null;
+  var scriptWorkshopChunks = [];
   var scriptWorkshopSnapshot = null;
   var scriptWorkshopIsNewDraft = false;
   var scriptWorkshopIsPremadeEditor = false;
@@ -18301,6 +18302,29 @@
     });
   }
 
+  function splitScriptChunks(text) {
+    var parts = String(text || "").split(/(?<=[.!?])\s+/).map(function (part) {
+      return part.trim();
+    }).filter(Boolean);
+    return parts.length ? parts : [String(text || "")];
+  }
+
+  function spokenScriptLine(chunk) {
+    return String(chunk || "").replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  function scriptLineFieldsHtml(rawText) {
+    scriptWorkshopChunks = splitScriptChunks(rawText);
+    var html = '<p class="app-muted" style="margin:0 0 0.45rem;">Change any line. The others stay as they are.</p>';
+    scriptWorkshopChunks.forEach(function (chunk, index) {
+      html += '<label class="script-line-label">Line ' + (index + 1) +
+        '<textarea class="script-workshop-textarea script-workshop-line" data-script-line="' + index + '" rows="2">' +
+        escapeHtml(spokenScriptLine(chunk)) +
+        "</textarea></label>";
+    });
+    return html;
+  }
+
   function renderScriptWorkshop() {
     var body = document.getElementById("script-workshop-body");
     var footer = document.getElementById("script-workshop-footer");
@@ -18310,19 +18334,15 @@
     var showFmtPref = readShowAudioTagsFormattingPreference();
     var rawText = scriptWorkshopDraft.text || "";
     var hasAudioTagsInScript = containsAudioTagsForScript(rawText);
-    var canEditTextBody = !(hasAudioTagsInScript && !showFmtPref);
+    var canEditTextBody = true;
     var bodyFieldHtml;
-    if (hasAudioTagsInScript && !showFmtPref) {
-      bodyFieldHtml =
-        '<p class="app-muted" style="margin:0 0 0.4rem;">Turn on <strong>Show formatting</strong> to edit TTS tags.</p>' +
-        '<div class="script-inline-preview-scroll"><pre class="script-inline-preview app-card-text">' +
-        escapeHtml(stripAudioTagsForDisplay(rawText) || "(No text)") +
-        "</pre></div>";
-    } else {
+    if (hasAudioTagsInScript && showFmtPref) {
       bodyFieldHtml =
         '<textarea id="script-workshop-text" class="script-workshop-textarea" rows="12" maxlength="50000">' +
         escapeHtml(rawText) +
         "</textarea>";
+    } else {
+      bodyFieldHtml = scriptLineFieldsHtml(rawText);
     }
     var formatToggleHtml = "";
     if (hasAudioTagsInScript) {
@@ -18410,6 +18430,18 @@
         renderScriptWorkshopFooterOnly(script);
       };
     }
+    document.querySelectorAll("[data-script-line]").forEach(function (field) {
+      field.oninput = function () {
+        var index = Number(field.getAttribute("data-script-line"));
+        var next = String(field.value || "").trim();
+        if (!scriptWorkshopChunks[index]) return;
+        if (spokenScriptLine(scriptWorkshopChunks[index]) === spokenScriptLine(next)) return;
+        if (next && !/[.!?]$/.test(next)) next += ".";
+        scriptWorkshopChunks[index] = next;
+        scriptWorkshopDraft.text = scriptWorkshopChunks.filter(Boolean).join(" ");
+        renderScriptWorkshopFooterOnly(script);
+      };
+    });
     var fmtToggle = document.getElementById("script-workshop-format-toggle");
     if (fmtToggle) {
       fmtToggle.onchange = function () {

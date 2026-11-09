@@ -2759,8 +2759,17 @@ html.fs-app[data-app-theme="light"] .script-workshop-textarea {
   padding: 0.42rem 0.55rem;
   font-size: 0.95rem;
 }
-.script-workshop-textarea {
-  min-height: 220px;
+.script-workshop-line {
+  min-height: 0;
+  margin-bottom: 0.45rem;
+}
+.script-line-label {
+  display: block;
+  margin: 0 0 0.15rem;
+  font-size: 0.75rem;
+  color: inherit;
+  opacity: 0.72;
+}
   padding: 0.5rem 0.6rem;
   font-size: 0.92rem;
   resize: vertical;
