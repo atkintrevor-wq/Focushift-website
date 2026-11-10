@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#b45309" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="description" content="Trip log history" />
+  <link rel="manifest" href="/trips/manifest.webmanifest" />
+  <link rel="icon" href="/trips/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/trips/icons/icon-192.png" />
+  <link rel="stylesheet" href="/trips/styles.css?v=2" />
+  <title>History — Trip Log</title>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <h1>Trip history</h1>
+      <p class="who">Trevor</p>
+    </div>
+    <nav>
+      <a href="/trips/">Log</a>
+      <a href="/trips/history/" class="active">History</a>
+      <a href="/trips/reconcile/">Reconcile</a>
+      <button type="button" class="linkish" id="logoutBtn" hidden>Sign out</button>
+    </nav>
+  </header>
+  <main class="wide">
+    <div class="login-wrap" id="loginView" hidden>
+      <div class="card">
+        <h2>Sign in</h2>
+        <p class="note">Enter the trip log password to see pay months and download the spreadsheet.</p>
+        <form id="loginForm">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" required />
+          <button type="submit" class="btn block" id="loginBtn">Sign in</button>
+          <div class="status" id="loginStatus" role="status"></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="appView" hidden>
+      <div class="stats" id="totals">
+        <div class="stat"><div class="label">Trips</div><div class="value" id="totTrips">—</div></div>
+        <div class="stat"><div class="label">Sunrise</div><div class="value" id="totSunrise">—</div></div>
+        <div class="stat"><div class="label">MTV/SH</div><div class="value" id="totMtv">—</div></div>
+        <div class="stat"><div class="label">Expected</div><div class="value" id="totPay">—</div></div>
+      </div>
+
+      <div class="card">
+        <h2>Pay months</h2>
+        <p class="note">A week counts in the month its Sunday falls in. The Oct 26–Nov 1, 2026 week is November.</p>
+        <div class="toolbar">
+          <div class="grow">
+            <label for="month">Pay month</label>
+            <input type="month" id="month" name="month" />
+          </div>
+          <button type="button" class="btn secondary" id="allMonths">All months</button>
+          <button type="button" class="btn" id="xlsxBtn">Download Excel (.xlsx)</button>
+          <button type="button" class="btn secondary" id="csvBtn">Download CSV</button>
+        </div>
+        <div class="actions">
+          <button type="button" class="btn secondary" id="seedBtn">Add trips from notes</button>
+        </div>
+        <p class="hint">Loads the written-down trips from Sep 1 through Nov 7, 2026, marks TA-6037 through TA-6040 paid, and adds the October paystub. Running it again does not add duplicates or overwrite edits.</p>
+        <div class="status" id="pageStatus" role="status"></div>
+      </div>
+
+      <div id="months"></div>
+    </div>
+  </main>
+  <script src="/trips/week.js?v=2"></script>
+  <script src="/trips/session.js?v=1"></script>
+  <script src="/trips/history.js?v=2"></script>
+</body>
+</html>

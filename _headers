@@ -16,3 +16,13 @@
 
 /fuel/manifest.webmanifest
   Content-Type: application/manifest+json
+
+# Trip log is a private tool. Do not index it. The service worker must revalidate.
+/trips/*
+  X-Robots-Tag: noindex, nofollow
+
+/trips/sw.js
+  Cache-Control: no-cache
+
+/trips/manifest.webmanifest
+  Content-Type: application/manifest+json
