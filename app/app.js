@@ -1914,34 +1914,18 @@
 
   function listenModeTitle(mode, categoryId) {
     var m = normalizeListenMode(mode);
-    var rows = {
-      "sleep-rest": { "getting-ready": "Before bed", "in-the-moment": "While I rest or fall asleep", after: "When I wake" },
-      "sports-performance": { "getting-ready": "Preparing for the game", "in-the-moment": "While you practice", after: "After the game" },
-      "health-fitness": { "getting-ready": "Before you move", "in-the-moment": "While you're moving", after: "After you're done" },
-      confidence: { "getting-ready": "Before you walk in", "in-the-moment": "While you're in it", after: "After it's over" },
-      relationships: { "getting-ready": "Before you're with them", "in-the-moment": "While you're with them", after: "After you've been with them" },
-      "success-prosperity": { "getting-ready": "Before the work", "in-the-moment": "While you're in the work", after: "After you step away" },
-      "mental-wellbeing": { "getting-ready": "Before the stretch", "in-the-moment": "While you're in it", after: "After, when you come down" },
-      "i-am": { "getting-ready": "Before you step in", "in-the-moment": "While you're in it", after: "When the moment is done" },
-    };
-    var row = rows[categoryId] || { "getting-ready": "Before it starts", "in-the-moment": "While it's happening", after: "After it's done" };
-    return row[m] || row.after;
+    if (categoryId === "sleep-rest") {
+      if (m === "getting-ready") return "Before bed";
+      if (m === "in-the-moment") return "While I rest";
+      return "When I wake";
+    }
+    if (m === "getting-ready") return "Before it";
+    if (m === "in-the-moment") return "During it";
+    return "After it";
   }
 
   function listenModeRepeatTitle(mode, categoryId) {
-    var m = normalizeListenMode(mode);
-    var rows = {
-      "sleep-rest": { "getting-ready": "Before bed, most nights", "in-the-moment": "While I rest or fall asleep", after: "When I wake" },
-      "sports-performance": { "getting-ready": "Preparing for the game", "in-the-moment": "While you practice", after: "After the game" },
-      "health-fitness": { "getting-ready": "Before you move, on ordinary days", "in-the-moment": "While you're moving", after: "After you move, to settle" },
-      confidence: { "getting-ready": "Before you walk in, on ordinary days", "in-the-moment": "While you're in it", after: "After it's over, to settle" },
-      relationships: { "getting-ready": "Before you're with them, on ordinary days", "in-the-moment": "While you're with them", after: "After you've been with them" },
-      "success-prosperity": { "getting-ready": "Before the work, on ordinary days", "in-the-moment": "While you're in the work", after: "After you step away" },
-      "mental-wellbeing": { "getting-ready": "Before the stretch, on ordinary days", "in-the-moment": "While you're in it", after: "After, when you come down" },
-      "i-am": { "getting-ready": "Before you step in, on ordinary days", "in-the-moment": "While you're in it", after: "When the moment is done" },
-    };
-    var row = rows[categoryId] || { "getting-ready": "Before it starts, on ordinary days", "in-the-moment": "While it's happening", after: "After it's done, to settle" };
-    return row[m] || row.after;
+    return listenModeTitle(mode, categoryId);
   }
 
   function listenModeRepeatHint(mode, categoryId) {
@@ -1950,11 +1934,6 @@
       if (m === "getting-ready") return "Play this while the day winds down. Not one special night.";
       if (m === "in-the-moment") return "Play this while you rest. Slower, quieter, most nights.";
       return "Play this as you wake. Unhurried, no pep talk.";
-    }
-    if (categoryId === "sports-performance") {
-      if (m === "getting-ready") return "Play this while you prepare. All week, or right before the game.";
-      if (m === "in-the-moment") return "Play this while you practice. The next rep, over and over.";
-      return "Play this after you compete, as a way to settle.";
     }
     return listenModeHint(mode, categoryId);
   }
@@ -2123,56 +2102,14 @@
 
   function listenModeHint(mode, categoryId) {
     var m = normalizeListenMode(mode);
-    var id = String(categoryId || "").trim();
-    var byCat = {
-      "sleep-rest": {
-        "getting-ready": "Settle the day and get ready for rest — sofa, bath, or the start of bedtime.",
-        "in-the-moment": "Stay with you while you rest or fall asleep — quiet the mind, slow the body.",
-        after: "A gentle wake-up — unhurried, light, no pep talk.",
-      },
-      "health-fitness": {
-        "getting-ready": "Before a meal, a workout, the sauna, a walk, or whatever you're about to do for your body.",
-        "in-the-moment": "While you're doing it — moving, cooking, recovering, in the sauna.",
-        after: "When you're done — settle, recover, close the day.",
-      },
-      "sports-performance": {
-        "getting-ready": "Listen while you prepare for the game. Through the week, or right before you play.",
-        "in-the-moment": "Listen while you practice. The next rep, with your cue.",
-        after: "After you're done — reset, recover, let it complete.",
-      },
-      confidence: {
-        "getting-ready": "Before you walk in — a talk, a room, a moment that matters.",
-        "in-the-moment": "While you're in it — the conversation, the room, the decision.",
-        after: "After it's over — keep what you want, let the rest complete.",
-      },
-      relationships: {
-        "getting-ready": "Before you show up with someone — a talk, a date, a boundary, a hello.",
-        "in-the-moment": "While you're with them, or in that connection right now.",
-        after: "After the moment — settle, stay clear, be at ease with yourself.",
-      },
-      "success-prosperity": {
-        "getting-ready": "Before a work block, a pitch, or a money decision.",
-        "in-the-moment": "While you're in the work — at the desk, on the call, making the next move.",
-        after: "When you step away — complete, not still spinning.",
-      },
-      "mental-wellbeing": {
-        "getting-ready": "Before a stretch of the day where you want more steadiness.",
-        "in-the-moment": "While you're moving through it — this hour, this feeling, this stretch.",
-        after: "When you're coming down — quieter, safer, more yourself.",
-      },
-      "i-am": {
-        "getting-ready": "Before you step into the day or a moment — already being that person.",
-        "in-the-moment": "While you're in it — living these truths in this moment.",
-        after: "When the moment is done — settle into who you are.",
-      },
-    };
-    var fallback = {
-      "getting-ready": "Before you step into it — feel it and walk up.",
-      "in-the-moment": "While you're doing it — this moment, in the body.",
-      after: "When you're done — settle, recover, or close the day.",
-    };
-    var table = byCat[id] || fallback;
-    return table[m] || fallback[m];
+    if (categoryId === "sleep-rest") {
+      if (m === "getting-ready") return "Settle the day and get ready for rest — sofa, bath, or the start of bedtime.";
+      if (m === "in-the-moment") return "Stay with you while you rest or fall asleep — quiet the mind, slow the body.";
+      return "A gentle wake-up — unhurried, light, no pep talk.";
+    }
+    if (m === "getting-ready") return "I'll listen while I'm getting ready.";
+    if (m === "in-the-moment") return "I'll listen while I'm in it.";
+    return "I'll listen once it's over.";
   }
 
   var LISTEN_MODE_QUESTIONS = {
@@ -15611,20 +15548,11 @@
   }
 
   function chosenLengthMarkup() {
-    if (completeBlocks().length) return "";
-    var labels = {
-      Short: "about 150 words (~1 min).",
-      Medium: "about 400 words (~2.5 min).",
-      Long: "about 800 words (~4 min).",
-    };
-    var v = isWebFreeTier() ? "Short" : (quickStartLength || "Medium");
-    var note = isWebFreeTier()
-      ? "Short is the free sample."
-      : "Chosen earlier. Go back to change it.";
+    if (completeBlocks().length || isQuickStartPath()) return "";
+    var line = isWebFreeTier() ? "About a minute." : "About three minutes.";
     return (
       '  <p class="gen-field-label" style="margin-top:0.85rem;">Length</p>' +
-      "  <p style=\"margin:0;\">" + escapeHtml(v + ". " + (labels[v] || "")) + "</p>" +
-      '  <p class="app-muted" style="margin:0.2rem 0 0;font-size:0.82rem;">' + escapeHtml(note) + "</p>"
+      '  <p style="margin:0;">' + escapeHtml(line) + "</p>"
     );
   }
 
@@ -16042,11 +15970,9 @@
     } else if (screen === "when") {
       var repeatWhen = quickStartIntention === "repeat";
       html += '<p style="margin:0 0 0.35rem;font-weight:600;">When will you press play?</p>' +
-        '<p class="app-muted" style="margin:0 0 0.75rem;">' +
-        escapeHtml(repeatWhen
-          ? "Ordinary days, not one event."
-          : "Pick the moment you'll press play.") +
-        "</p>" +
+        (repeatWhen
+          ? '<p class="app-muted" style="margin:0 0 0.75rem;">Ordinary days, not one event.</p>'
+          : "") +
         listenModesFor(cat.id).map(function (mode) {
           var title = repeatWhen ? listenModeRepeatTitle(mode, cat.id) : listenModeTitle(mode, cat.id);
           var hint = repeatWhen ? listenModeRepeatHint(mode, cat.id) : listenModeHint(mode, cat.id);
@@ -16643,8 +16569,8 @@
         "</p>" +
         '  <p class="app-muted" style="margin:0 0 0.75rem;font-size:0.88rem;">' +
         escapeHtml(isRepeatListen()
-          ? "This is for ordinary days, not one event."
-          : "When will you press play? We'll ask about that moment next.") +
+          ? "When will you press play? This is for ordinary days, not one event."
+          : "When will you press play?") +
         "</p>" +
         '  <div class="home-listen-mode-list" role="listbox" aria-label="When you\'ll listen">' +
         listenModesFor(cat.id).map(function (mode) {

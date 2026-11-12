@@ -18,17 +18,15 @@
     var m = mode === "in-the-moment" || mode === "after" ? mode : "getting-ready";
     var ordinary = intention === "repeat";
     var detail = categoryId === "sports-performance"
-      ? (m === "in-the-moment"
-        ? "Name the sport and/or the practice. A few words."
-        : "Name the sport and/or the game. A few words.")
+      ? "Name the sport and what you'll be in. A few words."
       : ordinary
         ? "The kind of thing it is on an ordinary day. A few words."
         : "Name the real thing. A few words. The listen uses it at the start.";
     var table = {
       "sports-performance": {
-        "getting-ready": ["What are you getting ready for?", "Friday's basketball game and/or every soccer game"],
-        "in-the-moment": ["What are you practicing?", "Friday's basketball practice"],
-        after: ["What will you have just come out of?", "Today's soccer practice"],
+        "getting-ready": ["What are you getting ready for?", "Friday's game, or today's practice"],
+        "in-the-moment": ["What will you be in the middle of?", "The game, or this practice"],
+        after: ["What will you have just finished?", "The game, or today's practice"],
       },
       confidence: {
         "getting-ready": ["What are you about to walk into?", "Monday's meeting"],
@@ -93,8 +91,8 @@
   function sportsParts(mode) {
     if (mode === "in-the-moment") {
       return {
-        title: "What do you want with you in practice?",
-        hint: "Choose the part of practice you want to walk through.",
+        title: "What do you want with you while you're in it?",
+        hint: "Choose the part you want to walk through.",
         chips: [
           "This rep", "The next rep", "My routine", "Getting loose",
           "Seeing the target", "One rep at a time", "Warming up", "The first rep",
@@ -105,7 +103,7 @@
     }
     if (mode === "after") {
       return {
-        title: "What do you want after the game?",
+        title: "What do you want after it?",
         hint: "Choose how you want to come off it.",
         chips: [
           "The last play", "Walking off", "Letting it go", "Cooling down",
@@ -114,8 +112,8 @@
       };
     }
     return {
-      title: "What do you want to take into the game?",
-      hint: "Choose what gets you ready for the game.",
+      title: "What do you want to take in with you?",
+      hint: "Choose the part you want with you as you get ready.",
       chips: [
         "Walking in", "Warming up", "My routine", "Getting loose",
         "Seeing the game", "Trusting my preparation", "The first play", "One play at a time",
