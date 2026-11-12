@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacy Policy — Tide Isle</title>
+  <meta name="description" content="Privacy policy for Tide Isle, a children's app by Izasa, LLC. Play microphone audio is not saved. Optional Parent Voices sends an adult's own recording and voice label to create a clone." />
+  <link rel="canonical" href="https://focusshift.app/tide-isle/privacy/" />
+  <meta name="theme-color" content="#123f3b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/tide-isle/tide-isle.css" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="top">
+    <div class="top-inner">
+      <a class="brand" href="/tide-isle/">Tide Isle</a>
+      <nav aria-label="Tide Isle">
+        <a href="/tide-isle/support/">Support</a>
+        <a href="/tide-isle/privacy/" aria-current="page">Privacy</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <article class="card">
+      <h1>Privacy Policy</h1>
+      <p class="updated">Tide Isle · Izasa, LLC · Last updated: November 7, 2026</p>
+
+      <p>Tide Isle is a child-directed play app published by Izasa, LLC (“we,” “us”). This policy explains how the Tide Isle app handles information. It applies only to Tide Isle. Focus Shift, also published by Izasa, LLC, has its own policy at <a href="https://focusshift.app/privacy">focusshift.app/privacy</a>.</p>
+
+      <h2>The short version</h2>
+      <p>A child can use Tide Isle without an account. We do not show ads, and we do not use tracking or analytics tools. Ordinary play does not ask for a name, email address, or phone number.</p>
+      <p>The microphone is used in different ways. Please read the one that matches the feature:</p>
+      <ul>
+        <li><strong>Play.</strong> The microphone can measure loudness on the device. That audio is not saved and is not uploaded.</li>
+        <li><strong>Talk.</strong> A photo or a custom one-word recording can be saved on the device. We do not receive those files.</li>
+        <li><strong>Parent Voices.</strong> This is optional. An adult, age 18 or older, can record their own voice and send it over the internet to create a cloned voice. The app also sends an adult voice label, an installation identifier, and a token to our backend. This is separate from play and from Talk.</li>
+      </ul>
+
+      <h2>Information we do not collect for ordinary play</h2>
+      <p>We do not ask children or caregivers to create a Tide Isle account. We do not ask for a child’s name, email address, phone number, contacts, or precise location in order to play.</p>
+      <ul>
+        <li>No third-party advertising</li>
+        <li>No analytics or crash-reporting SDKs</li>
+        <li>No sale of personal information</li>
+        <li>No in-app purchases</li>
+      </ul>
+      <p>Play does not depend on providing personal information. Photos and one-word recordings in Talk, and a parent’s voice in Parent Voices, are described below. They are not required to play.</p>
+
+      <h2>Microphone during play</h2>
+      <p>Microphone access is optional. If you allow it, play can use the microphone on the device to notice how loud the sound is. That audio is processed on the device for loudness only. We do not save it, and we do not send it to Izasa, Firebase, or a speech service.</p>
+      <p>Tide Isle still works if you decline microphone access. You can turn the microphone off later in the device’s Settings. New recordings, including Parent Voices and Talk, need the microphone. Turning it off does not delete a voice clone that was already created, and it does not erase files already saved on the device.</p>
+
+      <h2>Information that stays on the device</h2>
+      <p>Tide Isle may save the following on the device so a parent can review them in the parent area:</p>
+      <ul>
+        <li>Settings</li>
+        <li>Counts of how activities are used</li>
+        <li>Notes</li>
+        <li>Talk photos</li>
+        <li>Custom one-word recordings made in Talk</li>
+      </ul>
+      <p>That information stays on the device. We do not receive a copy of it. These local recordings and photos are not the same thing as Parent Voices. A one-word Talk recording is not uploaded to create a clone.</p>
+      <p>A parent can delete the local summary from the parent area. Resetting stats clears local counts on that device. Reset stats does not delete a cloned voice, and it does not contact our servers. Deleting the app removes the information Tide Isle stored on that device, including Talk photos, one-word recordings, settings, counts, and notes. Deleting the app does not delete a voice clone held by our voice provider unless a deletion request has already succeeded.</p>
+
+      <h2>Parent Voices</h2>
+      <p>Parent Voices is optional. It sits in the parent area, behind a parental gate: hold the moon, then answer a math question. Before a sample is sent, the app asks the adult to confirm that they are 18 or older and that the recording is their own voice.</p>
+      <p>That recording is for the adult’s own voice. It is not for a child’s speech, for other people talking in the background, or for a label that identifies a child. A person who ignores those rules can still record a child and upload that recording, or can still type a label that identifies a child.</p>
+      <p>If the adult continues, the app records a voice sample. It sends that sample to a Firebase function we operate on Google Cloud, together with an adult voice label, an installation identifier, and a token. The voice label includes app and installation metadata. The function passes the recording and that voice label to <a href="https://elevenlabs.io/privacy-policy" target="_blank" rel="noopener noreferrer">ElevenLabs</a> to create an instant voice clone and to generate speech in that voice. The label’s app and installation metadata go with that request. The token is sent to our backend. This policy does not say that ElevenLabs receives the token.</p>
+      <p>The function is built not to store the voice sample in our database. The recording still leaves the device: it is transmitted through Google to ElevenLabs. It is not “on the device only.” This policy does not claim that the voice label, the installation identifier, or the token are discarded after the request.</p>
+      <p>ElevenLabs keeps the voice clone so speech can be generated from it. <a href="https://elevenlabs.io/docs/eleven-api/resources/zero-retention-mode" target="_blank" rel="noopener noreferrer">Instant Voice Cloning is not covered by ElevenLabs’ zero-retention mode</a>, because the clone has to be stored. ElevenLabs’ default is to retain request data. We do not promise that speech generated from the clone is deleted from ElevenLabs after it is created, or that it exists only on the device.</p>
+      <p>We do not say that ElevenLabs refrains from using these samples to improve its models. ElevenLabs’ <a href="https://elevenlabs.io/docs/help-center/legal/is-my-data-used-to-improve-eleven-labs-ai-models" target="_blank" rel="noopener noreferrer">help center</a> says customers can turn off “Improve the models for everyone,” and that Enterprise customers are not trained on by default except as needed to provide the service. That opt-out is available and is not confirmed for the account Tide Isle uses. This policy does not claim it is turned off. When ElevenLabs processes a sample for Tide Isle, ElevenLabs’ agreement with us governs that processing. Its <a href="https://elevenlabs.io/privacy-policy" target="_blank" rel="noopener noreferrer">privacy policy</a> describes people who use ElevenLabs directly and says that policy is not the contract for information processed for a business customer.</p>
+
+      <h2>Deleting a cloned voice</h2>
+      <p>An adult can delete a cloned voice in Parent Voices. The app then asks our function to delete that voice at ElevenLabs. If the device cannot reach the service, the app tries the deletion again. Until a deletion request succeeds, ElevenLabs can still have the clone. ElevenLabs’ delete endpoint does not guarantee that every backup is removed immediately. ElevenLabs’ documentation says retained data is backed up, and that after deletion those database items can remain in backups for up to 30 days. Separately, ElevenLabs says that deleting generated audio removes that audio and text from its database, while debugging or moderation logs may still keep information about that generation. We do not promise that deleting the voice also deletes every generated clip, backup, or log. If it does not finish, connect to the internet and delete the voice again, or email <a href="mailto:support@focusshift.app">support@focusshift.app</a> and include the voice label. Steps are also on our <a href="/tide-isle/support/">support page</a>.</p>
+
+      <h2>Children’s privacy</h2>
+      <p>Tide Isle is directed to children. We follow the Children’s Online Privacy Protection Act (COPPA). We do not ask children to create an account or to enter a name, email address, or phone number. Parent Voices asks an adult, age 18 or older, to record their own voice. ElevenLabs’ <a href="https://elevenlabs.io/privacy-policy" target="_blank" rel="noopener noreferrer">privacy policy</a> prohibits providing it with voice data from or about anyone under 18.</p>
+      <p>A person who does not follow that screen can still record a child, record speech in the background, or enter a label that identifies a child, and that material can still be uploaded. If you believe that happened, email <a href="mailto:support@focusshift.app">support@focusshift.app</a>. We will delete any copy we still have and ask ElevenLabs to delete the clone. That request has the same limits as any other deletion, including backups that are not removed immediately.</p>
+      <p>Talk photos and one-word recordings can be created in the app and stored on the device. We do not receive those files.</p>
+
+      <h2>If you email us</h2>
+      <p>If a parent or caregiver emails us, we use that email address and the message only to respond. Please avoid including a child’s full name or other personal details unless you need them to explain the request. We keep the message only as long as needed to handle it, unless the law requires us to keep it longer.</p>
+
+      <h2>Parents’ choices</h2>
+      <ul>
+        <li>Decline microphone access, or turn it off later in Settings</li>
+        <li>Play without saving or uploading microphone audio</li>
+        <li>Skip Parent Voices entirely</li>
+        <li>Use the parent area, behind the parental gate, to change settings, reset local stats, delete the local play summary, or delete a cloned voice</li>
+        <li>Delete the app to remove Tide Isle’s on-device information, after a cloned voice has been deleted or with an email to us if deletion could not reach the service</li>
+        <li>Email us with a privacy question or deletion request</li>
+      </ul>
+
+      <h2>Apple</h2>
+      <p>Tide Isle is offered through Apple’s App Store. Apple may process information under <a href="https://www.apple.com/legal/privacy/" target="_blank" rel="noopener noreferrer">Apple’s privacy policy</a> when you use an Apple device or the App Store. That processing is controlled by Apple. We do not receive a child’s personal information from Apple through Tide Isle.</p>
+
+      <h2>How long information is kept</h2>
+      <p>On-device settings, counts, notes, Talk photos, and one-word recordings remain until a parent deletes them or deletes the app. Resetting stats clears local counts only.</p>
+      <p>We do not keep a Tide Isle account. The Firebase function is built not to store the voice sample in our database. We do not claim that the voice label, installation identifier, or token are left unstored. A cloned voice remains at ElevenLabs until a deletion request succeeds. Deletion does not guarantee that every backup disappears immediately. ElevenLabs may keep backups and logs as described above. Support emails are kept as described above.</p>
+
+      <h2>Service providers</h2>
+      <p>Parent Voices uses these providers. Ordinary play, including loudness from the microphone, does not.</p>
+      <ul>
+        <li><strong>Google Firebase (Cloud Functions):</strong> our backend receives the adult’s voice sample, the adult voice label (including app and installation metadata), an installation identifier, and a token. It sends the sample and that voice label to ElevenLabs. The function is built not to save the sample in our database. This policy does not say the token is forwarded to ElevenLabs. Google’s processing of that transmission is described in the <a href="https://firebase.google.com/support/privacy" target="_blank" rel="noopener noreferrer">Firebase privacy information</a>.</li>
+        <li><strong>ElevenLabs:</strong> creates the instant voice clone, stores the clone until deletion, and generates speech in that voice. The planned setup is a Tide Isle key that stays on our backend, is not shipped in the app, and is not Focus Shift’s secret. See the <a href="https://elevenlabs.io/privacy-policy" target="_blank" rel="noopener noreferrer">ElevenLabs privacy policy</a>, <a href="https://elevenlabs.io/docs/help-center/legal/is-my-data-used-to-improve-eleven-labs-ai-models" target="_blank" rel="noopener noreferrer">how ElevenLabs uses data to improve its models</a>, and <a href="https://elevenlabs.io/docs/eleven-api/resources/zero-retention-mode" target="_blank" rel="noopener noreferrer">zero retention</a>.</li>
+        <li><strong>Apple:</strong> distributes Tide Isle on the App Store. See the Apple section above.</li>
+      </ul>
+      <p>We do not sell personal information.</p>
+
+      <h2>Security</h2>
+      <p>We do not operate a Tide Isle account system or a database of children’s personal information. Information stored on the device is protected by the device’s own security, including its passcode and Apple’s platform protections. Sending a parent voice sample to the Firebase function and ElevenLabs does not change the retention limits described above.</p>
+
+      <h2>Changes</h2>
+      <p>We may update this policy. When we do, we will change the date at the top of this page. If a change is material, we will post the updated policy here before it applies.</p>
+
+      <h2>Contact</h2>
+      <p>Izasa, LLC<br />
+      Email: <a href="mailto:support@focusshift.app">support@focusshift.app</a><br />
+      Support: <a href="https://focusshift.app/tide-isle/support/">https://focusshift.app/tide-isle/support/</a><br />
+      This policy: <a href="https://focusshift.app/tide-isle/privacy/">https://focusshift.app/tide-isle/privacy/</a></p>
+    </article>
+  </main>
+
+  <footer class="footer">
+    <nav aria-label="Footer">
+      <a href="/tide-isle/">Tide Isle</a>
+      <span aria-hidden="true">·</span>
+      <a href="/tide-isle/support/">Support</a>
+      <span aria-hidden="true">·</span>
+      <a href="mailto:support@focusshift.app">support@focusshift.app</a>
+    </nav>
+    <p>© <span id="y"></span> Izasa, LLC</p>
+  </footer>
+  <script>
+    document.getElementById("y").textContent = String(new Date().getFullYear());
+  </script>
+</body>
+</html>

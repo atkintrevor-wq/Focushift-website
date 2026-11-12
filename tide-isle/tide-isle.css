@@ -1,0 +1,209 @@
+/* Tide Isle — standalone pages. Not used by Focus Shift. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #f3f6f4;
+  --ink: #14302c;
+  --muted: #3e5c56;
+  --line: #d5e2dc;
+  --card: #ffffff;
+  --accent: #0d6b66;
+  --accent-hover: #0a524e;
+  --header: #123f3b;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "DM Sans", system-ui, -apple-system, sans-serif;
+  background:
+    radial-gradient(ellipse 700px 320px at 0% -10%, rgba(13, 107, 102, 0.12), transparent),
+    var(--bg);
+  color: var(--ink);
+  line-height: 1.6;
+}
+
+.skip {
+  position: absolute;
+  left: 0.75rem;
+  top: -3rem;
+  background: #fff;
+  color: var(--ink);
+  padding: 0.4rem 0.7rem;
+  border-radius: 8px;
+  z-index: 20;
+}
+
+.skip:focus {
+  top: 0.75rem;
+}
+
+.top {
+  background: var(--header);
+  color: #f4fbfa;
+}
+
+.top-inner {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+
+.brand:hover {
+  color: #d7f3ef;
+}
+
+.top nav {
+  display: flex;
+  gap: 1rem;
+}
+
+.top nav a {
+  color: #d7f3ef;
+  text-decoration: none;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.top nav a:hover,
+.top nav a[aria-current="page"] {
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.25rem 3rem;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 1.6rem 1.4rem 1.8rem;
+  box-shadow: 0 10px 30px rgba(18, 63, 59, 0.06);
+}
+
+h1 {
+  font-size: 2rem;
+  line-height: 1.2;
+  margin: 0 0 0.4rem;
+}
+
+.lede,
+.updated {
+  color: var(--muted);
+  margin: 0 0 1rem;
+}
+
+.updated {
+  font-size: 0.92rem;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 1.6rem 0 0.45rem;
+}
+
+p,
+li {
+  margin: 0 0 0.7rem;
+}
+
+ul,
+ol {
+  margin: 0 0 0.8rem;
+  padding-left: 1.2rem;
+}
+
+.card a {
+  overflow-wrap: anywhere;
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover {
+  color: var(--accent-hover);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1.25rem 0 0.4rem;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  background: var(--accent);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0.65rem 1rem;
+}
+
+.button:hover {
+  background: var(--accent-hover);
+  color: #fff;
+}
+
+.fine {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+  padding: 1.25rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.footer a {
+  color: var(--muted);
+}
+
+.footer nav {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.7rem;
+  margin-bottom: 0.35rem;
+}
+
+@media (max-width: 520px) {
+  h1 {
+    font-size: 1.7rem;
+  }
+
+  .card {
+    padding: 1.25rem 1rem 1.4rem;
+  }
+}
