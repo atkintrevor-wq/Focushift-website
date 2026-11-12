@@ -2443,8 +2443,13 @@
     listenModeForCurrentAnswers = selectedListenMode;
     quickStartWhenChosen = true;
     if (homeDeepenState) homeDeepenState.listenMode = selectedListenMode;
-    if (!scriptBlocks.length) resetScriptBlocks();
-    setHomeFlowStep("blocks", displayName);
+    if (isQuickStartPath()) {
+      if (!scriptBlocks.length) resetScriptBlocks();
+      setHomeFlowStep("blocks", displayName);
+      return;
+    }
+    resetScriptBlocks();
+    setHomeFlowStep("survey", displayName);
   }
 
   // Matches iOS SurveyViewModel / functions CLARIFY_TURN_GOALS (positive identity first).
@@ -14452,7 +14457,7 @@
       back.setAttribute("aria-label", "Back");
       titleEl.hidden = true;
       back.addEventListener("click", function () {
-        if (completeBlocks().length || selectedParts.length) {
+        if (isQuickStartPath() && (completeBlocks().length || selectedParts.length)) {
           blockPart = selectedFeelings.length ? "scene" : "feel";
           setHomeFlowStep("blocks", displayName);
           return;
@@ -15217,7 +15222,7 @@
       if (ctx.intakeContext) intakeAnswers.context = ctx.intakeContext;
       if (ctx.intakeFeeling) intakeAnswers.feeling = ctx.intakeFeeling;
     }
-    var blocks = completeBlocks();
+    var blocks = isQuickStartPath() ? completeBlocks() : [];
     if (blocks.length) {
       intakeAnswers.blocks = blocks.map(function (block) {
         var lines = block.lines && block.lines.length ? block.lines : [{ feel: block.feel, scene: block.scene }];
@@ -15447,7 +15452,7 @@
 
   function readGenerateFormFromDom() {
     var cat = selectedCategory();
-    var blocks = completeBlocks();
+    var blocks = isQuickStartPath() ? completeBlocks() : [];
     var quickPhrases = !blocks.length && isQuickStartPath() ? quickStartPhraseList() : null;
     var q1 = quickPhrases
       ? String(quickPhrases[0] || "").trim()
@@ -15483,8 +15488,8 @@
   }
 
   function validateRequiredIntake(ctx) {
-    if (completeBlocks().length) {
-      if (isQuickStartPath() && !quickStartMomentValue()) {
+    if (isQuickStartPath() && completeBlocks().length) {
+      if (!quickStartMomentValue()) {
         generationMessage("Name what this listen is for before generating.", "error");
         return false;
       }
@@ -16844,7 +16849,7 @@
       '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
       '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
       "  </div>";
-    if (completeBlocks().length) {
+    if (isQuickStartPath() && completeBlocks().length) {
       var whenLabel = quickStartIntention === "repeat"
         ? listenModeRepeatTitle(selectedListenMode, cat.id)
         : listenModeTitle(selectedListenMode, cat.id);
