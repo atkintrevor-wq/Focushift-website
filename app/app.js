@@ -16179,6 +16179,7 @@
       var spoken = feeling ? feeling.charAt(0).toLowerCase() + feeling.slice(1) : "";
       var pageKey = "line-" + feeling;
       var movingCue = cat.id === "health-fitness" && selectedListenMode === "in-the-moment";
+      var sceneOptions = QuickStartChips.associationChips(cat.id, feeling, selectedListenMode);
       html += '<p style="margin:0 0 0.35rem;font-weight:600;">' +
         escapeHtml(movingCue ? ("While you are " + spoken + ", what do you do or tell yourself?") : ("What would you like to associate with being " + spoken + "?")) + "</p>";
       if (movingCue) {
@@ -16189,8 +16190,8 @@
           escapeHtml(String(lineIndex + 1) + " of " + selectedFeelings.length) + "</p>";
       }
       html += '<div data-feeling-section="' + escapeHtml(feeling) + '">' +
-        chipPageBar(set.sceneChips, pageKey) +
-        chipWrap(visibleChipSlice(set.sceneChips, pageKey), [feelingResponses[feeling] || ""], false) +
+        chipPageBar(sceneOptions, pageKey) +
+        chipWrap(visibleChipSlice(sceneOptions, pageKey), [feelingResponses[feeling] || ""], false) +
         '<label class="app-muted" style="display:block;margin:0.85rem 0 0.35rem;font-size:0.82rem;">Or type the line</label>' +
         '<input data-response-for="' + escapeHtml(feeling) + '" type="text" value="' +
         escapeHtml(feelingResponses[feeling] || "") +
