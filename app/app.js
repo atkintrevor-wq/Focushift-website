@@ -18891,6 +18891,9 @@
       syncStatusClass = "script-card-sync-busy";
     } else if (!hasAudio) {
       syncStatusLabel = "No audio yet";
+    } else if (isSharedListenOnly) {
+      syncStatusLabel = "Shared listen";
+      syncStatusClass = "script-card-sync-ok";
     } else if (audioMatchesCard && hostedAudio) {
       syncStatusLabel = "Synced with cloud";
       syncStatusClass = "script-card-sync-ok";
@@ -20913,6 +20916,33 @@
     activeAudio.addEventListener("timeupdate", onTime);
   }
 
+  /** Fresh download URLs for shared listens. The link copied at share time can be refused. */
+  var sharedAudioUrlCache = {};
+  var playbackStartToken = 0;
+
+  function resolvePlaybackAudioUrl(script) {
+    var stored = script && script.audioURL ? String(script.audioURL).trim() : "";
+    if (!stored) return Promise.resolve("");
+    if (!scriptIsSharedListenOnly(script)) return Promise.resolve(stored);
+    var cached = sharedAudioUrlCache[script.id];
+    if (cached) return Promise.resolve(cached);
+    if (typeof firebase.storage !== "function") return Promise.resolve(stored);
+    var ref;
+    try {
+      ref = firebase.storage().refFromURL(stored);
+    } catch (_e) {
+      return Promise.resolve(stored);
+    }
+    return ref.getDownloadURL().then(function (fresh) {
+      var url = fresh && String(fresh).trim();
+      if (!url) return stored;
+      sharedAudioUrlCache[script.id] = url;
+      return url;
+    }).catch(function () {
+      return stored;
+    });
+  }
+
   function beginScriptAudioPlayback(script, audioURL) {
     stopActiveAudio();
     reportCatalogStorageCostFromUrl(audioURL, script.isPremade ? "premade_play" : "user_audio_play");
@@ -20952,7 +20982,12 @@
       return;
     }
 
-    beginScriptAudioPlayback(script, audioURL).catch(function () {
+    var token = ++playbackStartToken;
+    resolvePlaybackAudioUrl(script).then(function (url) {
+      if (token !== playbackStartToken) return;
+      return beginScriptAudioPlayback(script, url || audioURL);
+    }).catch(function () {
+      if (token !== playbackStartToken) return;
       reportClientError("Could not play audio in browser.", "playback", {
         script_id: script.id,
       });
@@ -20976,8 +21011,8 @@
       return;
     }
     var script = activePlaylistQueue[index];
-    var audioURL = script.audioURL && String(script.audioURL).trim();
-    if (!audioURL) {
+    var storedURL = script.audioURL && String(script.audioURL).trim();
+    if (!storedURL) {
       var nextIx = index + 1;
       if (nextIx >= activePlaylistQueue.length && activePlaylistLoopForQueue) {
         nextIx = 0;
@@ -20985,42 +21020,48 @@
       playQueueAt(nextIx);
       return;
     }
-    stopActiveAudio(false);
-    activePlaylistIndex = index;
-    activeAudioScriptId = script.id;
-    reportCatalogStorageCostFromUrl(audioURL, script.isPremade ? "premade_play" : "user_audio_play");
-    assignActiveAudioFromUrl(audioURL);
-    activeAudioTitle = script.title || "Playlist audio";
-    function bindQueueEnded() {
-      bindAudioLifecycle(function () {
-        var next = activePlaylistIndex + 1;
-        if (next >= activePlaylistQueue.length) {
-          if (activePlaylistLoopForQueue && activePlaylistQueue.length) {
-            playQueueAt(0);
+    var token = ++playbackStartToken;
+    resolvePlaybackAudioUrl(script).then(function (url) {
+      if (token !== playbackStartToken) return;
+      if (!activePlaylistQueue.length) return;
+      var audioURL = url || storedURL;
+      stopActiveAudio(false);
+      activePlaylistIndex = index;
+      activeAudioScriptId = script.id;
+      reportCatalogStorageCostFromUrl(audioURL, script.isPremade ? "premade_play" : "user_audio_play");
+      assignActiveAudioFromUrl(audioURL);
+      activeAudioTitle = script.title || "Playlist audio";
+      function bindQueueEnded() {
+        bindAudioLifecycle(function () {
+          var next = activePlaylistIndex + 1;
+          if (next >= activePlaylistQueue.length) {
+            if (activePlaylistLoopForQueue && activePlaylistQueue.length) {
+              playQueueAt(0);
+            } else {
+              stopActiveAudio();
+              renderSelectedPlaylistDetail();
+              renderScripts(currentScripts);
+            }
           } else {
-            stopActiveAudio();
-            renderSelectedPlaylistDetail();
-            renderScripts(currentScripts);
+            playQueueAt(next);
           }
-        } else {
-          playQueueAt(next);
-        }
-      });
-    }
-    bindQueueEnded();
-    playActiveAudioElementWithNativeFallback(audioURL, bindQueueEnded)
-      .then(function () {
-        updateMiniPlayer();
-        renderSelectedPlaylistDetail();
-        renderScripts(currentScripts);
-        recordWebListen(activeAudioTitle, audioURL);
-        watchFreeOwnListen(script);
-      })
-      .catch(function () {
-        setPlaylistsMessage("Could not play playlist audio in browser.", "error");
-        stopActiveAudio();
-        renderSelectedPlaylistDetail();
-      });
+        });
+      }
+      bindQueueEnded();
+      return playActiveAudioElementWithNativeFallback(audioURL, bindQueueEnded)
+        .then(function () {
+          updateMiniPlayer();
+          renderSelectedPlaylistDetail();
+          renderScripts(currentScripts);
+          recordWebListen(activeAudioTitle, audioURL);
+          watchFreeOwnListen(script);
+        });
+    }).catch(function () {
+      if (token !== playbackStartToken) return;
+      setPlaylistsMessage("Could not play playlist audio in browser.", "error");
+      stopActiveAudio();
+      renderSelectedPlaylistDetail();
+    });
   }
 
   function startPlaylistPlayback(playlist, startScriptId) {
