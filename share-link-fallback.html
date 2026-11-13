@@ -43,10 +43,18 @@
   <script>
     (function () {
       var parts = location.pathname.split("/").filter(Boolean);
-      var token = (parts[0] === "s" && parts[1]) ? parts[1] : null;
+      var fromPath = (parts[0] === "s" && parts[1]) ? decodeURIComponent(parts[1]) : "";
+      var fromQuery = "";
+      try {
+        fromQuery = new URLSearchParams(location.search).get("share") || "";
+      } catch (_e) {}
+      var token = (fromQuery || fromPath || "").trim();
       var openAppBtn = document.getElementById("openApp");
       var openWebBtn = document.getElementById("openWeb");
       if (token) {
+        try {
+          localStorage.setItem("fs_pendingShareInviteToken", token);
+        } catch (_store) {}
         var deep = "focushift://s/" + encodeURIComponent(token);
         openAppBtn.href = deep;
         openWebBtn.href = "/login/?next=" + encodeURIComponent("/app/?share=" + encodeURIComponent(token));

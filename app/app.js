@@ -3266,7 +3266,12 @@
   }
 
   function redirectLogin() {
-    window.location.href = "/login/";
+    var next = window.location.pathname + (window.location.search || "") + (window.location.hash || "");
+    if (!next || next === "/login" || next.indexOf("/login") === 0) {
+      window.location.href = "/login/";
+      return;
+    }
+    window.location.href = "/login/?next=" + encodeURIComponent(next);
   }
 
   function configReady(cfg) {

@@ -229,7 +229,18 @@
     return "/app/";
   }
 
+  function rememberShareFromNext() {
+    try {
+      var next = resolvePostLoginUrl();
+      var q = next.indexOf("?");
+      if (q === -1) return;
+      var share = new URLSearchParams(next.slice(q + 1)).get("share");
+      if (share) localStorage.setItem("fs_pendingShareInviteToken", share);
+    } catch (_e) {}
+  }
+
   function goApp() {
+    rememberShareFromNext();
     window.location.href = resolvePostLoginUrl();
   }
 
@@ -487,9 +498,10 @@
       });
   });
 
+  rememberShareFromNext();
   auth.onAuthStateChanged(function (user) {
-    if (user && window.location.search.indexOf("stay") === -1) {
-      /* optional: auto-redirect if already signed in */
-    }
+    if (!user) return;
+    if (window.location.search.indexOf("stay") !== -1) return;
+    goApp();
   });
 })();
