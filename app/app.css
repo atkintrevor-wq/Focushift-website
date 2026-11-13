@@ -2541,12 +2541,15 @@ html.fs-app[data-app-theme="light"] .script-card-voice-bg-readonly .script-card-
 }
 .script-workshop-body {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 0.85rem 1rem;
 }
 .script-workshop-footer {
+  flex-shrink: 0;
   padding: 0.75rem 1rem 1rem;
   border-top: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--app-surface-elevated, #12151a);
 }
 .script-workshop-section-label {
   margin: 0 0 0.45rem;
@@ -2759,24 +2762,39 @@ html.fs-app[data-app-theme="light"] .script-workshop-textarea {
   padding: 0.42rem 0.55rem;
   font-size: 0.95rem;
 }
-.script-workshop-line {
-  min-height: 0;
-  margin-bottom: 0.45rem;
-}
-.script-line-label {
-  display: block;
-  margin: 0 0 0.15rem;
-  font-size: 0.75rem;
-  color: inherit;
-  opacity: 0.72;
-}
-  padding: 0.5rem 0.6rem;
-  font-size: 0.92rem;
+.script-workshop-textarea {
+  min-height: 18rem;
+  padding: 0.75rem 0.8rem;
+  font-size: 1rem;
+  line-height: 1.55;
   resize: vertical;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
+}
+.script-workshop-script-read {
+  min-height: 12rem;
+  overflow: visible;
+  margin-bottom: 0.65rem;
+  padding: 0.75rem 0.8rem;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: rgba(15, 23, 42, 0.55);
+  font-size: 1rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+html.fs-app[data-app-theme="light"] .script-workshop-script-read {
+  background: rgba(255, 255, 255, 0.88);
+}
+@media (prefers-color-scheme: light) {
+  html.fs-app[data-app-theme="system"] .script-workshop-script-read {
+    background: rgba(255, 255, 255, 0.88);
+  }
+}
+.script-workshop-edit-hint {
+  margin: 0 0 0.45rem;
 }
 .script-workshop-toolbar {
   display: flex;
