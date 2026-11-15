@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#b45309" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <link rel="manifest" href="/trips/manifest.webmanifest" />
+  <link rel="icon" href="/trips/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="/trips/icons/icon-192.png" />
+  <link rel="stylesheet" href="/trips/styles.css?v=2" />
+  <title>Reconcile — Trip Log</title>
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <h1>Reconcile</h1>
+      <p class="who">Trevor</p>
+    </div>
+    <nav>
+      <a href="/trips/">Log</a>
+      <a href="/trips/history/">History</a>
+      <a href="/trips/reconcile/" class="active">Reconcile</a>
+      <button type="button" class="linkish" id="logoutBtn" hidden>Sign out</button>
+    </nav>
+  </header>
+  <main class="wide">
+    <div class="login-wrap" id="loginView" hidden>
+      <div class="card">
+        <h2>Sign in</h2>
+        <form id="loginForm">
+          <label for="password">Password</label>
+          <input type="password" id="password" autocomplete="current-password" required />
+          <button type="submit" class="btn block" id="loginBtn">Sign in</button>
+          <div class="status" id="loginStatus" role="status"></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="appView" hidden>
+      <div class="card">
+        <h2>Pay rates</h2>
+        <p class="note">Expected gross uses these rates. MTV/SH also adds the load/unload amount once per run.</p>
+        <form id="ratesForm">
+          <div class="toolbar">
+            <div class="grow"><label for="sunrise_pay">Sunrise pay</label><input id="sunrise_pay" type="number" min="0" step="0.01" required /></div>
+            <div class="grow"><label for="sunrise_miles">Sunrise miles</label><input id="sunrise_miles" type="number" min="0" step="0.1" required /></div>
+            <div class="grow"><label for="mtv_pay">MTV/SH pay</label><input id="mtv_pay" type="number" min="0" step="0.01" required /></div>
+            <div class="grow"><label for="mtv_miles">MTV/SH miles</label><input id="mtv_miles" type="number" min="0" step="0.1" required /></div>
+            <div class="grow"><label for="load_unload_pay">Load/unload</label><input id="load_unload_pay" type="number" min="0" step="0.01" required /></div>
+          </div>
+          <button type="submit" class="btn" id="saveRates">Save rates</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Paystub</h2>
+        <p class="note">Each line is dated the Monday after the work week ends. 5 Oct is TA-6037.</p>
+        <form id="stubForm">
+          <div class="toolbar">
+            <div class="grow"><label for="pay_month">Pay month</label><input id="pay_month" type="month" required /></div>
+            <div class="grow"><label for="stub_status">Status</label>
+              <select id="stub_status"><option value="unpaid">Unpaid</option><option value="paid">Paid</option><option value="disputed">Disputed</option></select>
+            </div>
+            <div class="grow"><label for="net_pay">Net pay</label><input id="net_pay" type="number" min="0" step="0.01" /></div>
+            <div class="grow"><label for="vacation_days">Vacation days</label><input id="vacation_days" type="number" min="0" step="0.5" /></div>
+            <div class="grow"><label for="vacation_pay">Vacation pay</label><input id="vacation_pay" type="number" min="0" step="0.01" /></div>
+          </div>
+          <div class="field-label">Lines</div>
+          <div id="lines"></div>
+          <div class="actions">
+            <button type="button" class="btn secondary" id="addLine">Add line</button>
+            <button type="submit" class="btn" id="saveStub">Save paystub</button>
+            <button type="button" class="btn ghost danger" id="deleteStub" hidden>Delete paystub</button>
+          </div>
+        </form>
+        <div class="status" id="pageStatus" role="status"></div>
+      </div>
+
+      <div class="toolbar" style="margin-bottom:1rem">
+        <div class="grow"><label for="month">Show pay month</label><input id="month" type="month" /></div>
+        <button type="button" class="btn secondary" id="allMonths">All months</button>
+      </div>
+      <div id="rows"></div>
+    </div>
+  </main>
+  <script src="/trips/week.js?v=2"></script>
+  <script src="/trips/session.js?v=1"></script>
+  <script src="/trips/reconcile.js?v=2"></script>
+</body>
+</html>

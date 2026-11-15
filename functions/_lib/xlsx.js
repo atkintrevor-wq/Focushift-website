@@ -264,3 +264,72 @@ export function buildFuelWorkbook({ entries, byState, byQuarter }) {
 
   return zipStore(files);
 }
+
+function contentTypes(sheetCount) {
+  const overrides = [
+    '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>',
+    '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>',
+  ];
+  for (let i = 1; i <= sheetCount; i++) {
+    overrides.push(
+      `<Override PartName="/xl/worksheets/sheet${i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`
+    );
+  }
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+${overrides.join('')}
+</Types>`;
+}
+
+/**
+ * Generic workbook. `sheets` is [{ name, columns, rows }].
+ * Column fields match sheetXml: header, key, width, optional style.
+ * The fuel workbook builder above is unchanged.
+ */
+export function buildWorkbook(sheets) {
+  const sheetTags = sheets
+    .map((sheet, index) => `<sheet name="${xmlEscape(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`)
+    .join('');
+  const rels = sheets
+    .map(
+      (_, index) =>
+        `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`
+    )
+    .join('');
+  const styleId = `rId${sheets.length + 1}`;
+  const files = [
+    { name: '[Content_Types].xml', data: utf8(contentTypes(sheets.length)) },
+    {
+      name: '_rels/.rels',
+      data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`),
+    },
+    {
+      name: 'xl/workbook.xml',
+      data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets>
+${sheetTags}
+</sheets>
+</workbook>`),
+    },
+    {
+      name: 'xl/_rels/workbook.xml.rels',
+      data: utf8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${rels}
+<Relationship Id="${styleId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`),
+    },
+    { name: 'xl/styles.xml', data: utf8(STYLES) },
+    ...sheets.map((sheet, index) => ({
+      name: `xl/worksheets/sheet${index + 1}.xml`,
+      data: utf8(sheetXml(sheet.columns, sheet.rows)),
+    })),
+  ];
+  return zipStore(files);
+}
