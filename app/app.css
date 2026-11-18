@@ -1262,6 +1262,25 @@ html.fs-app[data-app-theme="light"] .screen-help-modal-head {
   cursor: not-allowed;
   transform: none;
 }
+.app-btn.is-busy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+}
+.app-btn.is-busy::before {
+  content: "";
+  width: 0.9rem;
+  height: 0.9rem;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: app-btn-spin 0.7s linear infinite;
+  flex: 0 0 auto;
+}
+@keyframes app-btn-spin {
+  to { transform: rotate(360deg); }
+}
 .app-btn.is-tier-locked,
 .library-dropdown-item.is-tier-locked {
   opacity: 0.52;

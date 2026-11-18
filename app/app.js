@@ -323,6 +323,7 @@
   var publishCategoryId = "confidence";
   var publishTextDirty = false;
   var publishTitleDirty = false;
+  var publishInFlight = false;
   var editingPremadeId = null;
   var inlineScriptEditorOpenById = {};
   /** Read-only script text expanded on listen-only library cards. */
@@ -354,7 +355,7 @@
   var premadeRenderGeneration = 0;
   var GENERATED_PREMADE_HASH_PREFIX = "generatedHashPremade_";
   var PREMADE_CARD_AUDIO_EXPAND_STORAGE_PREFIX = "focusshiftWebPremadeCardAudio_";
-  /** Same categories as iOS App Library (`quickScriptCategories` / PremadeAudioManager). */
+  /** App Library categories, including I am… from the writer. */
   var PREMADE_LIBRARY_CATEGORY_ORDER = [
     { id: "confidence", name: "Confidence & Self-Worth" },
     { id: "relationships", name: "Relationships & Love" },
@@ -363,6 +364,7 @@
     { id: "health-fitness", name: "Health & Fitness" },
     { id: "sports-performance", name: "Sports Performance" },
     { id: "sleep-rest", name: "Sleep & Rest" },
+    { id: "i-am", name: "I am…" },
   ];
   /** iOS app bundle catalog — loaded from bundled-premades-manifest.json for admin Content Manager. */
   var bundledPremadeManifest = null;
@@ -383,6 +385,8 @@
       '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M12 4v16M2 12h20"/></svg>',
     "sleep-rest":
       '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>',
+    "i-am":
+      '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M5.5 19.5c1.2-3 3.4-4.5 6.5-4.5s5.3 1.5 6.5 4.5"/></svg>',
     __other__:
       '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M2 10h4M10 8h4M18 12h4"/></svg>',
   };
@@ -7968,16 +7972,17 @@
       if (hasOption) sel.value = preselectedScriptId;
     }
     populatePublishCategoryOptions();
+    setPublishPremadeMessage("", "");
     syncPublishFormFromSelectedScript();
     publishTextDirty = false;
     publishTitleDirty = false;
     updatePublishDirtyUI();
-    setPublishPremadeMessage("", "");
     setStackedAdminModal(backdrop, isPremadeContentManagerOpen());
     backdrop.hidden = false;
   }
 
   function closePublishPremadeModal() {
+    if (publishInFlight) return;
     var backdrop = document.getElementById("premade-publish-backdrop");
     if (backdrop) {
       backdrop.hidden = true;
@@ -7987,6 +7992,36 @@
     publishTitleDirty = false;
     updatePublishDirtyUI();
     setPublishPremadeMessage("", "");
+    setPublishFormLocked(false);
+  }
+
+  function publishFormControlIds() {
+    return [
+      "publish-script-id",
+      "publish-title",
+      "publish-category",
+      "publish-access-tier",
+      "publish-description",
+      "publish-script-text",
+      "premade-publish-cancel",
+      "premade-publish-submit",
+    ];
+  }
+
+  function setPublishFormLocked(locked) {
+    publishFormControlIds().forEach(function (id) {
+      var el = document.getElementById(id);
+      if (!el) return;
+      if (id === "premade-publish-submit") {
+        var already = selectedScriptPublishStatus() === "published";
+        el.disabled = locked || already;
+        el.classList.toggle("is-busy", !!locked);
+        el.setAttribute("aria-busy", locked ? "true" : "false");
+        el.textContent = locked ? "Publishing…" : "Publish";
+        return;
+      }
+      el.disabled = !!locked;
+    });
   }
 
   function populatePublishScriptOptions() {
@@ -8001,15 +8036,27 @@
     }
     sel.innerHTML = withAudio
       .map(function (s) {
+        var status = premadeSourceScriptStatus(s.id);
+        var label = s.title || "Untitled Script";
+        if (status === "published") label += " (Published)";
+        else if (status === "hidden") label += " (Hidden)";
         return (
           '<option value="' +
           escapeHtml(s.id) +
-          '">' +
-          escapeHtml(s.title || "Untitled Script") +
+          '"' +
+          (status === "published" ? " disabled" : "") +
+          ">" +
+          escapeHtml(label) +
           "</option>"
         );
       })
       .join("");
+  }
+
+  function selectedScriptPublishStatus() {
+    var s = selectedPublishScript();
+    if (!s) return "draft";
+    return premadeSourceScriptStatus(s.id);
   }
 
   function populatePublishCategoryOptions() {
@@ -8047,10 +8094,22 @@
     if (textInput) textInput.value = s.text || "";
     publishCategoryId = s.categoryID || publishCategoryId || "confidence";
     var catSel = document.getElementById("publish-category");
-    if (catSel && publishCategoryId) catSel.value = publishCategoryId;
+    if (catSel && publishCategoryId) {
+      var hasCategory = Array.prototype.some.call(catSel.options, function (opt) {
+        return opt.value === publishCategoryId;
+      });
+      if (hasCategory) catSel.value = publishCategoryId;
+    }
     publishTextDirty = false;
     publishTitleDirty = false;
     updatePublishDirtyUI();
+    if (publishInFlight) return;
+    if (selectedScriptPublishStatus() === "published") {
+      setPublishPremadeMessage("Already published. This script is in the App Library.", "");
+    } else {
+      setPublishPremadeMessage("", "");
+    }
+    setPublishFormLocked(false);
   }
 
   function updatePublishDirtyState() {
@@ -9158,6 +9217,7 @@
   }
 
   function publishPremadeFromModal() {
+    if (publishInFlight) return;
     if (!adminModeEnabled) return;
     if (!currentUser) return;
     if (typeof firebase.storage !== "function") {
@@ -9167,6 +9227,11 @@
     var s = selectedPublishScript();
     if (!s) {
       setPublishPremadeMessage("Choose a script with audio first.", "error");
+      return;
+    }
+    if (premadeSourceScriptStatus(s.id) === "published") {
+      setPublishPremadeMessage("Already published. This script is in the App Library.", "error");
+      setPublishFormLocked(false);
       return;
     }
     var title = ((document.getElementById("publish-title").value || "").trim() || s.title || "Premade Script");
@@ -9180,7 +9245,9 @@
       setPublishPremadeMessage("Selected script has no audio URL.", "error");
       return;
     }
-    setPublishPremadeMessage("Publishing to App Library (server copy)…", "");
+    publishInFlight = true;
+    setPublishFormLocked(true);
+    setPublishPremadeMessage("Publishing to App Library…", "");
     currentUser
       .getIdToken(true)
       .then(function (token) {
@@ -9201,17 +9268,27 @@
         if (!result || result.ok !== true) {
           throw new Error((result && result.error) || "Could not publish premade.");
         }
-        setPublishPremadeMessage("Published to App Library.", "success");
-        setPremadeMessage('Published "' + title + '" to App Library.', "success");
-        var pcmOpen =
-          document.getElementById("premade-content-manager-backdrop") &&
-          !document.getElementById("premade-content-manager-backdrop").hidden;
-        if (pcmOpen) renderPremadeContentManager();
-        setTimeout(function () {
-          closePublishPremadeModal();
-        }, 600);
+        var publishedTitle = (result.title && String(result.title).trim()) || title;
+        var already = result.alreadyPublished === true;
+        publishInFlight = false;
+        setPublishFormLocked(false);
+        closePublishPremadeModal();
+        showAppBanner(
+          already ? "Already published" : "Published",
+          '"' + publishedTitle + '" is in the App Library.',
+          "success",
+          { duration: 5000 }
+        );
+        setPremadeMessage(
+          (already ? "Already published" : "Published") + ' "' + publishedTitle + '" to App Library.',
+          "success"
+        );
+        var pcmOpen = document.getElementById("premade-content-manager-backdrop");
+        if (pcmOpen && !pcmOpen.hidden) renderPremadeContentManager();
       })
       .catch(function (e) {
+        publishInFlight = false;
+        setPublishFormLocked(false);
         var msg = e && e.message ? e.message : "Could not publish premade.";
         if (isNetworkFetchFailure(e)) {
           msg = networkFetchErrorMessage("publish request");
@@ -23504,6 +23581,8 @@
         );
         premadeCloudSnapshotReceived = true;
         refreshAppLibraryPremadesFromCloud();
+        var pcmOpen = document.getElementById("premade-content-manager-backdrop");
+        if (pcmOpen && !pcmOpen.hidden) renderPremadeContentManager();
         var nextExpanded = {};
         currentPremade.forEach(function (p) {
           if (expandedPremadeTextById[p.id] === true) nextExpanded[p.id] = true;
