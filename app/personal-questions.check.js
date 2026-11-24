@@ -33,6 +33,7 @@ function assertFollowUpsStayOnOneSlot() {
         const clarifying = {};
         const seen = [];
         questions.forEach(function (expected, index) {
+          if (expected.slot === "preparingFor") return;
           const next = web.nextPersonalFollowUp(categoryId, intention, when, {}, clarifying);
           assert.equal(next.done, false, categoryId + " follow-up " + (index + 1));
           assert.equal(next.slot, expected.slot);
@@ -85,6 +86,55 @@ assert.equal(
   web.normalizeScriptParagraphs(spaced),
   "First paragraph.\n[warm] Second paragraph.\n[calm] Third."
 );
+
+Object.keys(web.TABLE).forEach(function (key) {
+  const has = web.TABLE[key].some(function (question) { return question.slot === "preparingFor"; });
+  assert.equal(has, key.indexOf("i-am|") === 0, key);
+});
+
+["moment", "repeat"].forEach(function (intention) {
+  ["getting-ready", "in-the-moment", "after"].forEach(function (when) {
+    const rows = web.questions("i-am", intention, when);
+    const situationAt = rows.findIndex(function (question) { return question.slot === "situation"; });
+    const preparingAt = rows.findIndex(function (question) { return question.slot === "preparingFor"; });
+    const pastAt = rows.findIndex(function (question) { return question.slot === "pastProof"; });
+    const optional = rows.filter(function (question) { return !question.required; });
+    const label = intention + " " + when;
+    assert.equal(preparingAt, situationAt + 1, label + " preparingFor follows situation");
+    assert.ok(pastAt > preparingAt, label + " preparingFor precedes pastProof");
+    assert.equal(optional[0].slot, "preparingFor", label);
+    assert.equal(optional[0].required, false);
+    assert.equal(optional[0].text, "Is there a moment you're preparing for? If so, what is it?");
+    assert.equal(optional[0].placeholder, "Skip this if it's for every day.");
+    assert.equal(optional[0].help, "");
+    assert.equal(optional[0].part, "");
+
+    const follow = web.nextPersonalFollowUp("i-am", intention, when, {
+      beliefs: "I am steady",
+      situation: "walking in already that person",
+    }, {});
+    assert.equal(follow.done, false, label);
+    assert.equal(follow.slot, "pastProof", label + " skips a blank preparingFor");
+
+    const blank = web.buildPersonal("i-am", intention, when, {
+      beliefs: "I am steady",
+      situation: "walking in already that person",
+      preparingFor: "   ",
+    }, "Auto");
+    assert.equal(Object.prototype.hasOwnProperty.call(blank.personal.slots, "preparingFor"), false, label);
+    assert.equal(blank.personal.slots.situation.answer, "walking in already that person");
+    assert.deepEqual(blank.legacy, ["I am steady", "walking in already that person"]);
+
+    const filled = web.buildPersonal("i-am", intention, when, {
+      beliefs: "I am steady",
+      situation: "walking in already that person",
+      preparingFor: "Monday's presentation",
+    }, "Auto");
+    assert.equal(filled.personal.slots.preparingFor.question, optional[0].text, label);
+    assert.equal(filled.personal.slots.preparingFor.answer, "Monday's presentation", label);
+    assert.deepEqual(filled.legacy, ["I am steady", "walking in already that person"]);
+  });
+});
 
 const writerDir = process.argv[2];
 if (!writerDir) {
@@ -157,6 +207,7 @@ const identity = web.buildPersonal("i-am", "repeat", "getting-ready", {
 }, "Standard");
 assert.deepEqual(identity.legacy, ["I am steady"]);
 assert.equal(identity.personal.slots.feeling, undefined);
+assert.equal(Object.prototype.hasOwnProperty.call(identity.personal.slots, "preparingFor"), false);
 
 const topic = web.questions("other", "moment", "in-the-moment");
 assert.equal(topic[0].text, "What's this about?");
