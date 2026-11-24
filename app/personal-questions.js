@@ -1669,6 +1669,14 @@
       "part": ""
     },
     {
+      "slot": "preparingFor",
+      "required": false,
+      "text": "Is there a moment you're preparing for? If so, what is it?",
+      "placeholder": "Skip this if it's for every day.",
+      "help": "",
+      "part": ""
+    },
+    {
       "slot": "pastProof",
       "required": false,
       "text": "A time you were already that person?",
@@ -1700,6 +1708,14 @@
       "text": "You're in it right now. Where are you, and how does living these truths feel in your body in this moment?",
       "placeholder": "e.g. At my desk — warm, grounded, these words true in my body right now",
       "help": "Name where you are and how these truths feel in your body right now — not someday. Honest fragments are enough.",
+      "part": ""
+    },
+    {
+      "slot": "preparingFor",
+      "required": false,
+      "text": "Is there a moment you're preparing for? If so, what is it?",
+      "placeholder": "Skip this if it's for every day.",
+      "help": "",
       "part": ""
     },
     {
@@ -1737,6 +1753,14 @@
       "part": ""
     },
     {
+      "slot": "preparingFor",
+      "required": false,
+      "text": "Is there a moment you're preparing for? If so, what is it?",
+      "placeholder": "Skip this if it's for every day.",
+      "help": "",
+      "part": ""
+    },
+    {
       "slot": "pastProof",
       "required": false,
       "text": "A time you were already that person?",
@@ -1768,6 +1792,14 @@
       "text": "You're about to step into something. How would it feel in your body to already be that person walking in?",
       "placeholder": "e.g. Steady in my chest, shoulders back, already belonging as I walk in",
       "help": "Name how it feels in your body to already be that person before you walk in — chest, breath, posture, warmth.",
+      "part": ""
+    },
+    {
+      "slot": "preparingFor",
+      "required": false,
+      "text": "Is there a moment you're preparing for? If so, what is it?",
+      "placeholder": "Skip this if it's for every day.",
+      "help": "",
       "part": ""
     },
     {
@@ -1805,6 +1837,14 @@
       "part": ""
     },
     {
+      "slot": "preparingFor",
+      "required": false,
+      "text": "Is there a moment you're preparing for? If so, what is it?",
+      "placeholder": "Skip this if it's for every day.",
+      "help": "",
+      "part": ""
+    },
+    {
       "slot": "pastProof",
       "required": false,
       "text": "A time you were already that person?",
@@ -1836,6 +1876,14 @@
       "text": "The moment is done. How do you want these truths to feel as you settle — in your body and in who you are?",
       "placeholder": "e.g. Quiet pride, still myself, the moment complete",
       "help": "Name how you want these truths to feel as you settle — after the moment, still you.",
+      "part": ""
+    },
+    {
+      "slot": "preparingFor",
+      "required": false,
+      "text": "Is there a moment you're preparing for? If so, what is it?",
+      "placeholder": "Skip this if it's for every day.",
+      "help": "",
       "part": ""
     },
     {
@@ -2216,12 +2264,15 @@
   /**
    * Next personal follow-up. Hint and question are both this slot's category wording.
    * A clarifying answer for that wording counts as filling the slot, so the next call
-   * moves on. When nothing is left, done is true and there is no question to wait on.
+   * moves on. preparingFor is never a follow-up: a blank answer is skipped the same
+   * way a filled one is, and the next unanswered slot is asked instead. When nothing
+   * else is left, done is true and there is no question to wait on.
    */
   function nextPersonalFollowUp(categoryId, intention, when, flat, clarifyingAnswers) {
     var asked = questions(categoryId, intention, when);
     for (var i = 0; i < asked.length; i++) {
       var question = asked[i];
+      if (question.slot === "preparingFor") continue;
       var fromFlat = String((flat && flat[answerKey(question)]) || "").trim();
       if (fromFlat || clarifyingTextAnswered(question, clarifyingAnswers)) continue;
       return {
