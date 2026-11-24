@@ -6,6 +6,10 @@
   var incomingSharedUnsubscribe = null;
   var ownedScripts = [];
   var incomingSharedScripts = [];
+  /** Bumps when a newer incoming-share snapshot or optimistic claim should win. */
+  var incomingSharedApplySeq = 0;
+  /** Script ids just written by this client, kept if the first roster read is stale. */
+  var recentlyClaimedScriptIds = {};
   var playlistsUnsubscribe = null;
   var premadeUnsubscribe = null;
   var backgroundCatalogUnsubscribe = null;
@@ -138,6 +142,11 @@
   var freeUsageReady = false;
   /** Pending share invite token from ?share= or /s/ redirect. */
   var pendingShareClaimToken = null;
+  /** Invite already shown in the claim dialog, used to overlap the roster reads. */
+  var pendingShareClaimInvite = null;
+  var shareClaimInFlight = false;
+  var shareClaimRequestId = 0;
+  var shareClaimLibraryScriptId = null;
   /** Creator share management rows loaded in Account. */
   var shareManagementSnapshot = {
     audience: [],
@@ -3670,25 +3679,36 @@
 
   function filterEntitledIncomingScripts(uid, incomingScripts) {
     if (!incomingScripts.length) return Promise.resolve([]);
+    var senderUids = [];
+    incomingScripts.forEach(function (s) {
+      var senderUid = s.sharedFrom && s.sharedFrom.senderUid;
+      if (!senderUid || senderUids.indexOf(senderUid) >= 0) return;
+      senderUids.push(senderUid);
+    });
+    if (!senderUids.length) return Promise.resolve(incomingScripts.slice());
     return Promise.all(
-      incomingScripts.map(function (s) {
-        if (!s.sharedFrom || !s.sharedFrom.senderUid) return Promise.resolve(s);
+      senderUids.map(function (senderUid) {
         return db
           .collection("users")
-          .doc(s.sharedFrom.senderUid)
+          .doc(senderUid)
           .collection("shareAudience")
           .doc(uid)
           .get()
           .then(function (snap) {
-            return snap.exists ? s : null;
+            return { senderUid: senderUid, ok: snap.exists };
           })
           .catch(function () {
-            return s;
+            return { senderUid: senderUid, ok: true };
           });
       })
     ).then(function (results) {
-      return results.filter(function (x) {
-        return !!x;
+      var allowed = {};
+      results.forEach(function (result) {
+        allowed[result.senderUid] = result.ok;
+      });
+      return incomingScripts.filter(function (s) {
+        if (!s.sharedFrom || !s.sharedFrom.senderUid) return true;
+        return allowed[s.sharedFrom.senderUid] !== false;
       });
     });
   }
@@ -7151,10 +7171,13 @@
       '    <h3 id="share-claim-title">Shared audio</h3>' +
       '    <p id="share-claim-lede" class="app-muted" style="margin-top:0;">Someone shared Focus Shift audio with you.</p>' +
       '    <div id="share-claim-meta" class="share-claim-meta"></div>' +
+      '    <p id="share-claim-status" class="app-inline-msg success" role="status" hidden></p>' +
       '    <p id="share-claim-error" class="app-inline-msg error" role="alert" hidden></p>' +
       '    <div class="app-modal-actions">' +
       '      <button type="button" class="app-btn" id="share-claim-dismiss">Not now</button>' +
-      '      <button type="button" class="app-btn app-btn-primary" id="share-claim-accept">Add to My Library</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="share-claim-accept" aria-live="polite">Add to My Library</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="share-claim-retry" hidden>Retry</button>' +
+      '      <button type="button" class="app-btn app-btn-primary" id="share-claim-open" hidden>Open in library</button>' +
       "    </div>" +
       "  </div>" +
       "</div>";
@@ -14653,13 +14676,88 @@
     return "Could not load this share link.";
   }
 
+  function shareClaimFailureMessage(e) {
+    var code = (e && e.code && String(e.code)) || "";
+    var msg = (e && e.message && String(e.message).trim()) || "";
+    if (code === "permission-denied" || code === "firestore/permission-denied" || msg === "Missing or insufficient permissions.") {
+      return "Could not add this audio. The sender’s listener list may be full, or this share is no longer active.";
+    }
+    if (
+      code === "unavailable" ||
+      code === "deadline-exceeded" ||
+      code === "firestore/unavailable" ||
+      code === "firestore/deadline-exceeded" ||
+      /network|offline|failed to fetch/i.test(msg)
+    ) {
+      return "Could not add this audio. Check your connection and try again.";
+    }
+    if (msg) return msg;
+    return "Could not add this audio to your library. Try again.";
+  }
+
+  function setShareClaimUiState(state, message) {
+    var adding = state === "adding";
+    var failed = state === "error";
+    var done = state === "success";
+    var acceptBtn = document.getElementById("share-claim-accept");
+    var retryBtn = document.getElementById("share-claim-retry");
+    var openBtn = document.getElementById("share-claim-open");
+    var dismissBtn = document.getElementById("share-claim-dismiss");
+    var errEl = document.getElementById("share-claim-error");
+    var statusEl = document.getElementById("share-claim-status");
+    var dialog = document.querySelector("#share-claim-backdrop .share-claim-modal");
+    if (dialog) dialog.setAttribute("aria-busy", adding ? "true" : "false");
+    if (acceptBtn) {
+      var blocked = acceptBtn.getAttribute("data-claim-unavailable") === "1";
+      acceptBtn.hidden = failed || done;
+      acceptBtn.classList.toggle("is-busy", adding);
+      acceptBtn.setAttribute("aria-busy", adding ? "true" : "false");
+      acceptBtn.textContent = adding ? "Adding\u2026" : "Add to My Library";
+      acceptBtn.disabled = adding || blocked;
+    }
+    if (retryBtn) {
+      retryBtn.hidden = !failed;
+      retryBtn.disabled = false;
+    }
+    if (openBtn) openBtn.hidden = !done;
+    if (dismissBtn) {
+      dismissBtn.disabled = adding;
+      dismissBtn.textContent = done ? "Done" : "Not now";
+    }
+    if (errEl) {
+      errEl.hidden = !failed;
+      errEl.textContent = failed ? message || "Could not add this audio to your library. Try again." : "";
+    }
+    if (statusEl) {
+      statusEl.hidden = !done;
+      statusEl.textContent = done ? "Added to your library" : "";
+    }
+  }
+
   function closeShareClaimModal(options) {
+    if (shareClaimInFlight) return;
     var bd = document.getElementById("share-claim-backdrop");
     if (bd) bd.hidden = true;
     unlockAppBodyScroll();
     pendingShareClaimToken = null;
+    pendingShareClaimInvite = null;
+    shareClaimLibraryScriptId = null;
+    shareClaimRequestId += 1;
     var opts = options || {};
     if (!opts.keepPersisted) clearPersistedPendingShareToken();
+  }
+
+  function openClaimedShareInLibrary() {
+    var scriptId = shareClaimLibraryScriptId;
+    closeShareClaimModal();
+    activeLibraryTab = "my-library";
+    sectionSearchQuery.library = "";
+    var input = document.getElementById("section-search-input-library");
+    if (input) input.value = "";
+    var clearBtn = document.getElementById("section-search-clear-library");
+    if (clearBtn) clearBtn.hidden = true;
+    setAdminTab("library");
+    if (scriptId) renderScripts(currentScripts, scriptId);
   }
 
   function openShareClaimModal(token, inviteData) {
@@ -14670,7 +14768,6 @@
     var titleEl = document.getElementById("share-claim-title");
     var ledeEl = document.getElementById("share-claim-lede");
     var metaEl = document.getElementById("share-claim-meta");
-    var errEl = document.getElementById("share-claim-error");
     var acceptBtn = document.getElementById("share-claim-accept");
     var data = inviteData || {};
     var sender = (data.creatorDisplayName && String(data.creatorDisplayName).trim()) || "Someone";
@@ -14685,16 +14782,18 @@
         escapeHtml(sender) +
         "</p>" +
         (data.audioURL && String(data.audioURL).trim()
-          ? '<p class="share-claim-meta-line app-muted">Listen-only copy — added to My Library on this account.</p>'
+          ? '<p class="share-claim-meta-line app-muted">Listen-only copy for My Library on this account.</p>'
           : '<p class="share-claim-meta-line app-inline-msg error">No audio URL on this share yet.</p>');
     }
-    if (errEl) {
-      errEl.hidden = true;
-      errEl.textContent = "";
-    }
+    pendingShareClaimInvite = data;
+    shareClaimLibraryScriptId = null;
+    shareClaimInFlight = false;
+    shareClaimRequestId += 1;
     if (acceptBtn) {
-      acceptBtn.disabled = !(data.active !== false && data.audioURL && String(data.audioURL).trim());
+      var canAdd = data.active !== false && !!(data.audioURL && String(data.audioURL).trim());
+      acceptBtn.setAttribute("data-claim-unavailable", canAdd ? "0" : "1");
     }
+    setShareClaimUiState("idle");
     bd.hidden = false;
     lockAppBodyScroll();
   }
@@ -14714,76 +14813,135 @@
       });
   }
 
-  function claimShareToken(token) {
-    if (!currentUser || !token) return Promise.reject(new Error("Sign in required."));
-    var recipientUid = currentUser.uid;
-    var inviteRef = db.collection("shareInvites").doc(token);
+  function incomingScriptFromClaimPayload(token, payload) {
+    return scriptFromIncomingDocument({
+      id: token,
+      data: function () {
+        return payload;
+      },
+    });
+  }
+
+  function showClaimedShareInLibraryNow(token, payload) {
+    var claimedNow = new Date();
+    var localPayload = Object.assign({}, payload, {
+      shareToken: token,
+      claimedAt: {
+        toDate: function () { return claimedNow; },
+        toMillis: function () { return claimedNow.getTime(); },
+      },
+    });
+    var script = incomingScriptFromClaimPayload(token, localPayload);
+    if (!script) return null;
+    recentlyClaimedScriptIds[script.id] = true;
+    incomingSharedApplySeq += 1;
+    var rest = incomingSharedScripts.filter(function (s) {
+      return s.id !== script.id;
+    });
+    incomingSharedScripts = [script].concat(rest);
+    rebuildCurrentScriptsFromSources();
+    return script.id;
+  }
+
+  function commitShareClaim(token, data, creatorUid, recipientUid, audienceSnap, sharingSnap, audienceRef, sharingMetaRef) {
     var recipientName =
       (typeof resolveDisplayNameForScript === "function" && resolveDisplayNameForScript("")) ||
       (currentUser.displayName && String(currentUser.displayName).trim()) ||
       ((currentUser.email || "").split("@")[0] || "Listener");
     var recipientEmail = (currentUser.email && String(currentUser.email).trim()) || "";
-    return inviteRef.get().then(function (inviteSnap) {
+    var alreadyOnRoster = audienceSnap.exists;
+    if (!alreadyOnRoster) {
+      var sharingData = sharingSnap.exists ? sharingSnap.data() || {} : {};
+      var count = Number(sharingData.listenerCount) || 0;
+      var rosterCap = Number(sharingData.listenerCap) || CREATOR_SHARE_RECIPIENT_CAP;
+      if (count >= rosterCap) {
+        throw new Error(
+          "The sender\u2019s listener list is full. They need to remove someone before new people can join."
+        );
+      }
+    }
+    var incomingRef = db
+      .collection("users")
+      .doc(recipientUid)
+      .collection("incomingSharedScripts")
+      .doc(token);
+    var batch = db.batch();
+    var audiencePayload = {
+      claimToken: token,
+      recipientDisplayName: recipientName,
+    };
+    if (recipientEmail) audiencePayload.recipientEmail = recipientEmail;
+    if (!alreadyOnRoster) {
+      audiencePayload.claimedAt = firebase.firestore.FieldValue.serverTimestamp();
+    }
+    batch.set(audienceRef, audiencePayload, { merge: true });
+    if (!alreadyOnRoster) {
+      var sharingData2 = sharingSnap.exists ? sharingSnap.data() || {} : {};
+      var nextCount = (Number(sharingData2.listenerCount) || 0) + 1;
+      batch.set(sharingMetaRef, { listenerCount: nextCount }, { merge: true });
+    }
+    var incomingPayload = {
+      creatorUid: creatorUid,
+      creatorDisplayName: data.creatorDisplayName || "Someone",
+      sourceScriptId: data.scriptId || "",
+      title: data.title || "Shared audio",
+      text: data.text || "",
+      audioURL: data.audioURL || "",
+      voiceID: data.voiceID || "",
+      backgroundID: data.backgroundID || "",
+      claimedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      shareToken: token,
+    };
+    batch.set(incomingRef, incomingPayload, { merge: true });
+    return batch.commit().then(function () {
+      try {
+        return showClaimedShareInLibraryNow(token, incomingPayload);
+      } catch (_e) {
+        return "incoming_" + token;
+      }
+    });
+  }
+
+  function claimShareToken(token) {
+    if (!currentUser || !token) return Promise.reject(new Error("Sign in required."));
+    var recipientUid = currentUser.uid;
+    var inviteRef = db.collection("shareInvites").doc(token);
+    var known = pendingShareClaimInvite || {};
+    var knownCreator = known.creatorUid ? String(known.creatorUid) : "";
+    var audienceRef = null;
+    var sharingMetaRef = null;
+    var reads = [inviteRef.get()];
+    // The dialog already loaded this invite, so the roster reads can share that round trip.
+    // The fresh invite read still runs in parallel and is what the write uses.
+    if (knownCreator && knownCreator !== recipientUid) {
+      audienceRef = db.collection("users").doc(knownCreator).collection("shareAudience").doc(recipientUid);
+      sharingMetaRef = db.collection("users").doc(knownCreator).collection("meta").doc("sharing");
+      reads.push(audienceRef.get(), sharingMetaRef.get());
+    }
+    return Promise.all(reads).then(function (snaps) {
+      var inviteSnap = snaps[0];
       if (!inviteSnap.exists) throw new Error(shareClaimErrorMessage("missing"));
       var data = inviteSnap.data() || {};
       if (data.active === false) throw new Error(shareClaimErrorMessage("inactive"));
       var creatorUid = data.creatorUid;
       if (!creatorUid) throw new Error(shareClaimErrorMessage("missing"));
       if (creatorUid === recipientUid) throw new Error(shareClaimErrorMessage("self"));
-
-      var audienceRef = db.collection("users").doc(creatorUid).collection("shareAudience").doc(recipientUid);
-      var sharingMetaRef = db.collection("users").doc(creatorUid).collection("meta").doc("sharing");
-      var incomingRef = db
-        .collection("users")
-        .doc(recipientUid)
-        .collection("incomingSharedScripts")
-        .doc(token);
-      return Promise.all([audienceRef.get(), sharingMetaRef.get()]).then(function (snaps) {
-        var audienceSnap = snaps[0];
-        var sharingSnap = snaps[1];
-        var alreadyOnRoster = audienceSnap.exists;
-        if (!alreadyOnRoster) {
-          var sharingData = sharingSnap.exists ? sharingSnap.data() || {} : {};
-          var count = Number(sharingData.listenerCount) || 0;
-          var rosterCap = Number(sharingData.listenerCap) || CREATOR_SHARE_RECIPIENT_CAP;
-          if (count >= rosterCap) {
-            throw new Error(
-              "The sender’s listener list is full. They need to remove someone before new people can join."
-            );
-          }
-        }
-        var batch = db.batch();
-        var audiencePayload = {
-          claimToken: token,
-          recipientDisplayName: recipientName,
-        };
-        if (recipientEmail) audiencePayload.recipientEmail = recipientEmail;
-        if (!alreadyOnRoster) {
-          audiencePayload.claimedAt = firebase.firestore.FieldValue.serverTimestamp();
-        }
-        batch.set(audienceRef, audiencePayload, { merge: true });
-        if (!alreadyOnRoster) {
-          var sharingData2 = sharingSnap.exists ? sharingSnap.data() || {} : {};
-          var nextCount = (Number(sharingData2.listenerCount) || 0) + 1;
-          batch.set(sharingMetaRef, { listenerCount: nextCount }, { merge: true });
-        }
-        batch.set(
-          incomingRef,
-          {
-            creatorUid: creatorUid,
-            creatorDisplayName: data.creatorDisplayName || "Someone",
-            sourceScriptId: data.scriptId || "",
-            title: data.title || "Shared audio",
-            text: data.text || "",
-            audioURL: data.audioURL || "",
-            voiceID: data.voiceID || "",
-            backgroundID: data.backgroundID || "",
-            claimedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            shareToken: token,
-          },
-          { merge: true }
+      if (audienceRef && sharingMetaRef && creatorUid === knownCreator) {
+        return commitShareClaim(token, data, creatorUid, recipientUid, snaps[1], snaps[2], audienceRef, sharingMetaRef);
+      }
+      audienceRef = db.collection("users").doc(creatorUid).collection("shareAudience").doc(recipientUid);
+      sharingMetaRef = db.collection("users").doc(creatorUid).collection("meta").doc("sharing");
+      return Promise.all([audienceRef.get(), sharingMetaRef.get()]).then(function (rosterSnaps) {
+        return commitShareClaim(
+          token,
+          data,
+          creatorUid,
+          recipientUid,
+          rosterSnaps[0],
+          rosterSnaps[1],
+          audienceRef,
+          sharingMetaRef
         );
-        return batch.commit();
       });
     });
   }
@@ -14810,9 +14968,43 @@
       });
   }
 
+  function beginShareClaim() {
+    if (shareClaimInFlight || !pendingShareClaimToken) return;
+    var token = pendingShareClaimToken;
+    var requestId = ++shareClaimRequestId;
+    shareClaimInFlight = true;
+    setShareClaimUiState("adding");
+    claimShareToken(token)
+      .then(function (scriptId) {
+        if (requestId !== shareClaimRequestId) return;
+        shareClaimInFlight = false;
+        shareClaimLibraryScriptId = scriptId || "incoming_" + token;
+        clearPersistedPendingShareToken();
+        var bd = document.getElementById("share-claim-backdrop");
+        if (!bd || bd.hidden) {
+          setMessage("Added to your library.", "success");
+          return;
+        }
+        setShareClaimUiState("success");
+      })
+      .catch(function (e) {
+        if (requestId !== shareClaimRequestId) return;
+        shareClaimInFlight = false;
+        var message = shareClaimFailureMessage(e);
+        var bd = document.getElementById("share-claim-backdrop");
+        if (!bd || bd.hidden) {
+          setMessage(message, "error");
+          return;
+        }
+        setShareClaimUiState("error", message);
+      });
+  }
+
   function bindShareClaimModal() {
     var dismiss = document.getElementById("share-claim-dismiss");
     var accept = document.getElementById("share-claim-accept");
+    var retry = document.getElementById("share-claim-retry");
+    var openBtn = document.getElementById("share-claim-open");
     var backdrop = document.getElementById("share-claim-backdrop");
     if (dismiss) {
       dismiss.addEventListener("click", function () {
@@ -14821,24 +15013,17 @@
     }
     if (accept) {
       accept.addEventListener("click", function () {
-        if (!pendingShareClaimToken) return;
-        accept.disabled = true;
-        claimShareToken(pendingShareClaimToken)
-          .then(function () {
-            closeShareClaimModal();
-            setMessage("Shared audio added to My Library.", "success");
-            showAppBanner("Shared audio added", "Find it in Library with a Shared badge.", "success");
-          })
-          .catch(function (e) {
-            var errEl = document.getElementById("share-claim-error");
-            if (errEl) {
-              errEl.hidden = false;
-              errEl.textContent = (e && e.message) || "Could not claim share.";
-            }
-          })
-          .finally(function () {
-            if (accept) accept.disabled = false;
-          });
+        beginShareClaim();
+      });
+    }
+    if (retry) {
+      retry.addEventListener("click", function () {
+        beginShareClaim();
+      });
+    }
+    if (openBtn) {
+      openBtn.addEventListener("click", function () {
+        openClaimedShareInLibrary();
       });
     }
     if (backdrop) {
@@ -24061,17 +24246,31 @@
       .collection("incomingSharedScripts")
       .onSnapshot(
         function (snap) {
+          var seq = ++incomingSharedApplySeq;
           var incoming = snap.docs
             .map(scriptFromIncomingDocument)
             .filter(function (x) {
               return !!x;
             });
           filterEntitledIncomingScripts(uid, incoming).then(function (entitled) {
+            if (seq !== incomingSharedApplySeq) return;
+            var seen = {};
+            entitled.forEach(function (s) {
+              seen[s.id] = true;
+              delete recentlyClaimedScriptIds[s.id];
+            });
+            incoming.forEach(function (s) {
+              if (seen[s.id] || !recentlyClaimedScriptIds[s.id]) return;
+              entitled.push(s);
+              seen[s.id] = true;
+              delete recentlyClaimedScriptIds[s.id];
+            });
             incomingSharedScripts = entitled;
             rebuildCurrentScriptsFromSources();
           });
         },
         function (e) {
+          incomingSharedApplySeq += 1;
           incomingSharedScripts = [];
           rebuildCurrentScriptsFromSources();
           setMessage(e.message || "Could not load shared scripts.", "error");
