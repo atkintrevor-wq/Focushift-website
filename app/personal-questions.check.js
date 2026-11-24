@@ -1,9 +1,8 @@
 /**
- * Compare the generated web table with questionsFor from the companion repo.
+ * Personal follow-up pairing, plus an optional compare against questionsFor.
  *
+ *   node app/personal-questions.check.js
  *   node app/personal-questions.check.js /path/to/FocuShift/functions/writer
- *
- * The directory must contain personalQuestions.js and personal-questions.json.
  */
 "use strict";
 
@@ -11,10 +10,86 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 const web = require("./personal-questions.js");
 
+function assertFollowUpsStayOnOneSlot() {
+  const categories = [
+    "confidence",
+    "relationships",
+    "success-prosperity",
+    "mental-wellbeing",
+    "health-fitness",
+    "sports-performance",
+    "sleep-rest",
+    "i-am",
+    "other",
+  ];
+  const intentions = ["moment", "repeat"];
+  const whens = ["getting-ready", "in-the-moment", "after"];
+  let pathsChecked = 0;
+  categories.forEach(function (categoryId) {
+    intentions.forEach(function (intention) {
+      whens.forEach(function (when) {
+        const questions = web.questions(categoryId, intention, when);
+        assert.ok(questions.length >= 2, categoryId + " " + intention + " " + when);
+        const clarifying = {};
+        const seen = [];
+        questions.forEach(function (expected, index) {
+          const next = web.nextPersonalFollowUp(categoryId, intention, when, {}, clarifying);
+          assert.equal(next.done, false, categoryId + " follow-up " + (index + 1));
+          assert.equal(next.slot, expected.slot);
+          assert.equal(next.part || "", expected.part || "");
+          assert.equal(next.question, expected.text);
+          assert.equal(next.hint, expected.text, "hint must be this slot's category wording");
+          assert.equal(next.answerKey, web.answerKey(expected));
+          assert.ok(next.question, "follow-up " + (index + 1) + " must show a question");
+          seen.forEach(function (previous) {
+            assert.notEqual(next.answerKey, previous.answerKey);
+          });
+          seen.push(next);
+          clarifying[next.question] = "answer " + index;
+        });
+        const finished = web.nextPersonalFollowUp(categoryId, intention, when, {}, clarifying);
+        assert.equal(finished.done, true);
+        assert.equal(finished.question, "");
+        assert.match(finished.message, /already has an answer/);
+        pathsChecked += 1;
+      });
+    });
+  });
+  assert.equal(pathsChecked, 54);
+
+  const repeatBefore = web.nextPersonalFollowUp("confidence", "repeat", "getting-ready", {
+    situation: "hard conversations",
+    feeling: "steady",
+  }, {});
+  assert.equal(repeatBefore.slot, "beliefs");
+  assert.match(repeatBefore.question, /believe about yourself on those days/);
+  assert.equal(repeatBefore.hint, repeatBefore.question);
+  assert.equal(/where or when you want to feel/.test(repeatBefore.hint), false);
+
+  const second = web.nextPersonalFollowUp("confidence", "repeat", "getting-ready", {
+    situation: "hard conversations",
+    feeling: "steady",
+  }, { [repeatBefore.question]: "I belong in the room" });
+  assert.equal(second.done, false);
+  assert.equal(second.slot, "pastProof");
+  assert.match(second.question, /already felt that way/);
+  assert.equal(second.hint, second.question);
+  assert.notEqual(second.question, repeatBefore.question);
+}
+
+assertFollowUpsStayOnOneSlot();
+console.log("personal follow-ups: hint and question share a slot on all 54 paths, and the next follow-up advances");
+
+const spaced = "First paragraph.\n [warm] Second paragraph.\n\t[calm] Third.";
+assert.equal(
+  web.normalizeScriptParagraphs(spaced),
+  "First paragraph.\n[warm] Second paragraph.\n[calm] Third."
+);
+
 const writerDir = process.argv[2];
 if (!writerDir) {
-  console.error("Usage: node app/personal-questions.check.js /path/to/functions/writer");
-  process.exit(1);
+  console.log("personal-questions checks passed (no companion path given)");
+  process.exit(0);
 }
 
 const pq = require(path.join(writerDir, "personalQuestions.js"));

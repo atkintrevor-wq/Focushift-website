@@ -2202,6 +2202,61 @@
     };
   }
 
+  function clarifyingTextAnswered(question, clarifyingAnswers) {
+    var wanted = String(question.text || "").trim();
+    if (!wanted || !clarifyingAnswers || typeof clarifyingAnswers !== "object") return false;
+    var keys = Object.keys(clarifyingAnswers);
+    for (var i = 0; i < keys.length; i++) {
+      if (String(keys[i] || "").trim() !== wanted) continue;
+      if (String(clarifyingAnswers[keys[i]] || "").trim()) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Next personal follow-up. Hint and question are both this slot's category wording.
+   * A clarifying answer for that wording counts as filling the slot, so the next call
+   * moves on. When nothing is left, done is true and there is no question to wait on.
+   */
+  function nextPersonalFollowUp(categoryId, intention, when, flat, clarifyingAnswers) {
+    var asked = questions(categoryId, intention, when);
+    for (var i = 0; i < asked.length; i++) {
+      var question = asked[i];
+      var fromFlat = String((flat && flat[answerKey(question)]) || "").trim();
+      if (fromFlat || clarifyingTextAnswered(question, clarifyingAnswers)) continue;
+      return {
+        done: false,
+        slot: question.slot,
+        part: question.part || "",
+        answerKey: answerKey(question),
+        question: question.text,
+        hint: question.text,
+        help: question.help || "",
+        message: "",
+      };
+    }
+    return {
+      done: true,
+      slot: "",
+      part: "",
+      answerKey: "",
+      question: "",
+      hint: "Every question on this path already has an answer.",
+      help: "",
+      message: "Every question on this path already has an answer. Generate the script when you're ready.",
+    };
+  }
+
+  function normalizeScriptParagraphs(text) {
+    return String(text || "")
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map(function (line) { return line.replace(/^[ \t]+/, ""); })
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
   return {
     HINT: HINT,
     OPTIONAL_HEADING: OPTIONAL_HEADING,
@@ -2210,5 +2265,7 @@
     answerKey: answerKey,
     legacyAnswers: legacyAnswers,
     buildPersonal: buildPersonal,
+    nextPersonalFollowUp: nextPersonalFollowUp,
+    normalizeScriptParagraphs: normalizeScriptParagraphs,
   };
 });

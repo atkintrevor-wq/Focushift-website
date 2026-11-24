@@ -2470,6 +2470,20 @@
     return goals[idx];
   }
 
+  /** Drop the space a writer sometimes leaves before a TTS tag on later paragraphs. */
+  function normalizeScriptParagraphs(text) {
+    if (typeof PersonalQuestions !== "undefined" && typeof PersonalQuestions.normalizeScriptParagraphs === "function") {
+      return PersonalQuestions.normalizeScriptParagraphs(text);
+    }
+    return String(text || "")
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map(function (line) { return line.replace(/^[ \t]+/, ""); })
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
+
   var DEFAULT_TONE_BY_CATEGORY = {
     confidence: "Motivational",
     "health-fitness": "Motivational",
@@ -15492,7 +15506,7 @@
   function applyCompletedScriptJob(data) {
     var scriptId = data.scriptId;
     var title = (data.title && String(data.title).trim()) || "My Affirmation";
-    var scriptText = String(data.content || "").trim();
+    var scriptText = normalizeScriptParagraphs(data.content || "");
     if (!scriptId || !scriptText) return Promise.resolve(null);
     var now = firebase.firestore.Timestamp.now();
     var entry = {
@@ -15979,6 +15993,44 @@
           : "You've used all " + maxC + " follow-ups. Tap Generate Script when you're ready.",
         "error"
       );
+      return;
+    }
+    if (usesAdminPersonalQuestions() && typeof PersonalQuestions.nextPersonalFollowUp === "function") {
+      var follow = PersonalQuestions.nextPersonalFollowUp(
+        deepen.cat.id,
+        personalIntention(),
+        normalizeListenMode(deepen.listenMode || selectedListenMode),
+        deepen.personalFlat || {},
+        deepen.clarifyingAnswers || {}
+      );
+      if (follow.done) {
+        generationMessage(follow.message, "info");
+        return;
+      }
+      homeClarifyFlow = {
+        displayName: deepen.displayName,
+        cat: deepen.cat,
+        q1: deepen.q1,
+        q2: deepen.q2,
+        intakeObstacle: deepen.intakeObstacle,
+        intakeContext: deepen.intakeContext,
+        intakeFeeling: deepen.intakeFeeling,
+        tone: deepen.tone,
+        length: deepen.length,
+        perspective: deepen.perspective,
+        useNameInScript: deepen.useNameInScript,
+        listenMode: deepen.listenMode || selectedListenMode,
+        maxClarify: maxC,
+        followUpStep: deepen.followUpStep || 0,
+        answers: deepen.clarifyingAnswers || {},
+        personalFlat: deepen.personalFlat || {},
+        pendingQuestion: follow.question,
+        pendingHint: follow.hint,
+        pendingHelp: follow.help || "",
+        pendingAnswerKey: follow.answerKey,
+        pendingSlot: follow.slot,
+      };
+      setHomeFlowStep("clarify", deepen.displayName || displayName || "");
       return;
     }
     homeClarifyFlow = {
@@ -17085,7 +17137,10 @@
       generationMessage("", "");
       var cf = homeClarifyFlow;
       var pq = cf.pendingQuestion || "";
-      var turnHint = clarifyingTurnGoal(cf.followUpStep || 0);
+      var personalAsk = !!cf.pendingAnswerKey;
+      var turnHint = personalAsk
+        ? (cf.pendingHelp || "")
+        : clarifyingTurnGoal(cf.followUpStep || 0);
       var remainingAfter = Math.max(0, (cf.maxClarify || 3) - ((cf.followUpStep || 0) + 1));
       var quickAsk = isQuickStartPath();
       el.innerHTML =
@@ -17097,9 +17152,11 @@
             "</strong> of <strong>" +
             escapeHtml(String(cf.maxClarify || 3)) +
             "</strong></p>") +
-        '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
-        escapeHtml(turnHint) +
-        "</p>" +
+        (turnHint
+          ? '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
+            escapeHtml(turnHint) +
+            "</p>"
+          : "") +
         '  <p style="margin:0 0 0.65rem;font-weight:600;">' +
         escapeHtml(pq) +
         "</p>" +
@@ -18666,7 +18723,16 @@
     var script = getScriptWorkshopContextScript();
     if (!script) return;
     var showFmtPref = readShowAudioTagsFormattingPreference();
-    var rawText = scriptWorkshopDraft.text || "";
+    var rawText = normalizeScriptParagraphs(scriptWorkshopDraft.text || "");
+    if (rawText !== (scriptWorkshopDraft.text || "")) {
+      scriptWorkshopDraft.text = rawText;
+      if (
+        scriptWorkshopSnapshot &&
+        normalizeScriptParagraphs(scriptWorkshopSnapshot.text || "") === rawText
+      ) {
+        scriptWorkshopSnapshot.text = rawText;
+      }
+    }
     var hasAudioTagsInScript = containsAudioTagsForScript(rawText);
     var canEditTextBody = true;
     var bodyFieldHtml;
@@ -18864,7 +18930,7 @@
     listenMatchDidSeed = false;
     scriptWorkshopDraft = {
       title: script.title || "",
-      text: script.text || "",
+      text: normalizeScriptParagraphs(script.text || ""),
       voiceID: script.voiceID || "",
       backgroundID: script.backgroundID || "",
     };
@@ -19428,7 +19494,7 @@
         "</div>" +
         (scriptTextViewOpenById[script.id]
           ? '<div class="script-card-readonly-text"><pre class="app-card-text">' +
-            escapeHtml((script.text && String(script.text)) || "") +
+            escapeHtml(normalizeScriptParagraphs((script.text && String(script.text)) || "")) +
             "</pre></div>"
           : "") +
         expandedToolbarHtml +
@@ -19803,7 +19869,7 @@
           if (doc) return;
           var data = d.data() || {};
           var type = data.type;
-          var content = (data.content && String(data.content).trim()) || "";
+          var content = normalizeScriptParagraphs(data.content || "");
           if (type === "script" && content && content.indexOf("[blocked") !== 0) {
             doc = { id: d.id, data: data, content: content };
           }
