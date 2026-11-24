@@ -5631,6 +5631,96 @@ textarea.gen-survey-textarea:focus {
   white-space: pre-wrap;
   color: rgba(226, 232, 240, 0.88);
 }
+.gen-personal-hint {
+  margin: 0.15rem 0 0.35rem;
+}
+.gen-personal-question {
+  margin-top: 0.85rem;
+}
+.app-form .gen-personal-question > label,
+.app-form .gen-personal-length-option,
+.gen-personal-optional summary {
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--text, inherit);
+}
+.app-form .gen-personal-question > label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0 0 0.35rem;
+}
+.app-form .gen-personal-length-option {
+  display: flex;
+  font-size: 0.95rem;
+}
+.gen-personal-optional {
+  margin-top: 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  padding: 0.7rem 0.8rem 0.85rem;
+}
+.gen-personal-optional summary {
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.gen-personal-optional .gen-personal-question:first-of-type {
+  margin-top: 0.75rem;
+}
+.gen-personal-length {
+  margin-top: 0.85rem;
+}
+.gen-personal-length-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.gen-personal-length-option {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.28));
+  background: var(--bg-elevated, rgba(18, 26, 43, 0.92));
+  color: inherit;
+  cursor: pointer;
+}
+.gen-personal-length-option.is-selected {
+  border-color: var(--app-tab-active-border, rgba(56, 189, 248, 0.55));
+  box-shadow: 0 0 0 1px var(--app-tab-active-border, rgba(56, 189, 248, 0.22));
+}
+.gen-personal-length-option.is-locked {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+.app-form .gen-personal-length-option input {
+  width: auto;
+  margin: 0;
+  flex-shrink: 0;
+}
+.gen-personal-length-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+.gen-personal-length-title {
+  font-weight: 600;
+}
+.gen-personal-length-detail,
+.gen-personal-length-lock,
+.gen-personal-length-note {
+  font-size: 0.8rem;
+  color: var(--muted, #94a3b8);
+}
+.gen-personal-length-note {
+  margin: 0.4rem 0 0;
+}
 .gen-stepper-row {
   display: flex;
   align-items: center;
@@ -5818,6 +5908,18 @@ html.fs-app[data-app-theme="light"] .gen-clarify-textarea {
   border-color: var(--border, rgba(15, 23, 42, 0.12));
 }
 
+html.fs-app[data-app-theme="light"] .gen-iam-help {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+html.fs-app[data-app-theme="light"] .gen-iam-help summary {
+  color: #1d4ed8;
+}
+html.fs-app[data-app-theme="light"] .gen-iam-help-body,
+html.fs-app[data-app-theme="light"] .gen-personal-optional summary {
+  color: var(--text, #0f172a);
+}
+
 html.fs-app[data-app-theme="light"] #generate-form label,
 html.fs-app[data-app-theme="light"] .gen-field-label,
 html.fs-app[data-app-theme="light"] .gen-clarify-field > label {
@@ -5917,6 +6019,18 @@ html.fs-app[data-app-theme="light"] .gen-clarify-progress {
     color: var(--text, #0f172a);
     background: var(--bg-card, #ffffff);
     border-color: var(--border, rgba(15, 23, 42, 0.12));
+  }
+
+  html.fs-app[data-app-theme="system"] .gen-iam-help {
+    background: rgba(255, 255, 255, 0.9);
+    border-color: rgba(15, 23, 42, 0.12);
+  }
+  html.fs-app[data-app-theme="system"] .gen-iam-help summary {
+    color: #1d4ed8;
+  }
+  html.fs-app[data-app-theme="system"] .gen-iam-help-body,
+  html.fs-app[data-app-theme="system"] .gen-personal-optional summary {
+    color: var(--text, #0f172a);
   }
 
   html.fs-app[data-app-theme="system"] #generate-form label,

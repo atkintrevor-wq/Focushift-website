@@ -1692,6 +1692,8 @@
   var quickStartIntention = "";
   var quickStartAsksLength = false;
   var quickStartLength = "Short";
+  /** More Personal length for admins: Auto | Short | Standard | Long. */
+  var personalLength = "Auto";
   var quickStartBeliefs = [];
   var quickStartFeelings = [];
   var quickStartMoment = "";
@@ -1951,6 +1953,60 @@
 
   function isQuickStartPath() {
     return selectedCreatePath === "quickStart";
+  }
+
+  /**
+   * More Personal questions. Same check as writer v2 when the flag is "admin":
+   * users/{uid}.isAdmin === true. The Advanced tools toggle does not gate this.
+   */
+  function usesAdminPersonalQuestions() {
+    return !isQuickStartPath()
+      && userHasFirestoreAdmin()
+      && typeof PersonalQuestions !== "undefined"
+      && typeof PersonalQuestions.questions === "function";
+  }
+
+  function personalIntention() {
+    return quickStartIntention === "repeat" ? "repeat" : "moment";
+  }
+
+  function normalizePersonalLength(value) {
+    if (isWebFreeTier()) return "Short";
+    if (value === "Auto" || value === "Short" || value === "Standard" || value === "Long") return value;
+    return "Auto";
+  }
+
+  function personalQuestionsNow(catId) {
+    if (!usesAdminPersonalQuestions()) return [];
+    var id = catId || (selectedCategory() && selectedCategory().id) || "";
+    return PersonalQuestions.questions(id, personalIntention(), normalizeListenMode(selectedListenMode));
+  }
+
+  function readPersonalFlatFromDom() {
+    var flat = {};
+    document.querySelectorAll("[data-personal-key]").forEach(function (field) {
+      var key = field.getAttribute("data-personal-key");
+      if (key) flat[key] = String(field.value || "");
+    });
+    return flat;
+  }
+
+  function readPersonalLengthFromDom() {
+    if (isWebFreeTier()) return "Short";
+    var checked = document.querySelector('input[name="gen-personal-length"]:checked');
+    return normalizePersonalLength(checked && checked.value);
+  }
+
+  function personalAnswersComplete(flat, catId) {
+    return personalQuestionsNow(catId).every(function (question) {
+      if (!question.required) return true;
+      return !!String((flat && flat[PersonalQuestions.answerKey(question)]) || "").trim();
+    });
+  }
+
+  function savedPersonalAnswer(key) {
+    var flat = homeDeepenState && homeDeepenState.personalFlat;
+    return flat && flat[key] ? String(flat[key]) : "";
   }
 
   function resetQuickStartAnswers() {
@@ -2371,6 +2427,7 @@
       homeDeepenState.intakeFeeling = "";
       homeDeepenState.clarifyingAnswers = {};
       homeDeepenState.followUpStep = 0;
+      homeDeepenState.personalFlat = {};
       homeDeepenState.listenMode = selectedListenMode;
     }
     homeClarifyFlow = null;
@@ -2411,6 +2468,20 @@
     var goals = isRepeatListen() ? REPEAT_CLARIFY_TURN_GOALS : CLARIFY_TURN_GOALS;
     var idx = Math.max(0, Math.min(step, goals.length - 1));
     return goals[idx];
+  }
+
+  /** Drop the space a writer sometimes leaves before a TTS tag on later paragraphs. */
+  function normalizeScriptParagraphs(text) {
+    if (typeof PersonalQuestions !== "undefined" && typeof PersonalQuestions.normalizeScriptParagraphs === "function") {
+      return PersonalQuestions.normalizeScriptParagraphs(text);
+    }
+    return String(text || "")
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map(function (line) { return line.replace(/^[ \t]+/, ""); })
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
   }
 
   var DEFAULT_TONE_BY_CATEGORY = {
@@ -14384,6 +14455,7 @@
       listenMode: selectedListenMode,
       clarifyingAnswers: snap.answers || snap.clarifyingAnswers || {},
       followUpStep: snap.followUpStep || snap.currentIndex || 0,
+      personalFlat: snap.personalFlat || null,
     };
     setTimeout(function () {
       fillSurveyFormFromDeepen();
@@ -15188,7 +15260,9 @@
 
   function maxClarifyForWebTier(tier) {
     if (tier === "starter" || tier === "creator" || tier === "pro") {
-      return isQuickStartPath() ? 1 : 3;
+      if (isQuickStartPath()) return 1;
+      if (usesAdminPersonalQuestions()) return 2;
+      return 3;
     }
     return 0;
   }
@@ -15227,9 +15301,53 @@
     return line;
   }
 
+  function buildAdminPersonalPayload(ctx, clarifyCount, cat, listenMode) {
+    var intention = personalIntention();
+    var length = normalizePersonalLength(ctx.length);
+    var flat = ctx.personalFlat || {};
+    var built = PersonalQuestions.buildPersonal(cat.id, intention, listenMode, flat, length);
+    var questions = PersonalQuestions.questions(cat.id, intention, listenMode);
+    var answersMap = {};
+    answersMap[cat.id] = built.legacy;
+    var intakeAnswers = {
+      createPath: "full",
+      intention: intention,
+      whenChosen: "true",
+      personal: built.personal,
+      personalJson: JSON.stringify(built.personal),
+    };
+    if (built.context) intakeAnswers.context = built.context;
+    if (built.feeling) intakeAnswers.feeling = built.feeling;
+    if (built.obstacle) intakeAnswers.obstacle = built.obstacle;
+    var third = (ctx.perspective || "").toLowerCase().indexOf("third") !== -1;
+    return {
+      categories: [
+        {
+          id: cat.id,
+          name: cat.name,
+          questions: questions.map(function (question) { return question.text; }),
+        },
+      ],
+      answers: answersMap,
+      clarifyingAnswers: ctx.clarifyingAnswers || {},
+      intakeAnswers: intakeAnswers,
+      listenMode: listenMode,
+      tone: ctx.tone || "Calming",
+      length: built.personal.length,
+      clarifyCount: clarifyCount,
+      tier: resolvedSubscriptionTier(),
+      perspective: third ? "Third person" : "First person",
+      useNameInScript: third ? !!ctx.useNameInScript : false,
+      userName: resolveDisplayNameForScript(ctx.displayName || ""),
+    };
+  }
+
   function buildScriptGeneratePayload(ctx, clarifyCount) {
     var cat = ctx.cat;
     var listenMode = normalizeListenMode(ctx.listenMode || selectedListenMode);
+    if (usesAdminPersonalQuestions()) {
+      return buildAdminPersonalPayload(ctx, clarifyCount, cat, listenMode);
+    }
     var third = (ctx.perspective || "").toLowerCase().indexOf("third") !== -1;
     var answersMap = {};
     answersMap[cat.id] = [ctx.q1, ctx.q2];
@@ -15388,7 +15506,7 @@
   function applyCompletedScriptJob(data) {
     var scriptId = data.scriptId;
     var title = (data.title && String(data.title).trim()) || "My Affirmation";
-    var scriptText = String(data.content || "").trim();
+    var scriptText = normalizeScriptParagraphs(data.content || "");
     if (!scriptId || !scriptText) return Promise.resolve(null);
     var now = firebase.firestore.Timestamp.now();
     var entry = {
@@ -15486,6 +15604,31 @@
       ? phrasesWithNote(quickStartFeelings, quickStartFeelingNote)
       : [];
     var length = blocks.length ? lengthForBlockCount(blockPieceCount(blocks)) : (isWebFreeTier() ? "Short" : (quickStartLength || "Medium"));
+    if (usesAdminPersonalQuestions() && !blocks.length && !quickPhrases) {
+      var personalFlat = readPersonalFlatFromDom();
+      var builtPersonal = PersonalQuestions.buildPersonal(
+        cat.id,
+        personalIntention(),
+        normalizeListenMode(selectedListenMode),
+        personalFlat,
+        readPersonalLengthFromDom()
+      );
+      personalLength = builtPersonal.personal.length;
+      return {
+        cat: cat,
+        q1: String(builtPersonal.legacy[0] || "").trim(),
+        q2: String(builtPersonal.legacy[1] || "").trim(),
+        intakeObstacle: builtPersonal.obstacle,
+        intakeContext: builtPersonal.context,
+        intakeFeeling: builtPersonal.feeling,
+        tone: (toneEl && toneEl.value) || "Calming",
+        length: builtPersonal.personal.length,
+        perspective: (persRadio && persRadio.value) || "First person",
+        useNameInScript: useNameEl ? !!useNameEl.checked : true,
+        listenMode: selectedListenMode,
+        personalFlat: personalFlat,
+      };
+    }
     return {
       cat: cat,
       q1: q1.trim(),
@@ -15520,6 +15663,14 @@
       });
       if (!quickStartIntention || !ready) {
         generationMessage("Choose at least one on each step before generating.", "error");
+        return false;
+      }
+      return true;
+    }
+    if (usesAdminPersonalQuestions()) {
+      var flat = (ctx && ctx.personalFlat) || readPersonalFlatFromDom();
+      if (!personalAnswersComplete(flat, ctx && ctx.cat && ctx.cat.id)) {
+        generationMessage("Answer the questions marked as needed.", "error");
         return false;
       }
       return true;
@@ -15564,6 +15715,7 @@
       listenMode: ctx.listenMode || selectedListenMode,
       clarifyingAnswers: priorAnswers,
       followUpStep: priorStep,
+      personalFlat: ctx.personalFlat || null,
     };
     return homeDeepenState;
   }
@@ -15592,6 +15744,16 @@
     }
     var useNameEl = document.getElementById("gen-use-name");
     if (useNameEl) useNameEl.checked = !!d.useNameInScript;
+    if (d.personalFlat) {
+      Object.keys(d.personalFlat).forEach(function (key) {
+        var field = document.querySelector('[data-personal-key="' + key + '"]');
+        if (field) field.value = d.personalFlat[key] || "";
+      });
+    }
+    var personalLen = document.querySelector(
+      'input[name="gen-personal-length"][value="' + normalizePersonalLength(d.length || personalLength) + '"]'
+    );
+    if (personalLen) personalLen.checked = true;
     wirePerspectiveUseNameRow();
     wireGenLengthHint();
   }
@@ -15755,6 +15917,7 @@
       useNameInScript: f.useNameInScript,
       listenMode: f.listenMode || selectedListenMode,
       clarifyingAnswers: f.answers,
+      personalFlat: f.personalFlat || {},
     };
     var payload = buildScriptGeneratePayload(ctx, 1);
     postGenerateScriptRequest(payload)
@@ -15785,7 +15948,7 @@
     if (isQuickStartPath()) {
       if (!validateRequiredIntake(deepen)) return;
     } else {
-      if (!deepen.q1 || !deepen.q2) {
+      if (!usesAdminPersonalQuestions() && (!deepen.q1 || !deepen.q2)) {
         generationMessage("Please answer both questions first.", "error");
         return;
       }
@@ -15805,6 +15968,7 @@
       useNameInScript: deepen.useNameInScript,
       listenMode: deepen.listenMode || selectedListenMode,
       clarifyingAnswers: deepen.clarifyingAnswers || {},
+      personalFlat: deepen.personalFlat || {},
     });
   }
 
@@ -15818,7 +15982,7 @@
     }
     var deepen = syncHomeDeepenFromForm(displayName);
     if (!validateRequiredIntake(deepen)) return;
-    if (!isQuickStartPath() && (!deepen.q1 || !deepen.q2)) {
+    if (!usesAdminPersonalQuestions() && !isQuickStartPath() && (!deepen.q1 || !deepen.q2)) {
       generationMessage("Please answer both questions before asking a follow-up.", "error");
       return;
     }
@@ -15829,6 +15993,44 @@
           : "You've used all " + maxC + " follow-ups. Tap Generate Script when you're ready.",
         "error"
       );
+      return;
+    }
+    if (usesAdminPersonalQuestions() && typeof PersonalQuestions.nextPersonalFollowUp === "function") {
+      var follow = PersonalQuestions.nextPersonalFollowUp(
+        deepen.cat.id,
+        personalIntention(),
+        normalizeListenMode(deepen.listenMode || selectedListenMode),
+        deepen.personalFlat || {},
+        deepen.clarifyingAnswers || {}
+      );
+      if (follow.done) {
+        generationMessage(follow.message, "info");
+        return;
+      }
+      homeClarifyFlow = {
+        displayName: deepen.displayName,
+        cat: deepen.cat,
+        q1: deepen.q1,
+        q2: deepen.q2,
+        intakeObstacle: deepen.intakeObstacle,
+        intakeContext: deepen.intakeContext,
+        intakeFeeling: deepen.intakeFeeling,
+        tone: deepen.tone,
+        length: deepen.length,
+        perspective: deepen.perspective,
+        useNameInScript: deepen.useNameInScript,
+        listenMode: deepen.listenMode || selectedListenMode,
+        maxClarify: maxC,
+        followUpStep: deepen.followUpStep || 0,
+        answers: deepen.clarifyingAnswers || {},
+        personalFlat: deepen.personalFlat || {},
+        pendingQuestion: follow.question,
+        pendingHint: follow.hint,
+        pendingHelp: follow.help || "",
+        pendingAnswerKey: follow.answerKey,
+        pendingSlot: follow.slot,
+      };
+      setHomeFlowStep("clarify", deepen.displayName || displayName || "");
       return;
     }
     homeClarifyFlow = {
@@ -15847,6 +16049,7 @@
       maxClarify: maxC,
       followUpStep: deepen.followUpStep || 0,
       answers: deepen.clarifyingAnswers || {},
+      personalFlat: deepen.personalFlat || {},
       pendingQuestion: "",
     };
     requestNextClarifyingQuestion();
@@ -15881,6 +16084,7 @@
       listenMode: f.listenMode || selectedListenMode,
       clarifyingAnswers: f.answers,
       followUpStep: f.followUpStep,
+      personalFlat: f.personalFlat || {},
     };
     homeClarifyFlow = null;
     generationMessage(
@@ -16434,6 +16638,191 @@
       ' style="width:100%;box-sizing:border-box;padding:0.55rem 0.7rem;border-radius:12px;border:1px solid rgba(148,163,184,0.35);background:transparent;color:inherit;" />';
   }
 
+  function personalQuestionFieldHtml(question) {
+    var key = PersonalQuestions.answerKey(question);
+    var id = "gen-personal-" + key.replace(/:/g, "-");
+    var placeholder = question.placeholder || "Your words";
+    var help = question.help
+      ? '<details class="gen-iam-help"><summary>Tips for this question</summary><div class="gen-iam-help-body">' +
+        escapeHtml(question.help) +
+        "</div></details>"
+      : "";
+    return (
+      '<div class="gen-personal-question">' +
+      '<label for="' + id + '">' + escapeHtml(question.text) + "</label>" +
+      help +
+      '<textarea id="' + id + '" class="gen-survey-textarea" data-personal-key="' + escapeHtml(key) + '"' +
+      (question.required ? " required" : "") +
+      ' rows="' + (question.required ? "6" : "4") + '" placeholder="' + escapeHtml(placeholder) + '">' +
+      escapeHtml(savedPersonalAnswer(key)) +
+      "</textarea></div>"
+    );
+  }
+
+  function personalLengthControlHtml() {
+    var locked = isWebFreeTier();
+    var selected = normalizePersonalLength((homeDeepenState && homeDeepenState.length) || personalLength);
+    var choices = [
+      { id: "Auto", detail: "Sized to what you share" },
+      { id: "Short", detail: "About 1 minute" },
+      { id: "Standard", detail: "About 2 minutes" },
+      { id: "Long", detail: "About 3 minutes" },
+    ];
+    var html =
+      '<div class="gen-personal-length">' +
+      '<p class="gen-field-label">Length</p>' +
+      '<div class="gen-personal-length-list" role="radiogroup" aria-label="Length">';
+    choices.forEach(function (choice) {
+      var enabled = !locked || choice.id === "Short";
+      var isSelected = selected === choice.id;
+      html +=
+        '<label class="gen-personal-length-option' +
+        (isSelected ? " is-selected" : "") +
+        (enabled ? "" : " is-locked") +
+        '">' +
+        '<input type="radio" name="gen-personal-length" value="' + choice.id + '"' +
+        (isSelected ? " checked" : "") +
+        (enabled ? "" : " disabled") +
+        " />" +
+        '<span class="gen-personal-length-copy">' +
+        '<span class="gen-personal-length-title">' + escapeHtml(choice.id) + "</span>" +
+        '<span class="gen-personal-length-detail">' + escapeHtml(choice.detail) + "</span>" +
+        "</span>" +
+        (enabled ? "" : '<span class="gen-personal-length-lock">Locked</span>') +
+        "</label>";
+    });
+    html += "</div>";
+    if (locked) {
+      html += '<p class="app-muted gen-personal-length-note">The free sample stays Short.</p>';
+    }
+    html += "</div>";
+    return html;
+  }
+
+  function renderAdminPersonalSurvey(el, cat, displayName) {
+    if (isWebFreeTier()) personalLength = "Short";
+    var questions = PersonalQuestions.questions(cat.id, personalIntention(), normalizeListenMode(selectedListenMode));
+    var required = questions.filter(function (question) { return question.required; });
+    var optional = questions.filter(function (question) { return !question.required; });
+    var optionalOpen = optional.some(function (question) {
+      return !!savedPersonalAnswer(PersonalQuestions.answerKey(question)).trim();
+    });
+    var whenLabel = isRepeatListen()
+      ? listenModeRepeatTitle(selectedListenMode, cat.id)
+      : listenModeTitle(selectedListenMode, cat.id);
+    var tierNow = resolvedSubscriptionTier();
+    var maxClar = maxClarifyForWebTier(tierNow);
+    var followLeft = followUpsRemainingWeb();
+    var clarifyHint =
+      maxClar > 0
+        ? followLeft > 0
+          ? "Optional: ask up to " +
+            followLeft +
+            " more follow-up" +
+            (followLeft === 1 ? "" : "s") +
+            " to deepen the script, or generate now."
+          : "You've used all follow-ups. Generate your script when ready."
+        : "Follow-ups are available on Starter and Creator. You can still generate from your answers below.";
+    var defaultTone = defaultToneForCategory(cat.id);
+    var mediaRec = recommendedMediaForCategory(cat.id, defaultTone);
+    var optionalHtml = optional.length
+      ? '<details class="gen-personal-optional"' + (optionalOpen ? " open" : "") + ">" +
+        "<summary>" + escapeHtml(PersonalQuestions.OPTIONAL_HEADING) + "</summary>" +
+        optional.map(personalQuestionFieldHtml).join("") +
+        "</details>"
+      : "";
+    el.innerHTML =
+      '<form id="generate-form" class="app-form gen-personal-survey" style="margin:0;">' +
+      '  <p class="app-muted" style="margin:0 0 0.45rem;">Category: <strong>' +
+      escapeHtml(cat.name) +
+      "</strong> · " +
+      escapeHtml(whenLabel) +
+      "</p>" +
+      (mediaRec
+        ? '  <p class="app-muted" id="gen-media-hint" style="margin:0 0 0.5rem;font-size:0.85rem;">Listen match: <strong>' +
+          escapeHtml(mediaRec.voiceName) +
+          "</strong> + <strong>" +
+          escapeHtml(mediaRec.backgroundName) +
+          "</strong> (updates when you change tone; confirm in My Library after save)</p>"
+        : "") +
+      '  <p class="app-muted gen-personal-hint">' + escapeHtml(PersonalQuestions.HINT) + "</p>" +
+      required.map(personalQuestionFieldHtml).join("") +
+      optionalHtml +
+      '  <label for="gen-tone" style="margin-top:0.85rem;">Tone</label>' +
+      '  <select id="gen-tone" class="app-btn" style="width:100%;text-align:left;">' +
+      '    <option value="Calming">Calming</option>' +
+      '    <option value="Motivational">Motivational</option>' +
+      '    <option value="Compassionate">Compassionate</option>' +
+      '    <option value="Assertive">Assertive</option>' +
+      "  </select>" +
+      personalLengthControlHtml() +
+      '  <p class="gen-field-label" style="margin-top:0.75rem;">Perspective</p>' +
+      '  <div class="gen-pill-row" role="radiogroup" aria-label="Narration perspective">' +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-perspective" id="gen-perspective-first" value="First person" class="gen-pill-input" checked />' +
+      '      <label for="gen-perspective-first" class="gen-pill-label">First person</label>' +
+      "    </span>" +
+      '    <span class="gen-pill-item">' +
+      '      <input type="radio" name="gen-perspective" id="gen-perspective-third" value="Third person" class="gen-pill-input" />' +
+      '      <label for="gen-perspective-third" class="gen-pill-label">Third person</label>' +
+      "    </span>" +
+      "  </div>" +
+      '  <div id="gen-use-name-row" style="margin-top:0.55rem;">' +
+      '    <label class="account-pref-row"><input type="checkbox" id="gen-use-name" checked /> Use my name in the script (third person)</label>' +
+      "  </div>" +
+      '  <p class="app-muted" style="margin:0.75rem 0 0;font-size:0.85rem;">' +
+      escapeHtml(clarifyHint) +
+      "</p>" +
+      '  <div class="gen-action-row">' +
+      '    <button type="submit" class="app-btn app-btn-primary" id="gen-submit-primary">Generate Script</button>' +
+      '    <button type="button" class="app-btn" id="gen-follow-up"' +
+      (maxClar > 0 && followLeft <= 0 ? " disabled" : "") +
+      ">Follow Up</button>" +
+      "  </div>" +
+      "</form>";
+    wirePerspectiveUseNameRow();
+    fillSurveyFormFromDeepen();
+    var tonePick = document.getElementById("gen-tone");
+    if (tonePick) {
+      if (!homeDeepenState || !homeDeepenState.tone) tonePick.value = defaultTone;
+      tonePick.addEventListener("change", function () {
+        var rec = applyCategoryMediaRecommendations(cat.id, tonePick.value);
+        var hint = document.getElementById("gen-media-hint");
+        if (hint && rec) {
+          hint.innerHTML =
+            "Listen match: <strong>" +
+            escapeHtml(rec.voiceName) +
+            "</strong> + <strong>" +
+            escapeHtml(rec.backgroundName) +
+            "</strong> (updates when you change tone; confirm in My Library after save)";
+        }
+      });
+    }
+    document.querySelectorAll('input[name="gen-personal-length"]').forEach(function (radio) {
+      radio.addEventListener("change", function () {
+        if (!radio.checked || isWebFreeTier()) return;
+        personalLength = normalizePersonalLength(radio.value);
+        document.querySelectorAll(".gen-personal-length-option").forEach(function (option) {
+          var input = option.querySelector("input");
+          option.classList.toggle("is-selected", !!(input && input.checked));
+        });
+      });
+    });
+    var form = document.getElementById("generate-form");
+    if (form) {
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        beginScriptGenerationFromForm(displayName || "");
+      });
+    }
+    var followBtn = document.getElementById("gen-follow-up");
+    if (followBtn) {
+      followBtn.addEventListener("click", function () {
+        beginFollowUpFromForm(displayName || "");
+      });
+    }
+  }
+
   function renderHomeFlow(displayName) {
     var el = document.getElementById("home-flow");
     if (!el) return;
@@ -16569,9 +16958,11 @@
         '    <span class="home-listen-mode-copy">' +
         '      <span class="home-listen-mode-title">More personal</span>' +
         '      <span class="home-listen-mode-hint">' +
-        (freePath
-          ? "Answer in your own words for a deeper free sample"
-          : "Answer in your own words for a deeper, category-tuned script") +
+        (userHasFirestoreAdmin()
+          ? "Answer in your own words. The more you share, the more personal (and longer) it gets."
+          : (freePath
+            ? "Answer in your own words for a deeper free sample"
+            : "Answer in your own words for a deeper, category-tuned script")) +
         "</span></span></button>" +
         "</div>";
       var quickBtn = document.getElementById("home-path-quick");
@@ -16588,6 +16979,7 @@
           selectedCreatePath = "full";
           resetQuickStartAnswers();
           quickStartLength = isWebFreeTier() ? "Short" : "Medium";
+          personalLength = isWebFreeTier() ? "Short" : "Auto";
           setHomeFlowStep("category", displayName);
         });
       }
@@ -16745,7 +17137,10 @@
       generationMessage("", "");
       var cf = homeClarifyFlow;
       var pq = cf.pendingQuestion || "";
-      var turnHint = clarifyingTurnGoal(cf.followUpStep || 0);
+      var personalAsk = !!cf.pendingAnswerKey;
+      var turnHint = personalAsk
+        ? (cf.pendingHelp || "")
+        : clarifyingTurnGoal(cf.followUpStep || 0);
       var remainingAfter = Math.max(0, (cf.maxClarify || 3) - ((cf.followUpStep || 0) + 1));
       var quickAsk = isQuickStartPath();
       el.innerHTML =
@@ -16757,9 +17152,11 @@
             "</strong> of <strong>" +
             escapeHtml(String(cf.maxClarify || 3)) +
             "</strong></p>") +
-        '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
-        escapeHtml(turnHint) +
-        "</p>" +
+        (turnHint
+          ? '  <p class="app-muted" style="margin:0 0 0.5rem;font-size:0.85rem;">' +
+            escapeHtml(turnHint) +
+            "</p>"
+          : "") +
         '  <p style="margin:0 0 0.65rem;font-weight:600;">' +
         escapeHtml(pq) +
         "</p>" +
@@ -16912,6 +17309,10 @@
           beginFollowUpFromForm(displayName || "");
         });
       }
+      return;
+    }
+    if (usesAdminPersonalQuestions()) {
+      renderAdminPersonalSurvey(el, cat, displayName);
       return;
     }
     el.innerHTML =
@@ -18322,7 +18723,16 @@
     var script = getScriptWorkshopContextScript();
     if (!script) return;
     var showFmtPref = readShowAudioTagsFormattingPreference();
-    var rawText = scriptWorkshopDraft.text || "";
+    var rawText = normalizeScriptParagraphs(scriptWorkshopDraft.text || "");
+    if (rawText !== (scriptWorkshopDraft.text || "")) {
+      scriptWorkshopDraft.text = rawText;
+      if (
+        scriptWorkshopSnapshot &&
+        normalizeScriptParagraphs(scriptWorkshopSnapshot.text || "") === rawText
+      ) {
+        scriptWorkshopSnapshot.text = rawText;
+      }
+    }
     var hasAudioTagsInScript = containsAudioTagsForScript(rawText);
     var canEditTextBody = true;
     var bodyFieldHtml;
@@ -18520,7 +18930,7 @@
     listenMatchDidSeed = false;
     scriptWorkshopDraft = {
       title: script.title || "",
-      text: script.text || "",
+      text: normalizeScriptParagraphs(script.text || ""),
       voiceID: script.voiceID || "",
       backgroundID: script.backgroundID || "",
     };
@@ -19084,7 +19494,7 @@
         "</div>" +
         (scriptTextViewOpenById[script.id]
           ? '<div class="script-card-readonly-text"><pre class="app-card-text">' +
-            escapeHtml((script.text && String(script.text)) || "") +
+            escapeHtml(normalizeScriptParagraphs((script.text && String(script.text)) || "")) +
             "</pre></div>"
           : "") +
         expandedToolbarHtml +
@@ -19459,7 +19869,7 @@
           if (doc) return;
           var data = d.data() || {};
           var type = data.type;
-          var content = (data.content && String(data.content).trim()) || "";
+          var content = normalizeScriptParagraphs(data.content || "");
           if (type === "script" && content && content.indexOf("[blocked") !== 0) {
             doc = { id: d.id, data: data, content: content };
           }
