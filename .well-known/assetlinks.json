@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.focushift.app",
+      "sha256_cert_fingerprints": [
+        "4B:8D:41:49:E3:B0:1F:CF:E9:74:16:EA:69:87:41:03:0C:C8:4D:7A:CA:70:79:EC:31:C0:95:7F:55:7F:65:26",
+        "37:0B:17:E6:38:D9:C5:CF:39:49:DE:92:5D:1D:A7:47:9C:16:2E:6C:EB:DF:3A:F4:0C:A2:72:A4:B9:8B:A0:55"
+      ]
+    }
+  }
+]
