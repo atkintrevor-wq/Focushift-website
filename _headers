@@ -4,6 +4,11 @@
 /.well-known/apple-app-site-association
   Content-Type: application/json
 
+# Android App Links: Google expects this file with Content-Type application/json.
+# https://developer.android.com/training/app-links/verify-android-applinks
+/.well-known/assetlinks.json
+  Content-Type: application/json
+
 /focus-training/*
   X-Robots-Tag: noindex, nofollow
 
