@@ -2050,9 +2050,8 @@
   }
 
   function partCap() {
-    var cat = typeof selectedCategory === "function" ? selectedCategory() : null;
-    if (cat && cat.id === "sports-performance") return 1;
-    return selectionCap();
+    // Focus / goal chips ("What do you want to work on?") are one pick for every category.
+    return 1;
   }
 
   function blockLimit() {
@@ -16714,7 +16713,7 @@
     var title = choosingFeelings ? "How do you want to feel?" : set.work;
     var detail = choosingFeelings
       ? "Select every feeling you want in this listen."
-      : (cat.id === "sports-performance" ? set.workHint : "Select every part you want in this listen.");
+      : "Pick one";
     var draft = choosingFeelings ? feelingDraft : partDraft;
     var ready = chosen.length > 0 || String(draft || "").trim();
     var showCount = choosingFeelings || partCap() > 1;
@@ -16751,11 +16750,10 @@
               delete feelingResponses[feeling];
             }
           });
-        } else if (partCap() === 1) {
+        } else {
           var chosenPart = selectedParts.some(function (item) { return item.toLowerCase() === value.toLowerCase(); });
           selectedParts = chosenPart ? [] : [value];
-        } else {
-          selectedParts = toggleSelection(selectedParts, value);
+          if (selectedParts.length) partDraft = "";
         }
         renderHomeFlow(displayName);
       });
@@ -16763,8 +16761,25 @@
     var draftField = document.getElementById(choosingFeelings ? "feeling-draft" : "part-draft");
     if (draftField) {
       draftField.addEventListener("input", function () {
-        if (choosingFeelings) feelingDraft = draftField.value;
-        else partDraft = draftField.value;
+        if (choosingFeelings) {
+          feelingDraft = draftField.value;
+        } else {
+          partDraft = draftField.value;
+          if (String(partDraft || "").trim() && selectedParts.length) {
+            selectedParts = [];
+            var cursor = draftField.selectionStart;
+            var cursorEnd = draftField.selectionEnd;
+            renderHomeFlow(displayName);
+            var again = document.getElementById("part-draft");
+            if (again) {
+              again.focus();
+              if (typeof cursor === "number" && typeof again.setSelectionRange === "function") {
+                again.setSelectionRange(cursor, cursorEnd == null ? cursor : cursorEnd);
+              }
+            }
+            return;
+          }
+        }
         var next = document.getElementById("block-next");
         var hasChoice = (choosingFeelings ? selectedFeelings : selectedParts).length > 0 || String(draftField.value || "").trim();
         if (next) next.disabled = !hasChoice;
