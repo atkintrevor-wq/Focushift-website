@@ -31,3 +31,7 @@
 
 /trips/manifest.webmanifest
   Content-Type: application/manifest+json
+
+# FocusShift web app. Revalidate the service worker. Do not cache auth or API responses here.
+/app/sw.js
+  Cache-Control: no-cache

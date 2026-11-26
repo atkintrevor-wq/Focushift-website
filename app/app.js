@@ -26,6 +26,7 @@
   var WEB_BETA_BANNER_DISMISS_KEY = "focusshiftWebBetaBannerDismissed";
 
   var currentUser = null;
+  var hadSignedInUser = false;
   var currentScripts = [];
   var currentPlaylists = [];
   /** Script IDs while the playlist edit modal is open (reorder draft). */
@@ -35,6 +36,7 @@
   var currentPremadeCloud = [];
   /** Set after the first successful premadeAudio snapshot, including an empty catalog. */
   var premadeCloudSnapshotReceived = false;
+  var premadeCloudLoadError = "";
   /** Cloud premades with `active: false` — admin-only, not shown in App Library. */
   var currentHiddenPremade = [];
   /** User-imported backgrounds synced via `users/{uid}/userBackgrounds`. */
@@ -376,10 +378,6 @@
     { id: "sleep-rest", name: "Sleep & Rest" },
     { id: "i-am", name: "I am…" },
   ];
-  /** iOS app bundle catalog — loaded from bundled-premades-manifest.json for admin Content Manager. */
-  var bundledPremadeManifest = null;
-  var bundledPremadeManifestLoadPromise = null;
-  var BUNDLED_PREMADE_MANIFEST_URL = "bundled-premades-manifest.json";
   var PREMADE_CATEGORY_ICON_SVGS = {
     confidence:
       '<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.39 4.84L20 8.27l-4 3.9.94 5.5L12 15.9l-4.94 2.77.94-5.5-4-3.9 5.61-.43L12 2z"/></svg>',
@@ -500,65 +498,9 @@
       if (genderById[v.id]) v.gender = genderById[v.id];
     });
   })();
-  /** `file` must match the filename in `website/audio/backgrounds/` (same catalog as iOS `BackGroundAudio`). */
+  /** No Background only. Every other bed streams from Firestore `backgroundCatalog`. */
   var availableBackgrounds = [
     { id: "bg-none", name: "No Background", categoryID: "bg-ambient", file: "" },
-    // Nature & Rain
-    { id: "bg-rain", name: "Rain", categoryID: "bg-nature", file: "background-music-soft-calm-333111.mp3" },
-    { id: "bg-nature-presence-glow", name: "Nature Presence Glow", categoryID: "bg-nature", file: "Nature Presence Glow.mp3" },
-    { id: "bg-breeze-glow", name: "Breeze Glow", categoryID: "bg-nature", file: "Breeze Glow.mp3" },
-    { id: "bg-serene-wave-drift", name: "Serene Wave Drift", categoryID: "bg-nature", file: "Serene Wave Drift.mp3" },
-    { id: "bg-whisper-flow", name: "Whisper Flow", categoryID: "bg-nature", file: "Whisper Flow.mp3" },
-    // Piano & Soft Keys
-    { id: "bg-piano", name: "Piano Background", categoryID: "bg-piano", file: "piano-background-music-337774.mp3" },
-    { id: "bg-soft-calm-piano", name: "Soft Calm Piano", categoryID: "bg-piano", file: "soft-calm-piano-music-405074.mp3" },
-    { id: "bg-warm-melody", name: "Warm Melody", categoryID: "bg-piano", file: "Warm Melody.mp3" },
-    { id: "bg-calm-piano-whisper", name: "Calm Piano Whisper", categoryID: "bg-piano", file: "Calm Piano Whisper.mp3" },
-    { id: "bg-kindness-melody", name: "Kindness Melody", categoryID: "bg-piano", file: "Kindness Melody.mp3" },
-    // Ambient & Meditation
-    { id: "bg-calm-soft", name: "Calm Soft", categoryID: "bg-ambient", file: "calm-soft-background-music-398280.mp3" },
-    { id: "bg-meditation", name: "Meditation Background", categoryID: "bg-ambient", file: "meditation-relaxing-music-background-320405.mp3" },
-    { id: "bg-please-calm", name: "Please Calm My Mind", categoryID: "bg-ambient", file: "please-calm-my-mind-125566.mp3" },
-    { id: "bg-mindful-drift", name: "Mindful Drift", categoryID: "bg-ambient", file: "Mindful Drift.mp3" },
-    { id: "bg-inner-calm", name: "Inner Calm", categoryID: "bg-ambient", file: "Inner Calm.mp3" },
-    { id: "bg-serene-mind-whisper", name: "Serene Mind Whisper", categoryID: "bg-ambient", file: "Serene Mind Whisper.mp3" },
-    { id: "bg-connection-drift", name: "Connection Drift", categoryID: "bg-ambient", file: "Cennection Drift.mp3" },
-    { id: "bg-theta-peace-drift", name: "Theta Peace Drift", categoryID: "bg-ambient", file: "Theta Peace Drift.mp3" },
-    { id: "bg-deep-serenity-pulse", name: "Deep Serenity Pulse", categoryID: "bg-ambient", file: "Deep Serenity Pulse.mp3" },
-    // Chill & Lo-fi
-    { id: "bg-calm-night", name: "Calm Night", categoryID: "bg-chill", file: "calm-night-312296.mp3" },
-    { id: "bg-just-relax", name: "Just Relax", categoryID: "bg-chill", file: "just-relax-11157.mp3" },
-    {
-      id: "bg-oasis",
-      name: "Oasis (Chill)",
-      categoryID: "bg-chill",
-      file: "oasis-background-relax-hip-hop-vlog-music-for-video-stories-short-379505.mp3",
-    },
-    { id: "bg-penguin", name: "Modern Chillout", categoryID: "bg-chill", file: "penguinmusic-modern-chillout-future-calm-12641.mp3" },
-    { id: "bg-calm-groove", name: "Calm Groove", categoryID: "bg-chill", file: "Calm Groove.mp3" },
-    { id: "bg-growth-glow", name: "Growth Glow", categoryID: "bg-chill", file: "Growth Glow.mp3" },
-    { id: "bg-freedom-whisper", name: "Freedom Whisper", categoryID: "bg-chill", file: "Freedom Whisper.mp3" },
-    // Orchestral & Cinematic
-    { id: "bg-orchestral-calm-embrace", name: "Orchestral Calm Embrace", categoryID: "bg-orchestral", file: "Orchestral Calm Embrace.mp3" },
-    { id: "bg-harmony-rise", name: "Harmony Rise", categoryID: "bg-orchestral", file: "Harmony Rise.mp3" },
-    { id: "bg-symphony-ascend", name: "Symphony Ascend", categoryID: "bg-orchestral", file: "Symphony Ascend.mp3" },
-    { id: "bg-resilience-ascend", name: "Resilience Ascend", categoryID: "bg-orchestral", file: "Resilience Ascend.mp3" },
-    { id: "bg-compassion-rise", name: "Compassion Rise", categoryID: "bg-orchestral", file: "Compassion Rise.mp3" },
-    { id: "bg-clarity-sting-echo", name: "Clarity Sting Echo", categoryID: "bg-orchestral", file: "Clarity Sting Echo.mp3" },
-    // Upbeat & Energetic
-    { id: "bg-assertive-whisper", name: "Assertive Whisper", categoryID: "bg-upbeat", file: "Assertive Whisper.mp3" },
-    { id: "bg-purpose-pulse", name: "Purpose Pulse", categoryID: "bg-upbeat", file: "Purpose Pulse.mp3" },
-    { id: "bg-groove-bloom", name: "Groove Bloom", categoryID: "bg-upbeat", file: "Groove Bloom.mp3" },
-    { id: "bg-joyful-fusion", name: "Joyful Fusion", categoryID: "bg-upbeat", file: "Joyful Fusion.mp3" },
-    { id: "bg-recovery-glow", name: "Recovery Glow", categoryID: "bg-upbeat", file: "Recovery Glow.mp3" },
-    { id: "bg-vitality-wave-rise", name: "Vitality Wave Rise", categoryID: "bg-upbeat", file: "Vitality Wave Rise.mp3" },
-    { id: "bg-ambient-mastery-pulse", name: "Ambient Mastery Pulse", categoryID: "bg-upbeat", file: "Ambient Mastery Pulse.mp3" },
-    { id: "bg-orchestral-resilience-rush", name: "Orchestral Resilience Rush", categoryID: "bg-upbeat", file: "orchestral Resilience Rush.mp3" },
-    { id: "bg-relentless-edge-surge", name: "Relentless Edge Surge", categoryID: "bg-upbeat", file: "Relentless Edge Surge.mp3" },
-    { id: "bg-riff-resilience-rush", name: "Riff Resilience Rush", categoryID: "bg-upbeat", file: "Riff Resilience Rush.mp3" },
-    { id: "bg-synth-flow-fury", name: "Synth Flow Fury", categoryID: "bg-upbeat", file: "Synth Flow Fury.mp3" },
-    { id: "bg-breakthrough-surge", name: "Breakthrough Surge", categoryID: "bg-upbeat", file: "Breakthrough Surge.mp3" },
-    { id: "bg-momentum-desire", name: "Momentum Desire", categoryID: "bg-upbeat", file: "Momentum Desire.mp3" },
   ];
   var backgroundCategoryOrder = [
     "bg-nature",
@@ -949,12 +891,9 @@
   var SAVED_APP_BG_IDS_KEY = "focusshiftWebSavedAppBgIds_v1";
   var USER_BG_IMPORT_MAX_BYTES = 40 * 1024 * 1024;
   var userBgObjectUrlCache = {};
-  /** Optional offline copies of cloud premade audio (stream-first). */
-  var PREMADE_OFFLINE_IDB_NAME = "focusshiftWebPremadeOfflineBlobs";
-  var PREMADE_OFFLINE_IDB_STORE = "blobs";
+  /** Explicit offline copies of cloud catalog audio (Cache API). Paid only; cleared on sign-out or downgrade. */
+  var OFFLINE_AUDIO_CACHE_NAME = "focusshift-app-offline-audio-v1";
   var premadeOfflineObjectUrlCache = {};
-  var BACKGROUND_OFFLINE_IDB_NAME = "focusshiftWebBackgroundOfflineBlobs";
-  var BACKGROUND_OFFLINE_IDB_STORE = "blobs";
   var backgroundOfflineObjectUrlCache = {};
   var activeAudioPageTab = "my-audio";
   var PREF_AUDIO_PAGE_SUB_KEY = "focusshiftWebPrefAudioPageSub";
@@ -1203,7 +1142,8 @@
       var m = {};
       if (Array.isArray(arr)) {
         arr.forEach(function (id) {
-          if (id) m[String(id)] = true;
+          var canonical = canonicalBackgroundId(id);
+          if (canonical && canonical !== "bg-none") m[canonical] = true;
         });
       }
       return m;
@@ -1223,7 +1163,7 @@
   }
 
   function addSavedAppBackgroundId(backgroundId) {
-    var bid = (backgroundId && String(backgroundId).trim()) || "";
+    var bid = canonicalBackgroundId(backgroundId);
     if (!bid || bid === "bg-none") return;
     var m = loadSavedAppBackgroundIdSet();
     m[bid] = true;
@@ -1231,7 +1171,7 @@
   }
 
   function removeSavedAppBackgroundId(backgroundId) {
-    var bid = (backgroundId && String(backgroundId).trim()) || "";
+    var bid = canonicalBackgroundId(backgroundId);
     if (!bid) return;
     var m = loadSavedAppBackgroundIdSet();
     delete m[bid];
@@ -1326,66 +1266,133 @@
     });
   }
 
-  function openPremadeOfflineIdb() {
-    return new Promise(function (resolve, reject) {
-      var req = indexedDB.open(PREMADE_OFFLINE_IDB_NAME, 1);
-      req.onerror = function () {
-        reject(req.error || new Error("IndexedDB failed"));
-      };
-      req.onupgradeneeded = function () {
-        var db = req.result;
-        if (!db.objectStoreNames.contains(PREMADE_OFFLINE_IDB_STORE)) {
-          db.createObjectStore(PREMADE_OFFLINE_IDB_STORE);
-        }
-      };
-      req.onsuccess = function () {
-        resolve(req.result);
-      };
-    });
+  function canonicalBackgroundId(backgroundId) {
+    var id = (backgroundId && String(backgroundId).trim()) || "";
+    if (!id) return "";
+    var api = typeof FocusShiftLegacyBackgrounds !== "undefined" ? FocusShiftLegacyBackgrounds : null;
+    if (api && typeof api.canonicalBackgroundId === "function") return api.canonicalBackgroundId(id);
+    return id;
   }
 
-  function getPremadeOfflineBlob(id) {
-    return openPremadeOfflineIdb().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(PREMADE_OFFLINE_IDB_STORE, "readonly");
-        var rq = tx.objectStore(PREMADE_OFFLINE_IDB_STORE).get(id);
-        rq.onsuccess = function () {
-          resolve(rq.result != null ? rq.result : null);
-        };
-        rq.onerror = function () {
-          reject(rq.error);
-        };
+  function offlineMediaUrl(kind, id) {
+    return new URL("/app/offline-media/" + kind + "/" + encodeURIComponent(id), window.location.origin).href;
+  }
+
+  function parseOfflineMediaUrl(url) {
+    try {
+      var parsed = new URL(url);
+      var prefix = "/app/offline-media/";
+      if (parsed.origin !== window.location.origin || parsed.pathname.indexOf(prefix) !== 0) return null;
+      var rest = parsed.pathname.slice(prefix.length);
+      var slash = rest.indexOf("/");
+      if (slash < 1) return null;
+      return {
+        kind: rest.slice(0, slash),
+        id: decodeURIComponent(rest.slice(slash + 1)),
+      };
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  function rememberOfflineObjectUrl(kind, id, blob) {
+    if (!id || !blob) return "";
+    if (kind === "premade") {
+      revokePremadeOfflineObjectUrl(id);
+      var premadeUrl = URL.createObjectURL(blob);
+      premadeOfflineObjectUrlCache[id] = premadeUrl;
+      return premadeUrl;
+    }
+    revokeBackgroundOfflineObjectUrl(id);
+    var backgroundUrl = URL.createObjectURL(blob);
+    backgroundOfflineObjectUrlCache[id] = backgroundUrl;
+    return backgroundUrl;
+  }
+
+  function openOfflineAudioCache() {
+    if (!window.caches) return Promise.reject(new Error("Offline storage is not available in this browser."));
+    return caches.open(OFFLINE_AUDIO_CACHE_NAME);
+  }
+
+  function downloadCatalogAudioForOffline(kind, id, remoteUrl, costKind) {
+    var remote = (remoteUrl && String(remoteUrl).trim()) || "";
+    var trackId = (id && String(id).trim()) || "";
+    if (!trackId || !remote) {
+      return Promise.reject(new Error("This audio is not available for offline download."));
+    }
+    return fetch(remote, { mode: "cors", credentials: "omit" }).then(function (response) {
+      if (!response.ok) throw new Error("Could not download audio.");
+      var stored = response.clone();
+      return response.blob().then(function (blob) {
+        reportCatalogStorageCost(remote, blob.size || 0, costKind);
+        return openOfflineAudioCache().then(function (cache) {
+          return cache.put(offlineMediaUrl(kind, trackId), stored).then(function () {
+            return rememberOfflineObjectUrl(kind, trackId, blob);
+          });
+        });
       });
     });
   }
 
-  function putPremadeOfflineBlob(id, blob) {
-    return openPremadeOfflineIdb().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(PREMADE_OFFLINE_IDB_STORE, "readwrite");
-        tx.objectStore(PREMADE_OFFLINE_IDB_STORE).put(blob, id);
-        tx.oncomplete = function () {
-          resolve();
-        };
-        tx.onerror = function () {
-          reject(tx.error);
-        };
-      });
-    });
+  function deleteOfflineAudio(kind, id) {
+    var trackId = (id && String(id).trim()) || "";
+    if (!trackId) return Promise.resolve();
+    if (kind === "premade") revokePremadeOfflineObjectUrl(trackId);
+    else revokeBackgroundOfflineObjectUrl(trackId);
+    if (!window.caches) return Promise.resolve();
+    return openOfflineAudioCache()
+      .then(function (cache) {
+        return cache.delete(offlineMediaUrl(kind, trackId));
+      })
+      .catch(function () {});
   }
 
-  function deletePremadeOfflineBlob(id) {
-    return openPremadeOfflineIdb().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(PREMADE_OFFLINE_IDB_STORE, "readwrite");
-        tx.objectStore(PREMADE_OFFLINE_IDB_STORE).delete(id);
-        tx.oncomplete = function () {
-          resolve();
-        };
-        tx.onerror = function () {
-          reject(tx.error);
-        };
-      });
+  function hydrateAllOfflineAudio() {
+    if (!window.caches) return Promise.resolve();
+    return openOfflineAudioCache()
+      .then(function (cache) {
+        return cache.keys().then(function (requests) {
+          return Promise.all(
+            requests.map(function (request) {
+              var parsed = parseOfflineMediaUrl(request.url);
+              if (!parsed || !parsed.id) return Promise.resolve();
+              var existing =
+                parsed.kind === "premade"
+                  ? premadeOfflineObjectUrlCache[parsed.id]
+                  : backgroundOfflineObjectUrlCache[parsed.id];
+              if (existing) return Promise.resolve();
+              return cache.match(request).then(function (response) {
+                if (!response) return;
+                return response.blob().then(function (blob) {
+                  rememberOfflineObjectUrl(parsed.kind, parsed.id, blob);
+                });
+              });
+            })
+          );
+        });
+      })
+      .catch(function () {});
+  }
+
+  function clearOfflineAudioDownloads() {
+    Object.keys(premadeOfflineObjectUrlCache).forEach(revokePremadeOfflineObjectUrl);
+    Object.keys(backgroundOfflineObjectUrlCache).forEach(revokeBackgroundOfflineObjectUrl);
+    if (!window.caches) return Promise.resolve();
+    return caches.delete(OFFLINE_AUDIO_CACHE_NAME).catch(function () {});
+  }
+
+  function maybePurgeOfflineAudioForTier() {
+    if (!currentUser || !currentUserProfile) return;
+    var raw = (currentUserProfile.subscriptionTier || "").toString().trim().toLowerCase();
+    if (!raw || raw === "starter" || raw === "creator" || raw === "pro" || raw === "basic" || raw === "premium") {
+      return;
+    }
+    if (raw !== "free") return;
+    clearOfflineAudioDownloads().then(function () {
+      try {
+        if (activeAdminTab === "library") renderPremade();
+        if (activeAdminTab === "audio") renderAudioPage();
+      } catch (_e) {}
     });
   }
 
@@ -1414,104 +1421,11 @@
     if (!premade || !isStreamableCloudPremade(premade)) {
       return Promise.reject(new Error("This premade is not available for offline download."));
     }
-    var remote = String(premade.audioURL).trim();
-    return fetch(remote)
-      .then(function (r) {
-        if (!r.ok) throw new Error("Could not download premade audio.");
-        return r.blob();
-      })
-      .then(function (blob) {
-        reportCatalogStorageCost(remote, blob.size || 0, "premade_download");
-        return putPremadeOfflineBlob(premade.id, blob).then(function () {
-          revokePremadeOfflineObjectUrl(premade.id);
-          var objUrl = URL.createObjectURL(blob);
-          premadeOfflineObjectUrlCache[premade.id] = objUrl;
-          return objUrl;
-        });
-      });
+    return downloadCatalogAudioForOffline("premade", premade.id, premade.audioURL, "premade_download");
   }
 
   function removePremadeOfflineDownload(premadeId) {
-    var id = (premadeId && String(premadeId).trim()) || "";
-    if (!id) return Promise.resolve();
-    revokePremadeOfflineObjectUrl(id);
-    return deletePremadeOfflineBlob(id);
-  }
-
-  function hydratePremadeOfflineCacheFromIdb(premadeIds) {
-    if (!premadeIds || !premadeIds.length || !window.indexedDB) return Promise.resolve();
-    return Promise.all(
-      premadeIds.map(function (id) {
-        if (!id || premadeOfflineObjectUrlCache[id]) return Promise.resolve();
-        return getPremadeOfflineBlob(id).then(function (blob) {
-          if (!blob) return;
-          premadeOfflineObjectUrlCache[id] = URL.createObjectURL(blob);
-        });
-      })
-    );
-  }
-
-  function openBackgroundOfflineIdb() {
-    return new Promise(function (resolve, reject) {
-      var req = indexedDB.open(BACKGROUND_OFFLINE_IDB_NAME, 1);
-      req.onerror = function () {
-        reject(req.error || new Error("IndexedDB failed"));
-      };
-      req.onupgradeneeded = function () {
-        var db = req.result;
-        if (!db.objectStoreNames.contains(BACKGROUND_OFFLINE_IDB_STORE)) {
-          db.createObjectStore(BACKGROUND_OFFLINE_IDB_STORE);
-        }
-      };
-      req.onsuccess = function () {
-        resolve(req.result);
-      };
-    });
-  }
-
-  function getBackgroundOfflineBlob(id) {
-    return openBackgroundOfflineIdb().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(BACKGROUND_OFFLINE_IDB_STORE, "readonly");
-        var rq = tx.objectStore(BACKGROUND_OFFLINE_IDB_STORE).get(id);
-        rq.onsuccess = function () {
-          resolve(rq.result != null ? rq.result : null);
-        };
-        rq.onerror = function () {
-          reject(rq.error);
-        };
-      });
-    });
-  }
-
-  function putBackgroundOfflineBlob(id, blob) {
-    return openBackgroundOfflineIdb().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(BACKGROUND_OFFLINE_IDB_STORE, "readwrite");
-        tx.objectStore(BACKGROUND_OFFLINE_IDB_STORE).put(blob, id);
-        tx.oncomplete = function () {
-          resolve();
-        };
-        tx.onerror = function () {
-          reject(tx.error);
-        };
-      });
-    });
-  }
-
-  function deleteBackgroundOfflineBlob(id) {
-    return openBackgroundOfflineIdb().then(function (db) {
-      return new Promise(function (resolve, reject) {
-        var tx = db.transaction(BACKGROUND_OFFLINE_IDB_STORE, "readwrite");
-        tx.objectStore(BACKGROUND_OFFLINE_IDB_STORE).delete(id);
-        tx.oncomplete = function () {
-          resolve();
-        };
-        tx.onerror = function () {
-          reject(tx.error);
-        };
-      });
-    });
+    return deleteOfflineAudio("premade", premadeId);
   }
 
   function revokeBackgroundOfflineObjectUrl(backgroundId) {
@@ -1524,7 +1438,7 @@
   }
 
   function backgroundOfflinePlaybackURL(backgroundId, remoteUrl) {
-    var id = (backgroundId && String(backgroundId).trim()) || "";
+    var id = canonicalBackgroundId(backgroundId);
     if (id && backgroundOfflineObjectUrlCache[id]) return backgroundOfflineObjectUrlCache[id];
     return (remoteUrl && String(remoteUrl).trim()) || "";
   }
@@ -1536,7 +1450,7 @@
   }
 
   function ensureBackgroundCachedForMixing(backgroundId) {
-    var bgId = (backgroundId && String(backgroundId).trim()) || "";
+    var bgId = canonicalBackgroundId(backgroundId);
     if (!bgId || bgId === "bg-none") {
       return Promise.reject(new Error("No background selected for mixing."));
     }
@@ -1544,60 +1458,23 @@
     if (!entry && !isKnownUserBackgroundId(bgId)) {
       return Promise.reject(new Error("Unknown background for mixing."));
     }
-    if (entry && (entry.userUpload || isKnownUserBackgroundId(bgId))) {
+    if (entry && (entry.userUpload || isKnownUserBackgroundId(bgId))) return Promise.resolve();
+    if (entry && (backgroundOfflineObjectUrlCache[bgId] || isStreamableCloudBackground(entry))) {
       return Promise.resolve();
     }
-    if (backgroundOfflineObjectUrlCache[bgId]) {
-      return Promise.resolve();
-    }
-    if (entry && isStreamableCloudBackground(entry)) {
-      return downloadBackgroundForOffline(entry).then(function () {});
-    }
-    return getBackgroundOfflineBlob(bgId).then(function (blob) {
-      if (!blob || !entry || !isStreamableCloudBackground(entry)) return;
-      backgroundOfflineObjectUrlCache[bgId] = URL.createObjectURL(blob);
-    });
+    return Promise.reject(new Error("Unknown background for mixing."));
   }
 
   function downloadBackgroundForOffline(bg) {
     if (!bg || !isStreamableCloudBackground(bg)) {
       return Promise.reject(new Error("This background is not available for offline download."));
     }
-    var remote = String(bg.audioURL).trim();
-    return fetch(remote)
-      .then(function (r) {
-        if (!r.ok) throw new Error("Could not download background audio.");
-        return r.blob();
-      })
-      .then(function (blob) {
-        reportCatalogStorageCost(remote, blob.size || 0, "background_download");
-        return putBackgroundOfflineBlob(bg.id, blob).then(function () {
-          revokeBackgroundOfflineObjectUrl(bg.id);
-          var objUrl = URL.createObjectURL(blob);
-          backgroundOfflineObjectUrlCache[bg.id] = objUrl;
-          return objUrl;
-        });
-      });
+    var bgId = canonicalBackgroundId(bg.id);
+    return downloadCatalogAudioForOffline("background", bgId, bg.audioURL, "background_download");
   }
 
   function removeBackgroundOfflineDownload(backgroundId) {
-    var id = (backgroundId && String(backgroundId).trim()) || "";
-    if (!id) return Promise.resolve();
-    revokeBackgroundOfflineObjectUrl(id);
-    return deleteBackgroundOfflineBlob(id);
-  }
-
-  function hydrateBackgroundOfflineCacheFromIdb(backgroundIds) {
-    if (!backgroundIds || !backgroundIds.length || !window.indexedDB) return Promise.resolve();
-    return Promise.all(
-      backgroundIds.map(function (id) {
-        if (!id || backgroundOfflineObjectUrlCache[id]) return Promise.resolve();
-        return getBackgroundOfflineBlob(id).then(function (blob) {
-          if (!blob) return;
-          backgroundOfflineObjectUrlCache[id] = URL.createObjectURL(blob);
-        });
-      })
-    );
+    return deleteOfflineAudio("background", canonicalBackgroundId(backgroundId));
   }
 
   function allBackgroundTracksForPicker() {
@@ -1805,11 +1682,11 @@
         "• Your saved tracks: uploaded files and app audio you've pinned (Starter/Creator for uploads).\n" +
         "• Imports sync across devices on Starter and Creator; this browser also keeps a local copy for faster mixing.\n\n" +
         "App Audio\n" +
-        "• Built-in and cloud background tracks — same catalog as App Audio on iOS.\n" +
+        "• Cloud background tracks — same catalog as App Audio on iOS.\n" +
         "• Preview any track here. Pin to My Audio with Starter or Creator.\n" +
         "• Expand/collapse categories with the chevron on each section.\n" +
         "• Cards with a blue edge are from the extended cloud catalog.\n" +
-        "• Cloud tracks download automatically when you generate audio; tap ↓ to save early for offline listening.",
+        "• Starter and Creator can download a track for offline listening. Downloads stay in this browser until you sign out or the plan no longer includes offline audio.",
     },
   };
 
@@ -2589,7 +2466,7 @@
     },
   };
 
-  // Published backgroundCatalog ids. Paid suggestions use these; Free keeps the bundled slugs.
+  // Published backgroundCatalog ids. Free and paid suggestions both use these cloud tracks.
   var TONE_BACKGROUND_CATALOG_IDS = {
     confidence: {
       Calming: "bg-cloud-918c480a-0cce-4bf7-8531-355ed3e4b52a",
@@ -2684,19 +2561,15 @@
     }
     if (!voiceID && pool.length) voiceID = pool[0];
     if (!voiceID && legacy) voiceID = legacy.voiceID;
-    var backgroundID =
-      TONE_BACKGROUND_OVERRIDES[id] && TONE_BACKGROUND_OVERRIDES[id][toneKey]
-        ? TONE_BACKGROUND_OVERRIDES[id][toneKey]
-        : legacy
-          ? legacy.backgroundID
-          : "";
-    if (
-      !isWebFreeTier() &&
-      TONE_BACKGROUND_CATALOG_IDS[id] &&
-      TONE_BACKGROUND_CATALOG_IDS[id][toneKey]
-    ) {
+    var backgroundID = "";
+    if (TONE_BACKGROUND_CATALOG_IDS[id] && TONE_BACKGROUND_CATALOG_IDS[id][toneKey]) {
       backgroundID = TONE_BACKGROUND_CATALOG_IDS[id][toneKey];
+    } else if (TONE_BACKGROUND_OVERRIDES[id] && TONE_BACKGROUND_OVERRIDES[id][toneKey]) {
+      backgroundID = TONE_BACKGROUND_OVERRIDES[id][toneKey];
+    } else if (legacy) {
+      backgroundID = legacy.backgroundID;
     }
+    backgroundID = canonicalBackgroundId(backgroundID);
     if (!voiceID || !backgroundID) return legacy || null;
     return {
       voiceID: voiceID,
@@ -2769,7 +2642,7 @@
         if (!voice) return null;
         return {
           voiceID: pair[0],
-          backgroundID: pair[1],
+          backgroundID: canonicalBackgroundId(pair[1]),
           voiceName: voice.name,
           backgroundName: backgroundNameById(pair[1]),
           voiceDescription: voice.description || "",
@@ -2937,6 +2810,7 @@
         "bg-none",
       ];
     }
+    ids = ids.map(canonicalBackgroundId);
     return ids.filter(function (id) {
       return isWebBackgroundAvailableForGeneration(id);
     });
@@ -3055,12 +2929,13 @@
   }
 
   function listenMatchBedUrl(backgroundID) {
-    var bid = String(backgroundID || "").trim();
+    var bid = canonicalBackgroundId(backgroundID);
     if (!bid || bid === "bg-none") return "";
     var entry = backgroundEntryById(bid);
     if (!entry) return "";
-    if (entry.audioURL && String(entry.audioURL).trim()) return String(entry.audioURL).trim();
-    if (entry.file && String(entry.file).trim()) return backgroundTrackAssetUrl(entry.file);
+    if (entry.audioURL && String(entry.audioURL).trim()) {
+      return backgroundOfflinePlaybackURL(entry.id, String(entry.audioURL).trim());
+    }
     return "";
   }
 
@@ -3796,17 +3671,14 @@
   }
 
   function isBackgroundIdAvailableForDefault(backgroundID) {
-    var id = (backgroundID && String(backgroundID).trim()) || "";
+    var id = canonicalBackgroundId(backgroundID);
     if (!id) return false;
-    if (
-      availableBackgrounds.some(function (b) {
-        return b.id === id;
-      })
-    ) {
-      return true;
-    }
+    if (id === "bg-none") return true;
     if (
       currentBackgroundCatalog.some(function (b) {
+        return b.id === id;
+      }) ||
+      currentHiddenBackgroundCatalog.some(function (b) {
         return b.id === id;
       })
     ) {
@@ -3829,7 +3701,7 @@
     if (!currentUserProfile) return false;
     var version = profileDefaultsVersion(currentUserProfile);
     var profileVoiceID = (currentUserProfile.defaultVoiceID || "").trim();
-    var profileBackgroundID = (currentUserProfile.defaultBackgroundID || "").trim();
+    var profileBackgroundID = canonicalBackgroundId((currentUserProfile.defaultBackgroundID || "").trim());
     var pendingVoice =
       profileVoiceID && isVoiceIdAvailableForDefault(profileVoiceID) && selectedVoiceId !== profileVoiceID;
     var pendingBackground =
@@ -3869,6 +3741,7 @@
           currentUserProfile = snap.exists ? snap.data() || {} : {};
           hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
           applyUserProfileDefaults({ onlyIfNewer: true });
+          maybePurgeOfflineAudioForTier();
           if (!userHasFirestoreAdmin() && adminModeEnabled) {
             writeAdminModeEnabled(false);
           }
@@ -8627,16 +8500,6 @@
           .join("") +
         "</details>";
     }
-    var bundledGroups = groupBackgroundsByCategory(availableBackgrounds);
-    var bundledTotal = availableBackgrounds.length;
-    var bundledBlocks = renderPcmCategoryGroupedBackgrounds(bundledGroups, function (b) {
-      return (
-        '<div class="admin-cloud-bg-row" style="display:flex;align-items:center;gap:0.5rem;padding:0.45rem 0;border-bottom:1px solid var(--border-subtle,#e5e7eb);">' +
-        '<div style="flex:1;min-width:0;"><strong>' +
-        escapeHtml(b.name || "Background") +
-        '</strong><br><span class="app-muted" style="font-size:0.82rem;">Bundled · Free (all users)</span></div></div>'
-      );
-    });
     return (
       '<details class="admin-cloud-bg-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
       '<summary style="cursor:pointer;font-weight:600;">Cloud backgrounds (' +
@@ -8646,19 +8509,12 @@
       header +
       cloudBody +
       hiddenBody +
-      "</details>" +
-      '<details class="admin-bundled-bg-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
-      '<summary style="cursor:pointer;font-weight:600;">Bundled backgrounds (iOS app) (' +
-      bundledTotal +
-      ")</summary>" +
-      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Shipped inside the app. Free listeners also see any cloud track marked Free.</p>' +
-      (bundledTotal ? bundledBlocks : '<p class="app-muted" style="margin:0.35rem 0 0;">No bundled backgrounds found.</p>') +
       "</details>"
     );
   }
 
   function findCloudBackground(backgroundId) {
-    var id = (backgroundId && String(backgroundId).trim()) || "";
+    var id = canonicalBackgroundId(backgroundId);
     return (
       currentBackgroundCatalog.find(function (b) {
         return b.id === id;
@@ -8950,117 +8806,38 @@
     return renderPcmCategoryGroupedPremades(groups, rowBuilder);
   }
 
-  function loadBundledPremadeManifest() {
-    if (bundledPremadeManifest) return Promise.resolve(bundledPremadeManifest);
-    if (bundledPremadeManifestLoadPromise) return bundledPremadeManifestLoadPromise;
-    bundledPremadeManifestLoadPromise = fetch(BUNDLED_PREMADE_MANIFEST_URL + "?v=1")
-      .then(function (r) {
-        if (!r.ok) throw new Error("Manifest not found");
-        return r.json();
-      })
-      .then(function (data) {
-        bundledPremadeManifest = data && data.categories ? data : { categories: [] };
-        return bundledPremadeManifest;
-      })
-      .catch(function () {
-        bundledPremadeManifest = { categories: [] };
-        return bundledPremadeManifest;
-      });
-    return bundledPremadeManifestLoadPromise;
-  }
-
-  function renderBundledPremadesAdminSection() {
-    var categories = (bundledPremadeManifest && bundledPremadeManifest.categories) || [];
-    var total = categories.reduce(function (n, c) {
-      return n + ((c.items && c.items.length) || 0);
-    }, 0);
-    var intro =
-      '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;line-height:1.45;">Built into the app. Free listeners hear these in a category until a Free item is published online for that category. Web lists metadata from <code>bundled-premades-manifest.json</code>.</p>';
-    if (!total) {
-      return (
-        '<details class="admin-bundled-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
-        '<summary style="cursor:pointer;font-weight:600;">Bundled premades (iOS app) (0)</summary>' +
-        intro +
-        '<p class="app-muted" style="margin:0.35rem 0 0;">Could not load bundled manifest, or no entries yet.</p>' +
-        "</details>"
-      );
-    }
-    var sections = categories
-      .map(function (cat) {
-        var items = cat.items || [];
-        if (!items.length) return "";
-        var rows = items
-          .map(function (item) {
-            return pcmPremadeRowHtml(
-              item.title,
-              "Bundled · Free (all users)" + (item.id ? " · " + escapeHtml(item.id) : "")
-            );
-          })
-          .join("");
-        return (
-          '<details class="pcm-category-collapse" style="margin:0 0 0.55rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.5rem;padding:0.35rem 0.65rem;">' +
-          '<summary style="cursor:pointer;font-weight:600;padding:0.2rem 0;">' +
-          escapeHtml(cat.name || cat.id || "Category") +
-          ' <span class="app-muted" style="font-size:0.82rem;font-weight:400;">(' +
-          items.length +
-          ")</span></summary>" +
-          '<div style="margin-top:0.35rem;">' +
-          rows +
-          "</div></details>"
-        );
-      })
-      .join("");
-    return (
-      '<details class="admin-bundled-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
-      '<summary style="cursor:pointer;font-weight:600;">Bundled premades (iOS app) (' +
-      total +
-      ")</summary>" +
-      intro +
-      sections +
-      "</details>"
-    );
-  }
-
   function renderPremadeContentManagerPremadeTab(body) {
-    body.innerHTML = '<p class="app-muted" style="margin:0;">Loading premade catalog…</p>';
-    loadBundledPremadeManifest().then(function () {
-      if (!body.isConnected) return;
-      var live = sortPremadeByCreatedAtDesc(currentPremade);
-      var liveGroups = groupPremadesByCategory(live, function (p) {
-        return p.categoryID;
-      });
-      var liveRows = renderPcmCategoryGroupedPremades(liveGroups, function (p) {
-        return pcmPremadeRowHtml(
-          p.title,
-          escapeHtml((p.accessTier || "paid") === "free" ? "Free (all users)" : "Paid (Starter, Creator & Pro)"),
-          '<button type="button" class="app-btn app-btn-secondary" data-pcm-download-premade="' +
-            escapeHtml(p.id) +
-            '" title="Download audio file to this computer"' +
-            (p.audioURL && String(p.audioURL).trim() ? "" : " disabled") +
-            ">Download</button>" +
-            '<button type="button" class="app-btn app-btn-secondary" data-pcm-hide-premade="' +
-            escapeHtml(p.id) +
-            '">Hide</button>'
-        );
-      });
-      var hiddenBlock = renderHiddenPremadesAdminSection();
-      var bundledBlock = renderBundledPremadesAdminSection();
-      var publishedBlock = live.length
-        ? '<details class="admin-published-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
-          '<summary style="cursor:pointer;font-weight:600;">Published (Cloud) (' +
-          live.length +
-          ")</summary>" +
-          '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;">Tap a category to expand. Hide removes from App Library.</p>' +
-          liveRows +
-          "</details>"
-        : '<p class="app-muted" style="margin:0 0 0.85rem;">No published cloud premades yet.</p>';
-      body.innerHTML =
-        publishedBlock +
-        hiddenBlock +
-        bundledBlock;
-      bindHiddenPremadeAdminActions(body);
-      bindPremadeContentManagerBodyActions();
+    var live = sortPremadeByCreatedAtDesc(currentPremade);
+    var liveGroups = groupPremadesByCategory(live, function (p) {
+      return p.categoryID;
     });
+    var liveRows = renderPcmCategoryGroupedPremades(liveGroups, function (p) {
+      return pcmPremadeRowHtml(
+        p.title,
+        escapeHtml((p.accessTier || "paid") === "free" ? "Free (all users)" : "Paid (Starter, Creator & Pro)"),
+        '<button type="button" class="app-btn app-btn-secondary" data-pcm-download-premade="' +
+          escapeHtml(p.id) +
+          '" title="Download audio file to this computer"' +
+          (p.audioURL && String(p.audioURL).trim() ? "" : " disabled") +
+          ">Download</button>" +
+          '<button type="button" class="app-btn app-btn-secondary" data-pcm-hide-premade="' +
+          escapeHtml(p.id) +
+          '">Hide</button>'
+      );
+    });
+    var hiddenBlock = renderHiddenPremadesAdminSection();
+    var publishedBlock = live.length
+      ? '<details class="admin-published-premades-panel" style="margin:0 0 1rem;padding:0.75rem;border:1px solid var(--border-subtle,#e5e7eb);border-radius:0.6rem;">' +
+        '<summary style="cursor:pointer;font-weight:600;">Published (Cloud) (' +
+        live.length +
+        ")</summary>" +
+        '<p class="app-muted" style="margin:0.5rem 0 0.65rem;font-size:0.88rem;">Tap a category to expand. Hide removes from App Library.</p>' +
+        liveRows +
+        "</details>"
+      : '<p class="app-muted" style="margin:0 0 0.85rem;">No published cloud premades yet.</p>';
+    body.innerHTML = publishedBlock + hiddenBlock;
+    bindHiddenPremadeAdminActions(body);
+    bindPremadeContentManagerBodyActions();
   }
 
   function renderPremadeContentManager() {
@@ -9900,21 +9677,21 @@
     return (found && found.name) || "Voice";
   }
 
-  /** Built-in + full cloud catalog + user imports (no subscription filter; iOS `BackgroundTrack.resolve`). */
+  /** Cloud catalog (including hidden) + user imports. Legacy bundled IDs resolve to the cloud track. */
   function allBackgroundTracksForNameLookup() {
     var out = availableBackgrounds.slice();
-    var bundledIds = {};
+    var seen = {};
     availableBackgrounds.forEach(function (b) {
-      if (b && b.id) bundledIds[b.id] = true;
+      if (b && b.id) seen[b.id] = true;
     });
-    currentBackgroundCatalog.forEach(function (b) {
-      if (!b || !b.id || bundledIds[b.id]) return;
-      bundledIds[b.id] = true;
+    currentBackgroundCatalog.concat(currentHiddenBackgroundCatalog).forEach(function (b) {
+      if (!b || !b.id || seen[b.id]) return;
+      seen[b.id] = true;
       out.push(b);
     });
     mergedUserBackgroundMetas().forEach(function (m) {
-      if (!m || !m.id || bundledIds[m.id]) return;
-      bundledIds[m.id] = true;
+      if (!m || !m.id || seen[m.id]) return;
+      seen[m.id] = true;
       out.push({
         id: m.id,
         name: m.name || "Imported audio",
@@ -9928,7 +9705,7 @@
   }
 
   function backgroundTrackById(backgroundID) {
-    var bid = (backgroundID && String(backgroundID).trim()) || "";
+    var bid = canonicalBackgroundId(backgroundID);
     if (!bid) return null;
     var fromLookup = allBackgroundTracksForNameLookup().find(function (b) {
       return b && b.id === bid;
@@ -9938,7 +9715,7 @@
   }
 
   function backgroundNameById(backgroundID) {
-    var bid = (backgroundID && String(backgroundID).trim()) || "";
+    var bid = canonicalBackgroundId(backgroundID);
     if (!bid) return "Background";
     if (bid === "bg-none") return "No Background";
     var found = backgroundTrackById(bid);
@@ -9952,17 +9729,14 @@
   var BG_MIX_OUTPUT_SAMPLE_RATE = 48000;
 
   function backgroundEntryById(backgroundId) {
-    var bid = (backgroundId && String(backgroundId).trim()) || "";
+    var bid = canonicalBackgroundId(backgroundId);
     if (!bid) return null;
-    var builtin = availableBackgrounds.find(function (b) {
-      return b.id === bid;
-    });
-    if (builtin) {
+    if (bid === "bg-none") {
       return {
-        id: builtin.id,
-        name: builtin.name,
-        categoryID: builtin.categoryID,
-        file: builtin.file,
+        id: "bg-none",
+        name: "No Background",
+        categoryID: "bg-ambient",
+        file: "",
         accessTier: "free",
         isCloudCatalog: false,
       };
@@ -9992,200 +9766,20 @@
     };
   }
 
-  function backgroundTrackAssetUrl(filename) {
-    var fn = (filename && String(filename).trim()) || "";
-    if (!fn) return "";
-    return new URL("../audio/backgrounds/" + encodeURIComponent(fn), window.location.href).href;
-  }
-
   function voiceSampleAssetUrl(filename) {
     var fn = (filename && String(filename).trim()) || "";
     if (!fn) return "";
     return new URL("../audio/voices/" + encodeURIComponent(fn), window.location.href).href;
   }
 
-  function premadeTrackAssetUrl(folderName, filename) {
-    var folder = (folderName && String(folderName).trim()) || "";
-    var file = (filename && String(filename).trim()) || "";
-    if (!folder || !file) return "";
-    return new URL(
-      "../audio/premade/" + encodeURIComponent(folder) + "/" + encodeURIComponent(file),
-      window.location.href
-    ).href;
-  }
-
-  function premadeStaticFolderCandidates(categoryID) {
-    var cid = (categoryID && String(categoryID).trim()) || "";
-    switch (cid) {
-      case "confidence":
-        return ["Confidence & Self-Worth"];
-      case "relationships":
-        // Keep typo first to match copied folder in this repo.
-        return ["Realtionships & Love", "Relationships & Love"];
-      case "success-prosperity":
-        // Keep trailing-dot variant first to match copied folder in this repo.
-        return ["Success & Prosperity.", "Success & Prosperity"];
-      case "mental-wellbeing":
-        return ["Mental Well-Being"];
-      case "health-fitness":
-        return ["Health & Fitness"];
-      case "sports-performance":
-        return ["Sports Performance"];
-      case "sleep-rest":
-        return ["Sleep & Rest"];
-      default:
-        return [];
-    }
-  }
-
-  function premadeCategorySuffix(categoryID) {
-    var cid = (categoryID && String(categoryID).trim()) || "";
-    switch (cid) {
-      case "confidence":
-        return "csw";
-      case "relationships":
-        return "rls";
-      case "success-prosperity":
-        return "s&p";
-      case "mental-wellbeing":
-        return "mwb";
-      case "health-fitness":
-        return "hf";
-      case "sports-performance":
-        return "sp";
-      case "sleep-rest":
-        return "s&r";
-      default:
-        return "";
-    }
-  }
-
-  function uniqueStrings(values) {
-    var seen = {};
-    var out = [];
-    (values || []).forEach(function (v) {
-      if (!v) return;
-      if (seen[v]) return;
-      seen[v] = true;
-      out.push(v);
-    });
-    return out;
-  }
-
-  function resolvePremadeStaticAudioURLFromData(data) {
-    var d = data || {};
-    var title = (d.title && String(d.title).trim()) || "";
-    var categoryID = (d.categoryID && String(d.categoryID).trim()) || "";
-    var explicitFile =
-      (d.audioFilename && String(d.audioFilename).trim()) ||
-      (d.audioFileName && String(d.audioFileName).trim()) ||
-      (d.filename && String(d.filename).trim()) ||
-      (d.fileName && String(d.fileName).trim()) ||
-      "";
-
-    var folders = premadeStaticFolderCandidates(categoryID);
-    if (!folders.length) return "";
-
-    if (explicitFile) {
-      return premadeTrackAssetUrl(folders[0], explicitFile);
-    }
-    var suffix = premadeCategorySuffix(categoryID);
-    if (!title || !suffix) return "";
-
-    var candidates = [];
-    folders.forEach(function (folder) {
-      candidates.push(premadeTrackAssetUrl(folder, title + "." + suffix + ".mp3"));
-      candidates.push(premadeTrackAssetUrl(folder, title + "." + suffix + ".m4a"));
-    });
-    // Handle known typo filename in Sleep & Rest set.
-    if (categoryID === "sleep-rest" && title.toLowerCase() === "claiming tranquil restoration") {
-      folders.forEach(function (folder) {
-        candidates.push(premadeTrackAssetUrl(folder, "Claiming Tranquil Resoration.s&r.mp3"));
-      });
-    }
-    return uniqueStrings(candidates)[0] || "";
-  }
-
-  var STATIC_PREMADE_FALLBACK = [
-    ["confidence", ["Embracing Inner Strength", "Radiating Self-Assurance", "Nurturing Self-Compassion", "Igniting Bold Confidence", "Cultivating Unwavering Worth"]],
-    ["relationships", ["Cultivating Deep Connections", "Embracing Self-Love First", "Fostering Harmony and Trust", "Attracting Passionate Bonds", "Nurturing Emotional Intimacy"]],
-    ["success-prosperity", ["Visionary Achievement", "Resilient Prosperity", "Empowered Wealth Building", "Harmonious Success Flow", "Bold Abundance Pursuit"]],
-    ["mental-wellbeing", ["Finding Inner Peace", "Releasing Anxiety Gently", "Cultivating Emotional Resilience", "Embracing Daily Mindfulness", "Nurturing Mental Harmony"]],
-    ["health-fitness", ["Building Vital Strength", "Nurturing Body Confidence", "Igniting Daily Energy", "Embracing Holistic Wellness", "Achieving Peak Performance"]],
-    ["sports-performance", ["Unleashing Peak Performance", "Building Unstoppable Resilience", "Igniting Competitive Fire", "Mastering Athletic Flow", "Claiming Champion Mindset"]],
-    ["sleep-rest", ["Embracing Gentle Slumber", "Cultivating Deep Recovery", "Nurturing Serene downtime", "Igniting Restful Renewal", "Claiming Tranquil Resoration"]],
-  ];
-
-  function buildStaticPremadeFallbackList() {
-    var rows = [];
-    STATIC_PREMADE_FALLBACK.forEach(function (entry) {
-      var cid = entry[0];
-      var titles = entry[1] || [];
-      titles.forEach(function (title, idx) {
-        var data = { title: title, categoryID: cid };
-        var staticUrl = resolvePremadeStaticAudioURLFromData(data);
-        var premadeRow = {
-          id: "static-premade-" + cid + "-" + String(idx + 1),
-          title: title,
-          categoryID: cid,
-          description: "Built-in premade audio",
-          scriptText: "",
-        };
-        premadeRow.scriptText = resolvePremadeScriptText(premadeRow);
-        rows.push({
-          id: premadeRow.id,
-          title: title,
-          categoryID: cid,
-          description: "Built-in premade audio",
-          scriptText: premadeRow.scriptText,
-          audioURL: staticUrl,
-          accessTier: "free",
-          isCloudCatalog: false,
-          sourceScriptID: "",
-          createdByUID: "",
-          createdByEmail: "",
-          createdByName: "Built-in",
-          createdAt: null,
-        });
-      });
-    });
-    return rows;
-  }
-
   function normalizePremadeTitleKey(title) {
     return ((title && String(title).trim()) || "").toLowerCase();
   }
 
-
-  /**
-   * App Library browse.
-   * Paid: online catalog, filtered by access.
-   * Free: online items marked free. A category with no Free publish yet keeps the built-in tracks.
-   */
+  /** App Library browse shows active cloud premades only. Hidden docs stay resolvable for old playlists. */
   function premadesForAppLibraryBrowse(cloudPremade) {
-    var accessible = filterPremadesByCatalogAccess(cloudPremade || []);
-    if (!isWebFreeTier()) return accessible;
-    if (!premadeCloudSnapshotReceived) return buildStaticPremadeFallbackList();
-
-    var staticRows = buildStaticPremadeFallbackList();
-    var cloudByCategory = {};
-    accessible.forEach(function (p) {
-      var cid = (p.categoryID && String(p.categoryID).trim()) || "";
-      if (!cid) return;
-      if (!cloudByCategory[cid]) cloudByCategory[cid] = [];
-      cloudByCategory[cid].push(p);
-    });
-    var rows = [];
-    Object.keys(cloudByCategory).forEach(function (cid) {
-      cloudByCategory[cid].forEach(function (p) {
-        rows.push(p);
-      });
-    });
-    staticRows.forEach(function (row) {
-      if (cloudByCategory[row.categoryID]) return;
-      rows.push(row);
-    });
-    return rows;
+    if (!premadeCloudSnapshotReceived) return [];
+    return filterPremadesByCatalogAccess(cloudPremade || []);
   }
 
   function refreshAppLibraryPremadesFromCloud() {
@@ -10481,7 +10075,6 @@
       stopActiveAudio(false);
     }
     var canPrev =
-      !!(entry.file && String(entry.file).trim()) ||
       !!(entry.audioURL && String(entry.audioURL).trim()) ||
       !!entry.userUpload ||
       isKnownUserBackgroundId(entry.id);
@@ -10497,7 +10090,7 @@
           .catch(function () {
             stopBackgroundPreview();
             var msg =
-              "Could not play preview. Check the file exists under audio/backgrounds/ or re-import your custom track.";
+              "Could not play preview. Check your connection, or re-import your custom track.";
             if (typeof onError === "function") onError(msg);
             return false;
           });
@@ -10520,7 +10113,7 @@
         .catch(function () {
           stopBackgroundPreview();
           var msg =
-            "Could not play preview. Check the file exists under audio/backgrounds/ or re-import your custom track.";
+            "Could not play preview. Check your connection, or re-import your custom track.";
           if (typeof onError === "function") onError(msg);
           return false;
         });
@@ -10548,8 +10141,9 @@
       }
       return playFromUrl(cloudBgUrl);
     }
-    var url = backgroundTrackAssetUrl(entry.file);
-    return playFromUrl(url);
+    stopBackgroundPreview();
+    if (typeof onError === "function") onError("This background has no audio to preview.");
+    return Promise.resolve(false);
   }
 
   function resampleFloat32Linear(src, srcRate, dstRate, dstLen) {
@@ -10612,7 +10206,7 @@
 
   function mixTtsWithBackgroundToWavBlob(ttsArrayBuffer, backgroundId) {
     return new Promise(function (resolve, reject) {
-      var bgIdRaw = (backgroundId && String(backgroundId).trim()) || "";
+      var bgIdRaw = canonicalBackgroundId(backgroundId);
       if (!bgIdRaw || bgIdRaw === "bg-none") {
         reject(new Error("Unknown background for mixing."));
         return;
@@ -10624,8 +10218,7 @@
       }
       if (
         !entry ||
-        (!entry.file &&
-          !(entry.audioURL && String(entry.audioURL).trim()) &&
+        (!(entry.audioURL && String(entry.audioURL).trim()) &&
           !(entry.userUpload || isKnownUserBackgroundId(bgIdRaw)))
       ) {
         reject(new Error("Unknown background for mixing."));
@@ -10664,18 +10257,8 @@
           return ctx.decodeAudioData(bgAb.slice(0));
         });
       } else {
-        decodeBgPromise = fetch(backgroundTrackAssetUrl(entry.file)).then(function (r) {
-          if (!r.ok) {
-            throw new Error(
-              "Background file not found (" +
-                r.status +
-                "). Deploy the iOS BackGroundAudio MP3s to /audio/backgrounds/ on the live site."
-            );
-          }
-          return r.arrayBuffer();
-        }).then(function (bgAb) {
-          return ctx.decodeAudioData(bgAb.slice(0));
-        });
+        reject(new Error("This background has no cloud audio to mix."));
+        return;
       }
       Promise.all([ctx.decodeAudioData(ttsArrayBuffer.slice(0)), decodeBgPromise])
         .then(function (buffers) {
@@ -12733,7 +12316,7 @@
 
   function audioBuiltinRowMarkup(b, options) {
     options = options || {};
-    var isSelected = b.id === selectedBackgroundId;
+    var isSelected = canonicalBackgroundId(b.id) === canonicalBackgroundId(selectedBackgroundId);
     var isAudible = isBackgroundPreviewing(b.id);
     var canPrev = backgroundRowCanPreview(b);
     var badges = "";
@@ -12807,7 +12390,7 @@
 
   function audioSavedShortcutRowMarkup(builtinEntry) {
     var b = builtinEntry;
-    var isSelected = b.id === selectedBackgroundId;
+    var isSelected = canonicalBackgroundId(b.id) === canonicalBackgroundId(selectedBackgroundId);
     var isAudible = isBackgroundPreviewing(b.id);
     var canPrev = backgroundRowCanPreview(b);
     var cloudBadge = backgroundCloudStatusBadgeHtml(b);
@@ -12864,7 +12447,7 @@
       audioURL: meta.audioURL || "",
       userUpload: true,
     };
-    var isSelected = b.id === selectedBackgroundId;
+    var isSelected = canonicalBackgroundId(b.id) === canonicalBackgroundId(selectedBackgroundId);
     var isAudible = isBackgroundPreviewing(b.id);
     return (
       '<div class="app-modal-row media-card-row">' +
@@ -17793,8 +17376,8 @@
       currentUserProfile && currentUserProfile.defaultBackgroundID
         ? String(currentUserProfile.defaultBackgroundID).trim()
         : "";
-    if (fromProfile) return fromProfile;
-    return (selectedBackgroundId || "").trim();
+    if (fromProfile) return canonicalBackgroundId(fromProfile);
+    return canonicalBackgroundId(selectedBackgroundId || "");
   }
 
   function effectiveVoiceIdForScript(script) {
@@ -17806,7 +17389,7 @@
   function effectiveBackgroundIdForScript(script) {
     var b = script && script.backgroundID ? String(script.backgroundID).trim() : "";
     if (!b) return accountDefaultBackgroundId();
-    return b;
+    return canonicalBackgroundId(b);
   }
 
   /** Card/workshop labels: stored script fields only (iOS `savedVoiceName` / `savedBackgroundName`). */
@@ -20044,47 +19627,7 @@
     });
   }
 
-  function bundledAppBackgroundTracks() {
-    return availableBackgrounds
-      .filter(function (b) {
-        return b.id !== "bg-none";
-      })
-      .map(function (b) {
-        return {
-          id: b.id,
-          name: b.name,
-          categoryID: b.categoryID,
-          file: b.file,
-          accessTier: "free",
-          isCloudCatalog: false,
-        };
-      });
-  }
-
   function appBackgroundTracksForSubscriptionTier() {
-    if (isWebFreeTier()) {
-      var bundled = bundledAppBackgroundTracks();
-      var seen = {};
-      bundled.forEach(function (b) {
-        seen[b.id] = true;
-      });
-      var cloudFree = filterBackgroundsByCatalogAccess(currentBackgroundCatalog)
-        .filter(function (b) {
-          return !seen[b.id];
-        })
-        .map(function (b) {
-          return {
-            id: b.id,
-            name: b.name,
-            categoryID: b.categoryID,
-            file: "",
-            audioURL: b.audioURL || "",
-            accessTier: b.accessTier || "free",
-            isCloudCatalog: true,
-          };
-        });
-      return bundled.concat(cloudFree);
-    }
     return filterBackgroundsByCatalogAccess(currentBackgroundCatalog).map(function (b) {
       return {
         id: b.id,
@@ -20092,7 +19635,7 @@
         categoryID: b.categoryID,
         file: "",
         audioURL: b.audioURL || "",
-        accessTier: b.accessTier || "paid",
+        accessTier: b.accessTier || "free",
         isCloudCatalog: true,
       };
     });
@@ -20110,9 +19653,19 @@
 
   var WEB_FREE_TIER_BACKGROUND_IDS = {
     "bg-none": true,
-    "bg-rain": true,
-    "bg-meditation": true,
   };
+  WEB_FREE_TIER_BACKGROUND_IDS[
+    (typeof FocusShiftLegacyBackgrounds !== "undefined" &&
+      FocusShiftLegacyBackgrounds.freeDefaults &&
+      FocusShiftLegacyBackgrounds.freeDefaults.rain) ||
+      "bg-cloud-0198adfc-6073-4b2f-a98c-56a8d59a306a"
+  ] = true;
+  WEB_FREE_TIER_BACKGROUND_IDS[
+    (typeof FocusShiftLegacyBackgrounds !== "undefined" &&
+      FocusShiftLegacyBackgrounds.freeDefaults &&
+      FocusShiftLegacyBackgrounds.freeDefaults.meditation) ||
+      "bg-cloud-aaa7ffdc-a75f-4aba-b4f9-2e33824d53a8"
+  ] = true;
 
   function isWebFreeTier() {
     return resolvedSubscriptionTier() === "free";
@@ -20125,7 +19678,7 @@
 
   function isWebBackgroundAvailableForGeneration(backgroundID) {
     if (!isWebFreeTier()) return true;
-    var id = (backgroundID || "").trim();
+    var id = canonicalBackgroundId(backgroundID);
     if (!id) return true;
     if (WEB_FREE_TIER_BACKGROUND_IDS[id]) return true;
     return currentBackgroundCatalog.some(function (b) {
@@ -20141,7 +19694,7 @@
   }
 
   function preferredWebBackgroundId(candidate) {
-    var id = (candidate || "").trim();
+    var id = canonicalBackgroundId(candidate);
     if (!isWebFreeTier()) return id || "bg-none";
     if (id && isWebBackgroundAvailableForGeneration(id)) return id;
     return "bg-none";
@@ -20355,7 +19908,7 @@
     setDefault:
       "Setting a default voice or background requires Starter or Creator. Upgrade to customize your generation defaults.",
     offlineDownload:
-      "Downloading premade audio for offline listening requires Starter or Creator.",
+      "Downloading audio for offline listening requires Starter or Creator.",
   };
 
   function promptWebPaidUpgrade(detail) {
@@ -21008,18 +20561,30 @@
         });
         return out;
       }
-      var candidates = ["bg-none", "bg-rain", "bg-piano", "bg-meditation"];
+      var defaults = ["bg-none"];
+      var freeDefaults =
+        typeof FocusShiftLegacyBackgrounds !== "undefined" ? FocusShiftLegacyBackgrounds.freeDefaults : null;
+      if (freeDefaults) {
+        defaults.push(freeDefaults.rain, freeDefaults.piano, freeDefaults.meditation);
+      } else {
+        defaults.push(
+          "bg-cloud-0198adfc-6073-4b2f-a98c-56a8d59a306a",
+          "bg-cloud-918c480a-0cce-4bf7-8531-355ed3e4b52a",
+          "bg-cloud-aaa7ffdc-a75f-4aba-b4f9-2e33824d53a8"
+        );
+      }
+      var candidates = defaults.slice();
       if (categoryID && CATEGORY_MEDIA_RECOMMENDATIONS[categoryID] && CATEGORY_MEDIA_RECOMMENDATIONS[categoryID].backgroundID) {
-        candidates.unshift(CATEGORY_MEDIA_RECOMMENDATIONS[categoryID].backgroundID);
+        candidates.unshift(canonicalBackgroundId(CATEGORY_MEDIA_RECOMMENDATIONS[categoryID].backgroundID));
       }
       var seen = {};
       return candidates
         .filter(function (id) {
-          if (seen[id]) return false;
-          seen[id] = true;
-          return availableBackgrounds.some(function (b) {
-            return b.id === id;
-          });
+          var canonical = canonicalBackgroundId(id);
+          if (!canonical || seen[canonical]) return false;
+          seen[canonical] = true;
+          if (canonical === "bg-none") return true;
+          return !!backgroundEntryById(canonical);
         })
         .slice(0, 4);
     }
@@ -22607,6 +22172,19 @@
     return [];
   }
 
+  function premadeByIdIncludingHidden(premadeId) {
+    var pid = (premadeId && String(premadeId).trim()) || "";
+    if (!pid) return null;
+    var lists = [currentPremadeCloud, currentHiddenPremade, currentPremade];
+    for (var i = 0; i < lists.length; i++) {
+      var found = (lists[i] || []).find(function (p) {
+        return p && p.id === pid;
+      });
+      if (found) return found;
+    }
+    return null;
+  }
+
   function resolvePlaylistScripts(playlist) {
     var ids = playlist.scriptIDs || [];
     var byId = {};
@@ -22615,7 +22193,9 @@
     });
     return ids
       .map(function (id) {
-        return byId[id] || null;
+        if (byId[id]) return byId[id];
+        var premade = premadeByIdIncludingHidden(id);
+        return premade ? premadeToScript(premade) : null;
       })
       .filter(function (x) {
         return !!x;
@@ -22630,10 +22210,16 @@
   var playlistPruneInFlight = {};
 
   function pruneOrphanedPlaylistReferencesIfReady() {
-    if (!scriptsSnapshotReceived || !currentUser || !currentPlaylists.length) return;
+    if (!scriptsSnapshotReceived || !premadeCloudSnapshotReceived || !currentUser || !currentPlaylists.length) return;
     var knownIds = {};
     currentScripts.forEach(function (s) {
       knownIds[s.id] = true;
+    });
+    currentPremadeCloud.forEach(function (p) {
+      if (p && p.id) knownIds[p.id] = true;
+    });
+    currentHiddenPremade.forEach(function (p) {
+      if (p && p.id) knownIds[p.id] = true;
     });
     var changed = false;
     currentPlaylists.forEach(function (p) {
@@ -24077,9 +23663,19 @@
       return;
     }
 
+    if (!premadeCloudSnapshotReceived) {
+      finishListHtml(
+        '<p class="app-muted" style="margin:0 0 0.85rem;">' +
+          (premadeCloudLoadError
+            ? escapeHtml(premadeCloudLoadError)
+            : "Loading premade audio…") +
+          "</p>"
+      );
+      return;
+    }
     if (!currentPremade.length) {
       finishListHtml(
-        '<p class="app-muted" style="margin:0 0 0.85rem;">No premade items in Firestore yet. iOS can also read bundled premade audio; web lists published docs from <code>premadeAudio</code>. Pick a category below to browse.</p>' +
+        '<p class="app-muted" style="margin:0 0 0.85rem;">No premade audio is published yet. Pick a category below to browse.</p>' +
           premadeCategoryListHtml(groupPremadesByLibraryCategory([]))
       );
       return;
@@ -24144,11 +23740,12 @@
           };
           currentBackgroundCatalog = active.sort(byName);
           currentHiddenBackgroundCatalog = hidden.sort(byName);
+          var canonicalSelected = canonicalBackgroundId(selectedBackgroundId);
+          if (canonicalSelected && canonicalSelected !== selectedBackgroundId) {
+            selectedBackgroundId = canonicalSelected;
+          }
           applyUserProfileDefaults({ onlyIfNewer: true });
-          var offlineBgIds = currentBackgroundCatalog.filter(isStreamableCloudBackground).map(function (b) {
-            return b.id;
-          });
-          hydrateBackgroundOfflineCacheFromIdb(offlineBgIds).then(function () {
+          hydrateAllOfflineAudio().then(function () {
             if (activeAdminTab === "audio") renderAudioPage();
           });
           if (activeAdminTab === "library") renderPremade();
@@ -24174,7 +23771,7 @@
       categoryID: data.categoryID || "",
       description: data.description || "",
       scriptText: data.scriptText || "",
-      audioURL: (data.audioURL && String(data.audioURL).trim()) || resolvePremadeStaticAudioURLFromData(data),
+      audioURL: (data.audioURL && String(data.audioURL).trim()) || "",
       accessTier: premadeAccessTierFromData(data),
       isCloudCatalog: true,
       storagePath: data.storagePath || "",
@@ -24318,6 +23915,7 @@
           })
         );
         premadeCloudSnapshotReceived = true;
+        premadeCloudLoadError = "";
         refreshAppLibraryPremadesFromCloud();
         var pcmOpen = document.getElementById("premade-content-manager-backdrop");
         if (pcmOpen && !pcmOpen.hidden) renderPremadeContentManager();
@@ -24327,23 +23925,20 @@
         });
         expandedPremadeTextById = nextExpanded;
         updateTabCounts();
+        pruneOrphanedPlaylistReferencesIfReady();
         Promise.all(currentPremade.map(seedPremadeContentHashIfNeeded))
           .then(function () {
-            renderPremade();
-            var offlineIds = currentPremade.filter(isStreamableCloudPremade).map(function (p) {
-              return p.id;
-            });
-            return hydratePremadeOfflineCacheFromIdb(offlineIds);
+            return hydrateAllOfflineAudio();
           })
           .then(function () {
-            if (activeAdminTab === "library") renderPremade();
+            renderPremade();
           });
         if (activeAdminTab === "home") renderHomeFlow((currentUser && currentUser.displayName) || "");
       },
       function (e) {
         setPremadeMessage(e.message || "Could not load premade library.", "error");
-        // If Firestore premade feed is unavailable, still show built-in static premades.
-        currentPremade = buildStaticPremadeFallbackList();
+        premadeCloudLoadError = e.message || "Could not load premade library.";
+        currentPremade = [];
         renderPremade();
       }
     );
@@ -24535,12 +24130,17 @@
     freeUsageReady = false;
   }
 
+  hydrateAllOfflineAudio();
+
   auth.onAuthStateChanged(function (user) {
     currentUser = user || null;
     if (!user) {
+      if (hadSignedInUser) clearOfflineAudioDownloads();
+      hadSignedInUser = false;
       renderSignedOut();
       return;
     }
+    hadSignedInUser = true;
     root.innerHTML = '<p class="app-muted">Loading your profile...</p>';
     db
       .collection("users")
@@ -24579,6 +24179,7 @@
         });
         hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
         applyUserProfileDefaults({ forceVersion: true });
+        maybePurgeOfflineAudioForTier();
         adminModeEnabled = userHasFirestoreAdmin() ? readAdminModeEnabled() : false;
         if (!userHasFirestoreAdmin()) {
           try {
