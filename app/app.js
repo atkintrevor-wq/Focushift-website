@@ -3,6 +3,7 @@
 
   var root = document.getElementById("root");
   var scriptsUnsubscribe = null;
+  var boundScriptsLibraryMode = null;
   var incomingSharedUnsubscribe = null;
   var ownedScripts = [];
   var incomingSharedScripts = [];
@@ -3878,6 +3879,14 @@
           syncAccountDeleteModalUi();
           refreshVoiceCloneLimits();
           if (activeAdminTab === "library") renderPremade();
+          var nextLibraryMode = isWebFreeTier() ? "free" : "cloud";
+          if (
+            currentUser &&
+            boundScriptsLibraryMode &&
+            nextLibraryMode !== boundScriptsLibraryMode
+          ) {
+            subscribeScripts(currentUser.uid);
+          }
         },
         function () {}
       );
@@ -5365,10 +5374,93 @@
       return s.id !== scriptId;
     });
     saveFreeLocalScripts(uid, scripts);
-    if (isWebFreeTier() && currentUser && currentUser.uid === uid) {
+    if (!currentUser || currentUser.uid !== uid) return;
+    if (isWebFreeTier()) {
       ownedScripts = scripts;
-      rebuildCurrentScriptsFromSources();
+    } else {
+      ownedScripts = (ownedScripts || []).filter(function (s) {
+        return s.id !== scriptId;
+      });
     }
+    rebuildCurrentScriptsFromSources();
+  }
+
+  function timestampFromLocalScript(value) {
+    if (value && typeof value.toDate === "function") return value;
+    if (value && typeof value.seconds === "number") {
+      return new firebase.firestore.Timestamp(value.seconds, value.nanoseconds || 0);
+    }
+    if (typeof value === "string" || typeof value === "number") {
+      var ms = typeof value === "number" ? value : Date.parse(value);
+      if (isFinite(ms)) return firebase.firestore.Timestamp.fromMillis(ms);
+    }
+    return firebase.firestore.Timestamp.now();
+  }
+
+  function migrateFreeLocalScriptsToCloud(uid) {
+    var local = loadFreeLocalScripts(uid);
+    if (!uid || !local.length) return Promise.resolve();
+    var pending = local.filter(function (s) {
+      return s && s.id;
+    });
+    return Promise.all(
+      pending.map(function (s) {
+        var ref = scriptCollection(uid).doc(String(s.id));
+        return ref
+          .get()
+          .then(function (snap) {
+            if (snap.exists) {
+              var data = snap.data() || {};
+              var cloudText = (data.text && String(data.text).trim()) || "";
+              var localText = (s.text && String(s.text).trim()) || "";
+              if (cloudText || !localText) return s.id;
+              return ref
+                .set(
+                  {
+                    title: data.title || s.title || "",
+                    text: localText,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                  },
+                  { merge: true }
+                )
+                .then(function () {
+                  return s.id;
+                });
+            }
+            var stillLocal = loadFreeLocalScripts(uid).some(function (row) {
+              return row && row.id === s.id;
+            });
+            if (!stillLocal) return s.id;
+            return ref
+              .set({
+                title: s.title || "",
+                text: s.text || "",
+                createdAt: timestampFromLocalScript(s.createdAt),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                audioURL: s.audioURL || "",
+                voiceID: s.voiceID || "",
+                backgroundID: s.backgroundID || "",
+                categoryID: s.categoryID || "",
+                audioContentHash: s.audioContentHash || "",
+              })
+              .then(function () {
+                return s.id;
+              });
+          })
+          .catch(function () {
+            return null;
+          });
+      })
+    ).then(function (ids) {
+      var migrated = {};
+      ids.forEach(function (id) {
+        if (id) migrated[id] = true;
+      });
+      var remain = loadFreeLocalScripts(uid).filter(function (s) {
+        return !s || !s.id || !migrated[s.id];
+      });
+      saveFreeLocalScripts(uid, remain);
+    });
   }
 
   function playlistCollection(uid) {
@@ -13029,14 +13121,24 @@
       });
   }
 
-  function syncUserProfileDocFromAuthUser(user) {
+  function ensureSignedInUserProfile(user, existing, fillMissingNames) {
     if (!user) return Promise.resolve();
-    var payload = {
-      email: user.email || "",
-      displayName: user.displayName || "",
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    if (!window.fsUserProfileDoc) {
+      return Promise.reject(new Error("Profile helper failed to load."));
+    }
+    var payload = window.fsUserProfileDoc.buildMergePayload(user, existing || {}, null, {
+      fillMissingNames: !!fillMissingNames,
+    });
+    payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    var commit = function () {
+      return db.collection("users").doc(user.uid).set(payload, { merge: true });
     };
-    return db.collection("users").doc(user.uid).set(payload, { merge: true });
+    if (typeof user.getIdToken !== "function") return commit();
+    return user.getIdToken().then(commit);
+  }
+
+  function syncUserProfileDocFromAuthUser(user) {
+    return ensureSignedInUserProfile(user, currentUserProfile || {}, false);
   }
 
   function jsonReplacer(_key, value) {
@@ -15708,9 +15810,31 @@
       audioVoiceID: "",
       audioBackgroundID: "",
     };
-    if (data.savedToCloud) {
-      upsertCurrentScript(entry);
-      return acknowledgeScriptJob(data.jobId).then(function () { return entry; });
+    if (data.savedToCloud || !isWebFreeTier()) {
+      var persist = data.savedToCloud
+        ? Promise.resolve()
+        : scriptCollection(currentUser.uid)
+            .doc(scriptId)
+            .set(
+              {
+                title: entry.title,
+                text: entry.text,
+                createdAt: entry.createdAt,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                audioURL: "",
+                voiceID: entry.voiceID || "",
+                backgroundID: entry.backgroundID || "",
+                categoryID: entry.categoryID || "",
+                audioContentHash: "",
+              },
+              { merge: true }
+            );
+      return persist.then(function () {
+        upsertCurrentScript(entry);
+        return acknowledgeScriptJob(data.jobId).then(function () {
+          return entry;
+        });
+      });
     }
     upsertFreeLocalScript(currentUser.uid, {
       id: entry.id,
@@ -21519,21 +21643,25 @@
     var ok = window.confirm('Delete "' + (script.title || "Untitled Script") + '"?');
     if (!ok) return;
     setMessage("Deleting...", "");
+    var uid = currentUser.uid;
+    var scriptId = script.id;
+    if (editingScriptId === scriptId) closeEditor();
+    // Free scripts live in localStorage. After the account becomes paid the open
+    // page still shows that copy, so a Firestore-only delete leaves the card up.
+    deleteFreeLocalScript(uid, scriptId);
+    var cloudDelete = scriptCollection(uid).doc(scriptId).delete();
     if (isWebFreeTier()) {
-      deleteFreeLocalScript(currentUser.uid, script.id);
       setMessage(libraryRemovalMessage(script, false), "success");
-      if (editingScriptId === script.id) closeEditor();
+      cloudDelete.catch(function () {});
       return;
     }
-    scriptCollection(currentUser.uid)
-      .doc(script.id)
-      .delete()
+    cloudDelete
       .then(function () {
         setMessage(libraryRemovalMessage(script, false), "success");
-        if (editingScriptId === script.id) closeEditor();
       })
       .catch(function (e) {
         setMessage(e.message || "Could not delete script.", "error");
+        subscribeScripts(uid);
       });
   }
 
@@ -24300,9 +24428,10 @@
     }
     ownedScripts = [];
     scriptsSnapshotReceived = false;
-    if (isWebFreeTier()) {
+    boundScriptsLibraryMode = isWebFreeTier() ? "free" : "cloud";
+    if (boundScriptsLibraryMode === "free") {
       reconcileCompletedScriptJobs().then(function () {
-        if (!currentUser || currentUser.uid !== uid) return;
+        if (!currentUser || currentUser.uid !== uid || !isWebFreeTier()) return;
         ownedScripts = loadFreeLocalScripts(uid);
         scriptsSnapshotReceived = true;
         rebuildCurrentScriptsFromSources();
@@ -24311,6 +24440,7 @@
       return;
     }
     reconcileCompletedScriptJobs();
+    migrateFreeLocalScriptsToCloud(uid);
     scriptsUnsubscribe = scriptCollection(uid)
       .orderBy("createdAt", "desc")
       .onSnapshot(
@@ -24441,6 +24571,12 @@
           }
         } catch (_e) {}
         currentUserProfile = snap.exists ? snap.data() || {} : {};
+        ensureSignedInUserProfile(user, currentUserProfile, true).catch(function (err) {
+          console.warn(
+            "[profile] could not save users/" + user.uid,
+            err && (err.message || err.code || err)
+          );
+        });
         hasVoiceCloneConsent = !!(currentUserProfile && currentUserProfile.voiceCloneConsentAcceptedAt);
         applyUserProfileDefaults({ forceVersion: true });
         adminModeEnabled = userHasFirestoreAdmin() ? readAdminModeEnabled() : false;
@@ -24466,6 +24602,12 @@
       })
       .catch(function () {
         currentUserProfile = {};
+        ensureSignedInUserProfile(user, {}, false).catch(function (err) {
+          console.warn(
+            "[profile] could not save users/" + user.uid,
+            err && (err.message || err.code || err)
+          );
+        });
         adminModeEnabled = false;
         renderAdminShell(user.email, user.displayName);
         handleStripeAndAccountQueryParams();
