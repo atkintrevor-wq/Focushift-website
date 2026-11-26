@@ -116,28 +116,41 @@
   var auth = firebase.auth();
   var db = firebase.firestore();
 
+  function writeUserProfile(user, existing, extras) {
+    if (!user) return Promise.resolve();
+    if (!window.fsUserProfileDoc) {
+      return Promise.reject(new Error("Profile helper failed to load. Reload the page."));
+    }
+    var payload = window.fsUserProfileDoc.buildMergePayload(user, existing, extras);
+    payload.updatedAt = firebase.firestore.FieldValue.serverTimestamp();
+    var commit = function () {
+      return db.collection("users").doc(user.uid).set(payload, { merge: true });
+    };
+    if (typeof user.getIdToken !== "function") return commit();
+    return user.getIdToken().then(commit);
+  }
+
   function syncUserProfile(user, additionalUserInfo) {
     var displayName = (user.displayName || "").trim();
+    var extras = {};
     if (!displayName && additionalUserInfo && additionalUserInfo.profile) {
       var profile = additionalUserInfo.profile;
       var given = profile.given_name || profile.firstName || "";
       var family = profile.family_name || profile.lastName || "";
       displayName = (String(given) + " " + String(family)).trim();
+      if (given) extras.firstName = String(given).trim();
+      if (family) extras.lastName = String(family).trim();
     }
+    if (displayName) extras.displayName = displayName;
 
-    function writeProfileDoc() {
-      var payload = {
-        email: user.email || "",
-        displayName: displayName || user.displayName || "",
-        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      };
-      return db.collection("users").doc(user.uid).set(payload, { merge: true });
+    function commit() {
+      return writeUserProfile(user, null, extras);
     }
 
     if (displayName && displayName !== (user.displayName || "").trim()) {
-      return user.updateProfile({ displayName: displayName }).then(writeProfileDoc);
+      return user.updateProfile({ displayName: displayName }).then(commit);
     }
-    return writeProfileDoc();
+    return commit();
   }
 
   function friendlyAuthError(err) {
@@ -180,17 +193,19 @@
     if (!pendingAppleLinkCredential || !pendingAppleLinkEmail) {
       return Promise.reject(new Error("Apple link session expired. Try Continue with Apple again."));
     }
-    return applyAuthPersistence()
-      .then(function () {
-        return auth.signInWithEmailAndPassword(pendingAppleLinkEmail, password);
-      })
-      .then(function (cred) {
-        return cred.user.linkWithCredential(pendingAppleLinkCredential);
-      })
-      .then(function (linked) {
-        hideAppleLinkPanel();
-        return finishAuthSuccess(linked);
-      });
+    return holdRedirectFor(function () {
+      return applyAuthPersistence()
+        .then(function () {
+          return auth.signInWithEmailAndPassword(pendingAppleLinkEmail, password);
+        })
+        .then(function (cred) {
+          return cred.user.linkWithCredential(pendingAppleLinkCredential);
+        })
+        .then(function (linked) {
+          hideAppleLinkPanel();
+          return finishAuthSuccess(linked);
+        });
+    });
   }
 
   function appleOAuthProvider() {
@@ -215,7 +230,7 @@
 
   function finishAuthSuccess(cred) {
     persistRememberPreferences((cred.user && cred.user.email) || "");
-    return syncUserProfile(cred.user, cred.additionalUserInfo).then(goApp);
+    return syncUserProfile(cred.user, cred.additionalUserInfo);
   }
 
   function resolvePostLoginUrl() {
@@ -242,6 +257,62 @@
   function goApp() {
     rememberShareFromNext();
     window.location.href = resolvePostLoginUrl();
+  }
+
+  // Auth state flips as soon as the account exists. Leaving the page then
+  // cancels the Firestore write that is still waiting on updateProfile.
+  // profileCommit is that write; navigation happens only after it resolves.
+  var profileCommit = null;
+  var redirectArmed = false;
+
+  function trackProfileCommit(promise) {
+    var tracked;
+    tracked = Promise.resolve(promise).then(
+      function (value) {
+        return value;
+      },
+      function (err) {
+        if (profileCommit === tracked) profileCommit = null;
+        throw err;
+      }
+    );
+    profileCommit = tracked;
+    return tracked;
+  }
+
+  function holdRedirectFor(work) {
+    var resolveHold;
+    var rejectHold;
+    var hold = new Promise(function (resolve, reject) {
+      resolveHold = resolve;
+      rejectHold = reject;
+    });
+    trackProfileCommit(hold);
+    return Promise.resolve()
+      .then(function () {
+        return work();
+      })
+      .then(
+        function (value) {
+          resolveHold(value);
+          return value;
+        },
+        function (err) {
+          rejectHold(err);
+          throw err;
+        }
+      );
+  }
+
+  function redirectOnceProfileCommits(user) {
+    if (!user) return Promise.resolve();
+    if (window.location.search.indexOf("stay") !== -1) return Promise.resolve();
+    if (!profileCommit) trackProfileCommit(syncUserProfile(user));
+    if (redirectArmed) return profileCommit;
+    redirectArmed = true;
+    return profileCommit.then(function () {
+      goApp();
+    });
   }
 
   function applyAuthPersistence() {
@@ -343,15 +414,20 @@
   if (btnApple) btnApple.disabled = false;
   btnEmailSubmit.disabled = false;
 
-  auth
+  var redirectResultReady = auth
     .getRedirectResult()
     .then(function (result) {
-      if (!result || !result.user) return;
-      return withAuthBusy(finishAuthSuccess(result));
+      if (!result || !result.user) return null;
+      return withAuthBusy(
+        holdRedirectFor(function () {
+          return finishAuthSuccess(result);
+        })
+      );
     })
     .catch(function (e) {
       var msg = friendlyAuthError(e);
       if (msg) showError(msg);
+      return null;
     });
 
   function signInWithApple() {
@@ -359,33 +435,37 @@
     hideAppleLinkPanel();
     var provider = appleOAuthProvider();
 
-    return applyAuthPersistence()
-      .then(function () {
-        return auth.signInWithPopup(provider);
-      })
-      .catch(function (e) {
-        if (e && e.code === "auth/popup-blocked") {
-          return applyAuthPersistence().then(function () {
-            return auth.signInWithRedirect(provider);
-          });
-        }
-        return handleAuthConflict(e);
-      })
-      .then(function (cred) {
-        if (!cred) return;
-        return finishAuthSuccess(cred);
-      });
+    return holdRedirectFor(function () {
+      return applyAuthPersistence()
+        .then(function () {
+          return auth.signInWithPopup(provider);
+        })
+        .catch(function (e) {
+          if (e && e.code === "auth/popup-blocked") {
+            return applyAuthPersistence().then(function () {
+              return auth.signInWithRedirect(provider);
+            });
+          }
+          return handleAuthConflict(e);
+        })
+        .then(function (cred) {
+          if (!cred) return;
+          return finishAuthSuccess(cred);
+        });
+    });
   }
 
   btnGoogle.addEventListener("click", function () {
     showError("");
     var provider = new firebase.auth.GoogleAuthProvider();
     withAuthBusy(
-      applyAuthPersistence()
-        .then(function () {
-          return auth.signInWithPopup(provider);
-        })
-        .then(finishAuthSuccess)
+      holdRedirectFor(function () {
+        return applyAuthPersistence()
+          .then(function () {
+            return auth.signInWithPopup(provider);
+          })
+          .then(finishAuthSuccess);
+      })
     ).catch(function (e) {
       showError(friendlyAuthError(e));
     });
@@ -446,35 +526,35 @@
         return;
       }
       withAuthBusy(
-        applyAuthPersistence().then(function () {
-          return auth.createUserWithEmailAndPassword(email, password).then(function (cred) {
-            var displayName = fn + " " + ln;
-            persistRememberPreferences(email);
-            return cred.user.updateProfile({ displayName: displayName }).then(function () {
-              return db.collection("users").doc(cred.user.uid).set(
-                {
+        holdRedirectFor(function () {
+          return applyAuthPersistence().then(function () {
+            return auth.createUserWithEmailAndPassword(email, password).then(function (cred) {
+              var displayName = fn + " " + ln;
+              persistRememberPreferences(email);
+              return cred.user.updateProfile({ displayName: displayName }).then(function () {
+                return writeUserProfile(cred.user, null, {
                   displayName: displayName,
                   firstName: fn,
                   lastName: ln,
                   email: email,
-                  updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-                },
-                { merge: true }
-              );
+                });
+              });
             });
           });
-        }).then(goApp)
+        })
       ).catch(function (e) {
         showError(friendlyAuthError(e));
       });
     } else {
       withAuthBusy(
-        applyAuthPersistence().then(function () {
-          return auth.signInWithEmailAndPassword(email, password).then(function (cred) {
-            persistRememberPreferences((cred.user && cred.user.email) || email);
-            return syncUserProfile(cred.user);
+        holdRedirectFor(function () {
+          return applyAuthPersistence().then(function () {
+            return auth.signInWithEmailAndPassword(email, password).then(function (cred) {
+              persistRememberPreferences((cred.user && cred.user.email) || email);
+              return syncUserProfile(cred.user);
+            });
           });
-        }).then(goApp)
+        })
       ).catch(function (e) {
         showError(friendlyAuthError(e));
       });
@@ -502,6 +582,15 @@
   auth.onAuthStateChanged(function (user) {
     if (!user) return;
     if (window.location.search.indexOf("stay") !== -1) return;
-    goApp();
+    redirectResultReady
+      .then(function () {
+        if (window.location.search.indexOf("stay") !== -1) return;
+        return redirectOnceProfileCommits(user);
+      })
+      .catch(function (err) {
+        redirectArmed = false;
+        var msg = friendlyAuthError(err);
+        if (msg) showError(msg);
+      });
   });
 })();
